@@ -11,6 +11,8 @@
   box-sizing: border-box;
 }
 body {
+  color: #23201b;
+  background: #f3ecdd;
   margin: 0;
 }
 button,
@@ -601,5 +603,25 @@ summary {
   }
   .end-card .speech {
     margin-block: 9px;
+  }
+}
+
+/* Keep the header, stock and map visible while resident notes scroll. */
+@media (max-width: 700px) {
+  .side {
+    height: calc(100dvh - 218px);
+  }
+  .sheet {
+    min-height: 0;
+    flex-shrink: 1;
+  }
+  .objective,
+  .actions,
+  .notice {
+    flex-shrink: 0;
+  }
+  .notice {
+    max-height: 40px;
+    overflow: auto;
   }
 }

@@ -1,6 +1,6 @@
 # Commonstead
 
-A ten-minute RTS settlement with five Human Framework people. Build a storehouse before the storm to keep the seed grain dry. Direct control gives way to fatigue, recovery and remembered pressure.
+A ten-minute residential workshop near Alder Quay with eight Human Framework people. Build a storehouse before the storm to keep the shared supplies dry. Direct control gives way to fatigue, recovery and remembered pressure.
 
 - `npm ci`
 - `npm run dev`

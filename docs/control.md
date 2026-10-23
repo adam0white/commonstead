@@ -1,4 +1,6 @@
-# Simulation controls — 2026-10-23
+# Historical pre-cast simulation controls — 2026-10-23
+
+These receipts describe the five-person edition at 7103af9. They are not current balance or canonical-edition verification. Current content-phase checks are recorded in cast-adoption.md; rerun the policies before making new balance claims.
 
 Builder checks use the installed `@adam0white/human-framework` 2.14.1. These are deterministic headless checks, not cold player tests or evidence of owner acceptance.
 

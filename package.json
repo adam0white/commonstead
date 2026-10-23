@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Commonstead: raise a storehouse with five people who have their own limits.",
+  "description": "Commonstead: prepare a workshop store with eight residents who have their own limits.",
   "license": "MIT",
   "engines": {
     "node": ">=24"

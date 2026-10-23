@@ -44,49 +44,20 @@ export function draw(
     c.translate(node.x, node.y);
     c.strokeStyle = '#4f5b3b';
     c.lineWidth = 3;
-    if (node.kind === 'wood') {
-      for (let j = 0; j < 5; j++) {
-        const x = (j % 3) * 31 - 30,
-          y = Math.floor(j / 3) * 38 - 20;
-        c.fillStyle = '#7f8d5c';
-        c.beginPath();
-        c.moveTo(x, y - 38);
-        c.lineTo(x - 24, y + 19);
-        c.lineTo(x + 24, y + 19);
-        c.closePath();
-        c.fill();
-        c.stroke();
-        c.beginPath();
-        c.moveTo(x, y + 18);
-        c.lineTo(x, y + 37);
-        c.stroke();
-      }
-    } else if (node.kind === 'stone') {
-      for (let j = 0; j < 5; j++) {
-        c.fillStyle = '#a7aaa0';
-        c.beginPath();
-        c.ellipse((j % 3) * 30 - 25, Math.floor(j / 3) * 25 - 15, 24, 19, j * 0.3, 0, 7);
-        c.fill();
-        c.stroke();
-      }
-    } else {
-      for (let j = 0; j < 6; j++) {
-        c.fillStyle = '#859163';
-        c.beginPath();
-        c.ellipse((j % 3) * 31 - 28, Math.floor(j / 3) * 25 - 15, 22, 19, 0, 0, 7);
-        c.fill();
-        c.stroke();
-        c.fillStyle = '#98624d';
-        c.beginPath();
-        c.arc((j % 3) * 31 - 28, Math.floor(j / 3) * 25 - 15, 5, 0, 7);
-        c.fill();
-      }
+    // Delivered prepared materials, not trees, quarry or berry beds.
+    for (let j = 0; j < 4; j++) {
+      const x = (j % 2) * 42 - 40,
+        y = Math.floor(j / 2) * 25 - 25;
+      c.fillStyle = node.kind === 'wood' ? '#ad8962' : node.kind === 'stone' ? '#a7aaa0' : '#859163';
+      c.fillRect(x, y, node.kind === 'wood' ? 70 : 35, 20);
+      c.strokeRect(x, y, node.kind === 'wood' ? 70 : 35, 20);
+      if (node.kind === 'food') c.fillText('+', x + 12, y + 15);
     }
     c.fillStyle = '#23201b';
     c.font = '22px Georgia';
     c.textAlign = 'center';
     c.fillText(
-      node.kind === 'food' ? 'Berry beds' : node.kind === 'wood' ? 'Woodland' : 'Stone ridge',
+      node.kind === 'food' ? 'Meal crates' : node.kind === 'wood' ? 'Prepared boards' : 'Ballast bags',
       0,
       87,
     );
@@ -128,7 +99,7 @@ export function draw(
     c.fillStyle = '#23201b';
     c.font = '21px Georgia';
     c.textAlign = 'center';
-    c.fillText(b.kind === 'town' ? 'Town centre' : b.kind === 'house' ? 'House' : 'Storehouse', 0, 76);
+    c.fillText(b.kind === 'town' ? 'Workshop hub' : b.kind === 'house' ? 'Guest cabin' : 'Kit store', 0, 76);
     c.restore();
   }
   const colors = ['#3d5a73', '#865c46', '#4f6b3a', '#8a7152', '#6b617f'];

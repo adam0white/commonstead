@@ -9,6 +9,19 @@ import {
   readPerson,
   tick as tickPerson,
 } from '@adam0white/human-framework';
+import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
+
+export function taskLabel(target: string): string {
+  return (
+    {
+      food: 'meals',
+      wood: 'prepared boards',
+      stone: 'ballast bags',
+      house: 'guest cabin',
+      storehouse: 'kit store',
+    }[target] ?? target
+  );
+}
 
 export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
@@ -20,6 +33,11 @@ type Order = { target: string; x: number; y: number };
 export type Villager = {
   id: string;
   name: string;
+  role: string;
+  family: string;
+  discovery: number;
+  invitedBreak: boolean;
+  breakStarted: number;
   x: number;
   y: number;
   person: Person;
@@ -59,29 +77,34 @@ export const NODES: { id: string; kind: Resource; x: number; y: number }[] = [
 // Game deadlines and movement remain real seconds. HF alone evolves body and mind.
 const BODY_MINUTES = 0.5;
 const START_MINUTE = 8 * 60;
-const names = ['Amina', 'Yusuf', 'Meryem', 'Idris', 'Leyla', 'Samir', 'Hana', 'Omar', 'Nura'];
 function makeVillager(seed: number, n: number): Villager {
   const id = `v${n}`;
-  const name = names[(n - 1) % names.length] ?? `Villager ${n}`;
+  const entry = CAST[n - 1];
+  const name = entry?.name ?? `Helper ${n}`;
   return {
     id,
     name,
+    role: entry?.role ?? 'Episode helper; orientation covers light prepared-material tasks only',
+    family: entry?.family ?? 'No maintained biography',
+    discovery: 0,
+    invitedBreak: false,
+    breakStarted: -1,
     x: 450 + ((n - 1) % 3) * 42,
     y: 425 + Math.floor((n - 1) / 3) * 35,
     person: createPerson({
-      id,
+      id: entry?.castId ?? `commonstead.episode.${seed}.${n}`,
       name,
       seed: (seed + n * 997) >>> 0,
       now: START_MINUTE,
-      bornAt: -25 * 365 * 1440,
-      sex: n % 2 ? 'female' : 'male',
-      traits: { conscientiousness: 0.5 + (n % 3) * 0.12, agreeableness: 0.45 + (n % 2) * 0.2 },
-      body: { satiety: 0.95, hydration: 0.98, fitness: 0.25 + (n % 3) * 0.1, sleepPressure: 0.05 },
+      bornAt: START_MINUTE - (entry?.age ?? 30) * 365 * 1440,
+      sex: entry?.sex ?? 'female',
+      ...(entry ? openingProfile(entry) : {}),
+      body: { satiety: 0.95, hydration: 0.98, fitness: 0.35, sleepPressure: 0.05 },
       voices: [{ voiceId: 'commander', trust: 0.7 }],
       enable: { suggestionReasons: true },
     }),
     task: 'idle',
-    says: 'Ready to help.',
+    says: 'Prepared boards, small ballast bags and hand tools only. No powered tools or structural work.',
     order: null,
     recoveryUntil: 0,
     actionUntil: 0,
@@ -95,10 +118,11 @@ export function createGame(seed: number): State {
     trainingUntil: null,
     tick: 0,
     resources: { food: 100, wood: 80, stone: 0 },
-    villagers: Array.from({ length: 5 }, (_, i) => makeVillager(seed, i + 1)),
+    villagers: Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1)),
     buildings: [{ id: 'town', kind: 'town', x: 500, y: 350, progress: 1, complete: true }],
     inputs: [],
-    message: 'Raise a storehouse before the storm at 10:00.',
+    message:
+      'Alder Quay workshop: assemble the kit store before the storm at 10:00. Dai and Nerys have arranged work cover.',
     ended: false,
     won: false,
   };
@@ -135,7 +159,7 @@ function recover(s: State, v: Villager, kind: 'rest' | 'meal', automatic = false
   v.recoveryUntil = s.tick + (kind === 'rest' ? 35 : 8);
   v.actionUntil = v.recoveryUntil;
   v.task = kind === 'rest' ? 'resting' : 'eating / drinking';
-  v.status = `${v.task}; then ${v.order?.target ?? 'idle'}`;
+  v.status = `${v.task}; then ${taskLabel(v.order?.target ?? 'idle')}`;
   v.says =
     kind === 'rest'
       ? automatic
@@ -158,7 +182,7 @@ function chooseWork(s: State, v: Villager, push = false) {
     const r = decide(v.person, [a]);
     begin(v.person, a, r);
     v.actionUntil = s.tick + 10;
-    v.task = `moving to ${v.order.target}`;
+    v.task = `moving to ${taskLabel(v.order.target)}`;
     v.status = 'moving';
     v.says = 'I am on my way.';
     return;
@@ -180,7 +204,7 @@ function chooseWork(s: State, v: Villager, push = false) {
         channel: 'heard',
         kind: 'request',
         actorId: 'commander',
-        targetId: v.id,
+        targetId: v.person.id,
         salience: 1,
         summary: 'The commander insisted: push on with the work.',
         valence: -0.15,
@@ -201,7 +225,7 @@ function chooseWork(s: State, v: Villager, push = false) {
   if (a.action !== 'work') {
     v.recoveryUntil = v.actionUntil;
     v.task = a.action === 'rest' ? 'resting' : a.action === 'eat' ? 'eating / drinking' : 'drinking';
-    v.status = `${r.suggestion?.verdict === 'refused' ? 'waiting / refused; ' : ''}${v.task}; then ${v.order?.target ?? 'idle'}`;
+    v.status = `${r.suggestion?.verdict === 'refused' ? 'waiting / refused; ' : ''}${v.task}; then ${taskLabel(v.order?.target ?? 'idle')}`;
     v.says =
       r.suggestion?.reason === 'distrust'
         ? r.suggestion.says
@@ -211,7 +235,7 @@ function chooseWork(s: State, v: Villager, push = false) {
             ? 'I need to eat and drink here.'
             : 'I need water. A drink, then back to work.';
   } else {
-    v.task = v.order?.target ?? 'idle';
+    v.task = taskLabel(v.order?.target ?? 'idle');
     v.status = v.person.activity?.protest ? 'working under protest' : 'working';
     const body = readPerson(v.person).body;
     v.says = push
@@ -236,21 +260,22 @@ export function apply(s: State, c: Command): void {
   s.inputs.push({ tick: s.tick, command: structuredClone(c) });
   if (c.kind === 'train') {
     if (s.trainingUntil !== null) {
-      s.message = 'One villager is already training.';
+      s.message = 'One helper is already in orientation.';
       return;
     }
-    const cap = 7 + s.buildings.filter((b) => b.kind === 'house' && b.complete).length * 2;
+    const cap = 10 + s.buildings.filter((b) => b.kind === 'house' && b.complete).length * 2;
     if (s.villagers.length >= cap) {
       s.message = 'More housing is needed.';
       return;
     }
     if (s.resources.food < 35) {
-      s.message = 'Training needs 35 food.';
+      s.message = 'A helper’s meal and orientation need 35 meal units.';
       return;
     }
     s.resources.food -= 35;
     s.trainingUntil = s.tick + 15;
-    s.message = 'Training a villager: ready in 15 seconds.';
+    s.message =
+      'A local helper will finish light-task orientation in 15 seconds. No qualification is granted.';
     return;
   }
   const selected = s.villagers.filter((v) => c.ids.includes(v.id));
@@ -270,11 +295,11 @@ export function apply(s: State, c: Command): void {
       c.y > 645 ||
       [...s.buildings, ...NODES].some((b) => Math.hypot(b.x - c.x, b.y - c.y) < 90)
     ) {
-      s.message = 'Choose open ground, away from buildings and resource beds.';
+      s.message = 'Choose open ground, away from cabins and delivered materials.';
       return;
     }
     if (s.resources.wood < wood || s.resources.stone < stone) {
-      s.message = `${c.building} needs ${wood} wood${stone ? ` and ${stone} stone` : ''}.`;
+      s.message = `${taskLabel(c.building)} needs ${wood} boards${stone ? ` and ${stone} ballast bags` : ''}.`;
       return;
     }
     if (c.building === 'storehouse' && s.buildings.some((b) => b.kind === 'storehouse')) {
@@ -298,19 +323,59 @@ export function apply(s: State, c: Command): void {
         x: b.x + 18 * Math.cos(Number(v.id.slice(1)) * 2.4),
         y: b.y + 18 * Math.sin(Number(v.id.slice(1)) * 2.4),
       });
-    s.message = `Build ${c.building}: ${selected.map((v) => v.name).join(', ')}.`;
+    s.message = `Prepare ${taskLabel(c.building)}: ${selected.map((v) => v.name).join(', ')}.`;
     return;
   }
   if (c.target === 'rest' || c.target === 'meal') {
     if (c.target === 'meal' && s.resources.food < selected.length * 2) {
-      s.message = 'A meal needs 2 food per person.';
+      s.message = 'A meal needs 2 meal units per person.';
       return;
     }
     for (const v of selected) {
       recover(s, v, c.target);
+      v.invitedBreak = true;
+      v.breakStarted = s.tick;
     }
     s.message =
       c.target === 'rest' ? 'Rest here for 35 seconds, then resume.' : 'Food and water here, then resume.';
+    return;
+  }
+  if (c.target === 'listen' || c.target === 'collaborate') {
+    if (selected.length !== 1) {
+      s.message = 'Invite one person to talk during a chosen break.';
+      return;
+    }
+    const v = selected[0];
+    if (!v) return;
+    const scene = DISCOVERIES[Number(v.id.slice(1)) - 1];
+    if (
+      !scene ||
+      !v.invitedBreak ||
+      v.recoveryUntil <= s.tick ||
+      s.tick < 60 ||
+      s.tick - v.breakStarted < 5
+    ) {
+      s.message =
+        'Spend a minute together, then offer a break and give it five seconds. Private conversation is optional.';
+      return;
+    }
+    const invitation = offer('talk', 5, 0, { belonging: 0.5 }, ['social']);
+    const response = decide(v.person, [invitation], {
+      suggestion: { voiceId: 'commander', action: 'talk', strength: 0 },
+    });
+    if (response.suggestion?.verdict === 'refused' || !response.chosenAffordanceId) {
+      v.says = response.suggestion?.says || 'I would rather rest than talk just now.';
+      s.message = v.says;
+      return;
+    }
+    if (c.target === 'listen' && v.discovery === 0) {
+      v.discovery = 1;
+      v.says = scene[0];
+    } else if (c.target === 'collaborate' && v.discovery === 1) {
+      v.discovery = 2;
+      v.says = scene[1];
+    }
+    s.message = v.says;
     return;
   }
   if (c.target === 'push') {
@@ -339,7 +404,7 @@ export function apply(s: State, c: Command): void {
       x: Math.max(20, Math.min(980, x + (target ? 18 * Math.cos(Number(v.id.slice(1)) * 2.4) : 0))),
       y: Math.max(20, Math.min(680, y + (target ? 18 * Math.sin(Number(v.id.slice(1)) * 2.4) : 0))),
     });
-  s.message = `${selected.map((v) => v.name).join(', ')} → ${c.target === 'move' ? 'move' : c.target}.`;
+  s.message = `${selected.map((v) => v.name).join(', ')} → ${c.target === 'move' ? 'move' : taskLabel(c.target)}.`;
 }
 export function step(s: State): void {
   if (s.ended) return;
@@ -349,7 +414,7 @@ export function step(s: State): void {
     tickPerson(arrival.person, START_MINUTE + s.tick * BODY_MINUTES);
     s.villagers.push(arrival);
     s.trainingUntil = null;
-    s.message = `${s.villagers.at(-1)?.name} has joined the settlement.`;
+    s.message = `${s.villagers.at(-1)?.name} has joined the workshop for this episode.`;
   }
   for (const v of s.villagers) {
     tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
@@ -381,7 +446,7 @@ export function step(s: State): void {
           action: v.person.activity.action,
           at: v.person.now,
           status: 'completed',
-          summary: `Worked at ${v.order.target}.`,
+          summary: `Worked at ${taskLabel(v.order.target)}.`,
           material: 1,
         });
       chooseWork(s, v);
@@ -415,7 +480,7 @@ export function step(s: State): void {
       b.progress = Math.min(1, b.progress + capacity / (b.kind === 'house' ? 35 : 180));
       if (b.progress === 1) {
         b.complete = true;
-        s.message = `${b.kind} completed${b.kind === 'storehouse' ? '; seed grain is ready for the storm' : '; two more housing spaces'}.`;
+        s.message = `${taskLabel(b.kind)} completed${b.kind === 'storehouse' ? '; shared supplies are ready for the storm' : '; two more housing spaces'}.`;
       }
     }
     if (b?.complete) {
@@ -431,8 +496,8 @@ export function step(s: State): void {
     s.ended = true;
     s.won = s.buildings.some((b) => b.kind === 'storehouse' && b.complete);
     s.message = s.won
-      ? 'The storehouse keeps the seed grain dry. The settlement can begin again.'
-      : 'The storm soaks the seed grain. The unfinished storehouse could not protect it.';
+      ? 'The storehouse keeps the shared supplies dry. The workshop can open tomorrow.'
+      : 'The storm soaks the shared supplies. The unfinished storehouse could not protect them.';
   }
 }
 function stable(x: unknown): string {
@@ -477,7 +542,7 @@ export function replay(seed: number, inputs: Input[], tick: number): State {
 }
 export function exportRun(s: State): unknown {
   return {
-    schema: 1,
+    schema: 2,
     framework: '2.14.1',
     seed: s.seed,
     tick: s.tick,
@@ -498,11 +563,11 @@ export function importRun(raw: unknown): State {
       state: State;
       hash: string;
     };
-    if (r.schema !== 1 || r.framework !== '2.14.1') throw new Error('version');
+    if (r.schema !== 2 || r.framework !== '2.14.1') throw new Error('version');
     const s = replay(r.seed, r.inputs, r.tick);
     if (stable(s) !== stable(r.state) || stateHash(s) !== r.hash) throw new Error('state mismatch');
     return s;
   } catch {
-    throw new Error('Invalid run: replay state verification failed.');
+    throw new Error('Invalid or older run. Start fresh; replay state verification failed.');
   }
 }

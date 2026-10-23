@@ -12,11 +12,50 @@ function first(s: ReturnType<typeof createGame>) {
 }
 
 describe('Commonstead fixed-tick simulation', () => {
-  test('starts with five HF people, counted stocks and housing', () => {
+  test('starts with eight canonical HF people, counted stocks and housing', () => {
     const s = createGame(42);
-    expect(s.villagers).toHaveLength(5);
-    expect(s.villagers.every((v) => v.person.id === v.id && v.person.body.alive)).toBe(true);
+    expect(s.villagers).toHaveLength(8);
+    expect(s.villagers.every((v) => v.person.id.startsWith('hf.cast.') && v.person.body.alive)).toBe(true);
     expect(s.resources).toEqual({ food: 100, wood: 80, stone: 0 });
+  });
+  test('private workshop discoveries require a chosen break and invitation, and replay', () => {
+    const s = createGame(42);
+    advance(s, 60);
+    for (const v of s.villagers) {
+      apply(s, { kind: 'order', ids: [v.id], target: 'listen' });
+      expect(v.discovery).toBe(0);
+      apply(s, { kind: 'order', ids: [v.id], target: 'rest' });
+      apply(s, { kind: 'order', ids: [v.id], target: 'listen' });
+      expect(v.discovery).toBe(0);
+      advance(s, 5);
+      apply(s, { kind: 'order', ids: [v.id], target: 'listen' });
+      expect(v.discovery).toBe(1);
+      apply(s, { kind: 'order', ids: [v.id], target: 'collaborate' });
+      expect(v.discovery).toBe(2);
+    }
+    expect(stateHash(importRun(exportRun(s)))).toBe(stateHash(s));
+  });
+  test('remembered pressure can defer a private invitation', () => {
+    const s = createGame(42);
+    apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+    advance(s, 160);
+    for (let i = 0; i < 20; i++) apply(s, { kind: 'order', ids: ['v1'], target: 'push' });
+    apply(s, { kind: 'order', ids: ['v1'], target: 'rest' });
+    advance(s, 5);
+    apply(s, { kind: 'order', ids: ['v1'], target: 'listen' });
+    expect(first(s).discovery).toBe(0);
+    expect(first(s).says).toBe(first(s).person.trace.at(-1)?.suggestion?.says);
+    expect(first(s).person.memory.episodes.some((e) => e.targetId === first(s).person.id)).toBe(true);
+  });
+  test('episode helpers never duplicate the canonical roster', () => {
+    const s = createGame(7);
+    apply(s, { kind: 'train' });
+    advance(s, 15);
+    const helper = s.villagers.at(-1);
+    if (!helper) throw new Error('Missing helper');
+    expect(helper.person.id).toBe('commonstead.episode.7.9');
+    expect(helper.name).toBe('Helper 9');
+    expect(new Set(s.villagers.map((v) => v.person.id)).size).toBe(9);
   });
   test('replays changed orders, recovery and training byte identically', () => {
     const s = createGame(42);
@@ -27,7 +66,7 @@ describe('Commonstead fixed-tick simulation', () => {
     advance(s, 105);
     expect(stateHash(replay(s.seed, s.inputs, s.tick))).toBe(stateHash(s));
     expect(s.resources.wood).toBeGreaterThan(80);
-    expect(s.villagers).toHaveLength(6);
+    expect(s.villagers).toHaveLength(9);
   });
   test('export roundtrip verifies the full state and rejects tampering', () => {
     const s = createGame(88);
@@ -84,7 +123,7 @@ describe('Commonstead fixed-tick simulation', () => {
     expect(v.y).toBe(y);
     expect(v.task).toMatch(/rest/);
     advance(s, 1);
-    expect(v.task).toMatch(/stone/);
+    expect(v.task).toMatch(/ballast/);
   });
   test('blocked placement costs nothing; completed houses add two spaces', () => {
     const s = createGame(1);
@@ -97,7 +136,7 @@ describe('Commonstead fixed-tick simulation', () => {
       apply(s, { kind: 'train' });
       advance(s, 15);
     }
-    expect(s.villagers).toHaveLength(7); // food, not housing, limits this opening
+    expect(s.villagers).toHaveLength(10); // food limits this opening
   });
   test('a meal costs exactly two food and nourishes through HF', () => {
     const s = createGame(4);
@@ -133,11 +172,11 @@ describe('Commonstead fixed-tick simulation', () => {
     apply(s, { kind: 'train' });
     apply(s, { kind: 'train' });
     expect(s.resources.food).toBe(65);
-    expect(s.villagers).toHaveLength(5);
+    expect(s.villagers).toHaveLength(8);
     advance(s, 14);
-    expect(s.villagers).toHaveLength(5);
+    expect(s.villagers).toHaveLength(8);
     step(s);
-    expect(s.villagers).toHaveLength(6);
+    expect(s.villagers).toHaveLength(9);
     expect(s.trainingUntil).toBeNull();
   });
   test('remembered pressure changes HF willingness and the worker states that cause', () => {
