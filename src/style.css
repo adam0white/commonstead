@@ -530,3 +530,55 @@ input[type="file"] {
 .sheet {
   min-width: 0;
 }
+
+.panel:has(.feedback-body) {
+  width: 560px;
+  height: min(850px, 90dvh);
+  margin: auto;
+  overflow: hidden;
+}
+.feedback-body {
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+}
+.feedback-body > * {
+  margin-bottom: 10px;
+}
+.feedback-body label {
+  display: block;
+}
+.feedback-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: none;
+}
+.feedback-actions #send {
+  grid-column: span 2;
+  grid-row: 1;
+}
+.feedback-actions button {
+  font-size: 0.85rem;
+}
+.panel label:has(input[type="checkbox"]) {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+summary {
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}
+.unit-list button {
+  flex: none;
+}
+@media (max-width: 700px) {
+  .panel:has(.feedback-body) {
+    width: 100%;
+    margin-top: auto;
+    margin-bottom: 0;
+  }
+}
