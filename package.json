@@ -1,0 +1,45 @@
+{
+  "name": "commonstead",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Commonstead: raise a storehouse with five people who have their own limits.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "stamp-release && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "ci": "npm run check && npm run build",
+    "check:lane": "npm run ci",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@adam0white/human-framework": "2.14.1",
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.2.1.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.3.1.tgz"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261019.1": true,
+    "fsevents": false
+  },
+  "overrides": {
+    "sharp": "0.35.5"
+  }
+}
