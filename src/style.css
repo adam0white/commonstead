@@ -582,3 +582,24 @@ summary {
     margin-bottom: 0;
   }
 }
+
+.end-card h1 {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  line-height: 1.05;
+  margin-block: 16px;
+}
+.end-card .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.end-card .row .primary {
+  grid-column: span 2;
+}
+@media (max-width: 700px) {
+  .end-card {
+    width: 100%;
+  }
+  .end-card .speech {
+    margin-block: 9px;
+  }
+}

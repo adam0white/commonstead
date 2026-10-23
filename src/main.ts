@@ -486,8 +486,8 @@ function end() {
   canvas = null;
   lab.screen('storm outcome');
   save();
-  root.innerHTML = `<main class="title">${top('Commonstead · after the storm')}<section class="end-card"><p class="eyebrow">10:00 · the storm arrived</p><h1>${state.won ? 'Grain kept dry.' : 'The grain spoiled.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p><div>${state.villagers
-    .slice(0, 5)
+  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">10:00 · the storm arrived</p><h1>${state.won ? 'Grain kept dry.' : 'The grain spoiled.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p><div>${state.villagers
+    .slice(0, 2)
     .map(
       (v) =>
         `<p class="speech">${esc(v.name)}: ${esc(v.says || 'We made it through the work together.')}</p>`,
