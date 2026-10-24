@@ -24,7 +24,7 @@
   "dependencies": {
     "@adam0white/human-framework": "2.18.0",
     "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.6.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.6.tgz"
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.7.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

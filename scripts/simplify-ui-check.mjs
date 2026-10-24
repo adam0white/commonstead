@@ -52,6 +52,57 @@ for (const [name, type] of [
       await page.getByRole('button', { name: 'Resume', exact: true }).click();
       await page.locator('#map').waitFor();
       await page.evaluate(() => document.fonts.ready);
+      await page.locator('.lk-telemetry-notice').waitFor({ state: 'visible' });
+      const measureFooter = () =>
+        page.evaluate(() => {
+          const notice = document.querySelector('.lk-telemetry-notice');
+          const footer = document.querySelector('.lab-footer');
+          const style = getComputedStyle(notice);
+          const range = document.createRange();
+          range.selectNodeContents(notice);
+          return {
+            text: notice.textContent,
+            font: parseFloat(style.fontSize),
+            node: notice.getBoundingClientRect().toJSON(),
+            wrapper: footer.getBoundingClientRect().toJSON(),
+            textBottom: range.getBoundingClientRect().bottom,
+            clipped: notice.scrollWidth > notice.clientWidth || notice.scrollHeight > notice.clientHeight,
+            ellipsis: style.textOverflow === 'ellipsis',
+            buttons: notice.querySelectorAll('button').length,
+            inMenu: !!notice.closest('.panel'),
+            overflow: footer.scrollWidth > footer.clientWidth,
+          };
+        });
+      const footerMetrics = await measureFooter();
+      if (
+        footerMetrics.text !== 'We record and link play across games on this device.' ||
+        footerMetrics.buttons ||
+        footerMetrics.font < 14 ||
+        footerMetrics.clipped ||
+        footerMetrics.ellipsis ||
+        footerMetrics.inMenu ||
+        footerMetrics.overflow ||
+        footerMetrics.textBottom > footerMetrics.node.bottom
+      )
+        throw Error(`Invalid compact footer ${JSON.stringify(footerMetrics)}`);
+      if (width === 360 && (footerMetrics.node.height > 55 || footerMetrics.wrapper.height > 65))
+        throw Error(`Oversized phone footer ${JSON.stringify(footerMetrics)}`);
+      let enlargedFooter = null;
+      if (width === 360) {
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '32px';
+        });
+        enlargedFooter = await measureFooter();
+        if (
+          enlargedFooter.clipped ||
+          enlargedFooter.overflow ||
+          enlargedFooter.textBottom > enlargedFooter.node.bottom
+        )
+          throw Error('Enlarged disclosure clipped');
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '';
+        });
+      }
       const box = await page.locator('#map').boundingBox();
       await page.locator('#map').click({ position: { x: box.width / 2, y: box.height / 2 } });
       await page.locator('#train').waitFor();
@@ -99,6 +150,8 @@ for (const [name, type] of [
         await page.setViewportSize({ width, height });
       }
       out.push({
+        footerMetrics,
+        enlargedFooter,
         reducedViewportSubmit,
         engine: name,
         width,
