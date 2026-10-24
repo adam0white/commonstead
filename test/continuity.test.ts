@@ -37,7 +37,7 @@ import {
 } from '@adam0white/lab-client';
 import { CAST } from '../src/cast.ts';
 import { Continuity } from '../src/continuity.ts';
-import { residentTransfer } from '../src/passport.ts';
+import { admitResident, residentTransfer } from '../src/passport.ts';
 
 const clock = 1_790_000_000_000;
 async function source(castId = CAST[0]!.castId, peer = false) {
@@ -369,4 +369,33 @@ test('multi-batch recording refuses a central epoch change between approvals', a
   h.rotateAfterApproval();
   await imported.recording(true);
   expect(h.allowed).toBe(false);
+});
+
+describe('finite forwarded Commonstead passport', () => {
+  test('Glance may forward Nerys with strict native semantics only', async () => {
+    const opening = createGame(42).villagers.find((v) => v.person.id === 'hf.cast.nerys.glance')!.person;
+    const captured = await residentTransfer(opening);
+    const envelope = await createPersona({
+      format: 'hf-persona/1',
+      castId: opening.id,
+      castRevision: canonicalCast(opening.id).revision,
+      branchId: 'synthetic-forward',
+      parentRevision: null,
+      source: { game: 'glance', build: 'synthetic-control', engine: '2.17.0', rules: 'glance-3' },
+      transfer: { ...captured.transfer, life: initialPersonaLife(opening.id, 'synthetic-forward', clock) },
+      limitations: captured.limitations,
+    });
+    const admit = (p: PersonaEnvelope) => admitResident(preparePersonaLife(p, clock), opening);
+    const admitted = admit(envelope);
+    expect(admitted.rng).toEqual(opening.rng);
+    expect(admitted.body.fitness).toBe(opening.body.fitness);
+    for (const patch of [
+      { source: { ...envelope.source, rules: 'glance-unknown' } },
+      { source: { ...envelope.source, game: 'unknown' } },
+      { transfer: { ...envelope.transfer, sourceRole: 'nerys' } },
+      { transfer: { ...envelope.transfer, castPassport: 'glance-cast/1' } },
+      { castId: 'hf.cast.dai.smallworks' },
+    ])
+      expect(() => admit({ ...envelope, ...patch })).toThrow();
+  });
 });

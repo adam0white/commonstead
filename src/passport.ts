@@ -31,7 +31,7 @@ const same = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPerson
 const identity = (keys: string[]) => Object.fromEntries(keys.map((key) => [key, key]));
 const supportedActions = new Set(['rest', 'eat', 'drink']);
 
-/** Finite Small Works Nora/Sam and native Commonstead maps. No clinical or duty waiver. */
+/** Finite Small Works Nora/Sam, native Commonstead and forwarded Glance Nerys maps. No clinical or duty waiver. */
 export function admitResident(input: LifePreparation, opening: Person): Person {
   const p = input.parent;
   const cast = canonicalCast(p.castId);
@@ -51,8 +51,14 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     p.transfer.castPassport === 'workshop-cast/1' &&
     peerRole &&
     p.transfer.sourceRole === peerRole;
+  // Glance's verified claim retains Nerys's original Commonstead passport unchanged.
+  const forwardedNerys =
+    p.castId === 'hf.cast.nerys.glance' &&
+    p.source.game === 'glance' &&
+    p.source.rules === 'glance-3' &&
+    p.source.engine === '2.17.0';
   const native =
-    p.source.game === 'commonstead' &&
+    (p.source.game === 'commonstead' || forwardedNerys) &&
     p.transfer.castPassport === DIALECT &&
     p.transfer.sourceRole === p.castId;
   if (!peer && !native)
