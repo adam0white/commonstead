@@ -36,7 +36,7 @@ import {
   preparePersonaLife,
 } from '@adam0white/lab-client';
 import { CAST } from '../src/cast.ts';
-import { Continuity } from '../src/continuity.ts';
+import { Continuity, watchShelfPreference } from '../src/continuity.ts';
 import { admitResident, residentTransfer } from '../src/passport.ts';
 
 const clock = 1_790_000_000_000;
@@ -398,4 +398,20 @@ describe('finite forwarded Commonstead passport', () => {
     ])
       expect(() => admit({ ...envelope, ...patch })).toThrow();
   });
+});
+
+test('recording preference changes do not cancel a chapter waiting for the shelf', async () => {
+  const h = harness();
+  let finish: (value: boolean) => void = () => {};
+  h.shelf.ready = new Promise<boolean>((resolve) => {
+    finish = resolve;
+  });
+  const continuity = new Continuity(h.lab, h.shelf);
+  const events = new EventTarget();
+  const stop = watchShelfPreference(() => continuity.invalidate(), events);
+  const pending = continuity.fresh(42);
+  events.dispatchEvent(new Event('hf-lab-preference'));
+  finish(true);
+  await expect(pending).resolves.toBeDefined();
+  stop();
 });

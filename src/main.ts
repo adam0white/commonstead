@@ -1,6 +1,6 @@
 import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
 import { CAST as ALLOCATION, CAST, DISCOVERIES } from './cast.ts';
-import { Continuity, LOCAL_KEY } from './continuity.ts';
+import { Continuity, LOCAL_KEY, watchShelfPreference } from './continuity.ts';
 import './style.css';
 import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
 import {
@@ -606,14 +606,7 @@ function continuityMenu() {
   });
 }
 const attemptedDeaths = new Set<string>();
-const invalidateHistory = () => continuity.invalidate();
-window.addEventListener('hf-lab-preference', invalidateHistory);
-window.addEventListener('hf-persona-preference', invalidateHistory);
-window.addEventListener('storage', invalidateHistory);
-document.addEventListener('change', (event) => {
-  if ((event.target as HTMLElement)?.getAttribute('aria-label') === 'Record play for the lab')
-    invalidateHistory();
-});
+watchShelfPreference(() => continuity.invalidate());
 watchPersonaCheckpoint(() => {
   if (state?.chapterPaused) return continuity.checkpointAll();
 });

@@ -183,7 +183,7 @@ export class Continuity {
     this.fileOrigin = true;
     this.denied = false;
     this.status =
-      'File-origin run: no embedded ownership is acquired. Local play/export work; recording needs this run’s explicit choice.';
+      'File-origin run: no embedded ownership is acquired. Recording and automatic cross-game linkage follow your menu choice.';
     return state;
   }
   localSave(state: State) {
@@ -406,4 +406,18 @@ export class Continuity {
     }
     this.changed();
   }
+}
+
+/** Only browser-person continuity changes cancel a pending chapter. Recording does not. */
+export function watchShelfPreference(invalidate: () => void, events: EventTarget = window): () => void {
+  const stored = (event: Event) => {
+    const key = (event as StorageEvent).key;
+    if (key === null || key === 'hf-persona-opt-in') invalidate();
+  };
+  events.addEventListener('hf-persona-preference', invalidate);
+  events.addEventListener('storage', stored);
+  return () => {
+    events.removeEventListener('hf-persona-preference', invalidate);
+    events.removeEventListener('storage', stored);
+  };
 }
