@@ -502,8 +502,20 @@ function feedback() {
         },
         recordingAllowed: lab.personaRecordingAllowed,
         allowRecording: (value) => {
+          if (!lab.telemetryOn) {
+            if (!value) {
+              continuity.invalidate();
+              lab.allowPersonaRecording(false);
+            }
+            status.textContent = value
+              ? 'Recording is off. Your note still sends without history linkage.'
+              : 'This history stays local. Your note can still be sent.';
+            status.scrollIntoView({ block: 'nearest' });
+            return;
+          }
           void (value ? continuity.recording(true) : continuity.deny()).catch((error: unknown) => {
             status.textContent = String(error);
+            status.scrollIntoView({ block: 'nearest' });
           });
         },
       }),
@@ -527,11 +539,13 @@ function feedback() {
       status.textContent = !lab.telemetryOn
         ? `Note and verdict queued without a run or history linkage · ${id}.`
         : `Note queued; run included when available. Persona history linked only if approved · ${id}.`;
+      status.scrollIntoView({ block: 'nearest' });
       send.textContent = 'Back to the game';
       send.disabled = false;
       send.onclick = closeModal;
     } catch (error) {
       status.textContent = `Could not queue feedback: ${error instanceof Error ? error.message : 'try again'}. Keep a copy or retry.`;
+      status.scrollIntoView({ block: 'nearest' });
       send.disabled = false;
     }
   };
