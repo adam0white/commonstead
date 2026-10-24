@@ -3,7 +3,13 @@ import { CAST as ALLOCATION, CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY } from './continuity.ts';
 import './style.css';
 import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
-import { downloadJson, personaControls, telemetryNotice, telemetryToggle } from '@adam0white/lab-kit';
+import {
+  downloadJson,
+  feedbackPersonaControl,
+  feedbackSharePlay,
+  telemetryNotice,
+  telemetryToggle,
+} from '@adam0white/lab-kit';
 import { draw } from './draw.ts';
 import { apply, type Command, createGame, exportRun, NODES, type State, step } from './sim.ts';
 
@@ -343,7 +349,10 @@ function order(target: string, x?: number, y?: number) {
 function point(e: PointerEvent) {
   const r = canvas?.getBoundingClientRect();
   return r
-    ? { x: ((e.clientX - r.left) / r.width) * 1000, y: ((e.clientY - r.top) / r.height) * 700 }
+    ? {
+        x: ((e.clientX - r.left) / r.width) * 1000,
+        y: ((e.clientY - r.top) / r.height) * 700,
+      }
     : { x: 0, y: 0 };
 }
 function targetAt(x: number, y: number) {
@@ -382,7 +391,14 @@ function bindMap(map: HTMLCanvasElement) {
       destination(p.x, p.y);
       return;
     }
-    pointer = { id: e.pointerId, ...p, x2: p.x, y2: p.y, at: performance.now(), ordered: false };
+    pointer = {
+      id: e.pointerId,
+      ...p,
+      x2: p.x,
+      y2: p.y,
+      at: performance.now(),
+      ordered: false,
+    };
     holdTimer = setTimeout(() => {
       if (pointer && Math.hypot(pointer.x2 - pointer.x, pointer.y2 - pointer.y) < 20) {
         destination(pointer.x, pointer.y);
@@ -482,7 +498,7 @@ function menu() {
 }
 function feedback() {
   sheet(
-    `<h2>Send feedback</h2><div class="feedback-body"><p>Your run, saves and log reach us on their own while recording is on. Tell us what they can't show.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened, what you wanted, what got in the way.</label><textarea id="note" rows="4" maxlength="3900"></textarea><label for="name">Your name or tester id (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><p class="small">A name labels your linked play history on this device. Leave empty to stay pseudonymous.</p><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Linked play history is included only when recording is allowed. No character analysis consent is included.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><div id="feedback-toggle"></div><div id="feedback-persona"></div><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions"><button id="copy">Keep a copy of this run</button><button class="primary" id="send">Send</button><button id="cancel-feedback">Back to the menu</button></div>`,
+    `<h2>Send feedback</h2><div class="feedback-body"><p>Tell us what happened.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened, what you wanted, what got in the way.</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name or tester id (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Linked play history is included only when recording is allowed. No character analysis consent is included.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions"><button id="copy">Keep a copy of this run</button><button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
   );
   let verdict = '';
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
@@ -491,36 +507,10 @@ function feedback() {
       for (const v of document.querySelectorAll('[data-verdict]'))
         v.setAttribute('aria-pressed', String(v === b));
     };
-  document.getElementById('feedback-toggle')?.append(telemetryToggle(lab));
+  const share = feedbackPersonaControl(lab);
+  if (share) document.getElementById('feedback-persona')?.append(share);
   const send = document.getElementById('send') as HTMLButtonElement;
   const status = document.getElementById('send-status') as HTMLElement;
-  if (lab.personaRecordingRequired)
-    document.getElementById('feedback-persona')?.append(
-      personaControls({
-        enabled: continuity.shelf.enabled,
-        setEnabled: (value) => {
-          void continuity.setEnabled(value);
-        },
-        recordingAllowed: lab.personaRecordingAllowed,
-        allowRecording: (value) => {
-          if (!lab.telemetryOn) {
-            if (!value) {
-              continuity.invalidate();
-              lab.allowPersonaRecording(false);
-            }
-            status.textContent = value
-              ? 'Recording is off. Your note still sends without history linkage.'
-              : 'This history stays local. Your note can still be sent.';
-            status.scrollIntoView({ block: 'nearest' });
-            return;
-          }
-          void (value ? continuity.recording(true) : continuity.deny()).catch((error: unknown) => {
-            status.textContent = String(error);
-            status.scrollIntoView({ block: 'nearest' });
-          });
-        },
-      }),
-    );
   const copy = document.getElementById('copy');
   if (copy) copy.hidden = !state;
   bind('copy', download);
@@ -537,11 +527,12 @@ function feedback() {
       } catch {
         // An unavailable optional run does not block the note.
       }
-      const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
-      const id = await lab.sendFeedback(note, { name, run });
+      const sharePlay = feedbackSharePlay(share);
+      const noteOnly = !lab.telemetryOn && !sharePlay;
+      const id = await lab.sendFeedback(note, { name, run, sharePlay });
       status.textContent = noteOnly
         ? `Note and verdict queued without a run or history linkage · ${id}.`
-        : `Note queued; run included when available. Persona history linked only if approved · ${id}.`;
+        : `Note queued with available run and linked play · ${id}.`;
       status.scrollIntoView({ block: 'nearest' });
       send.textContent = state ? 'Back to the game' : 'Back to the title page';
       send.disabled = false;
@@ -575,7 +566,7 @@ function end() {
 }
 function continuityMenu() {
   sheet(
-    `<h2>People between chapters</h2><p id="continuity-status" role="status">${esc(continuity.status)}</p><p>Continuity stays in this browser. A fresh chapter checks all eight allocated people together. Loaded chapters keep their pinned people. Recording and character analysis are separate choices.</p><label><input type="checkbox" id="continuity-enabled" ${continuity.shelf.enabled ? 'checked' : ''}> Continue people between games</label>${state ? `<p>${state.chapterPaused ? 'Chapter paused for departure.' : state.pauseRequested ? 'Current acts are finishing.' : 'Play first, then pause at completed action boundaries. Unfinished assembly and source obligations still bind.'}</p><button id="departure">${state.chapterPaused ? 'Resume this chapter' : 'Pause chapter for departure'}</button><details><summary>Save a person to browser continuity</summary><p>A stale source cannot overwrite a newer chapter. Export first. An explicit alternative branch preserves old history and does not continue it.</p>${ALLOCATION.map((c) => `<div class="resident-checkpoint"><strong>${esc(c.name)}</strong><button data-checkpoint="${c.castId}">Save ${esc(c.name)}</button><button data-fork="${c.castId}">Save ${esc(c.name)} as an explicit alternative branch</button></div>`).join('')}</details><details><summary>Recording this history</summary><p>Recording a continuing or file history can link earlier play to the current recording identity. Default is local play until every carried history permits it. This does not grant character-analysis consent.</p><button id="allow-history">Allow recording all histories in this run</button><button id="deny-history">Keep this history local</button></details><button id="continuity-export">Download run and source archive</button>` : ''}<a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noreferrer">Inspect or export browser people</a><button id="back-continuity">Back</button>`,
+    `<h2>People between chapters</h2><p id="continuity-status" role="status">${esc(continuity.status)}</p><p>Continuity stays in this browser. A fresh chapter checks all eight allocated people together. Loaded chapters keep their pinned people. Recording and character analysis are separate choices.</p><label><input type="checkbox" id="continuity-enabled" ${continuity.shelf.enabled ? 'checked' : ''}> Continue people between games</label>${state ? `<p>${state.chapterPaused ? 'Chapter paused for departure.' : state.pauseRequested ? 'Current acts are finishing.' : 'Play first, then pause at completed action boundaries. Unfinished assembly and source obligations still bind.'}</p><button id="departure">${state.chapterPaused ? 'Resume this chapter' : 'Pause chapter for departure'}</button><details><summary>Save a person to browser continuity</summary><p>A stale source cannot overwrite a newer chapter. Export first. An explicit alternative branch preserves old history and does not continue it.</p>${ALLOCATION.map((c) => `<div class="resident-checkpoint"><strong>${esc(c.name)}</strong><button data-checkpoint="${c.castId}">Save ${esc(c.name)}</button><button data-fork="${c.castId}">Save ${esc(c.name)} as an explicit alternative branch</button></div>`).join('')}</details><p>Recorded play links across games on this device. Switch recording off in the game menu.</p><button id="continuity-export">Download run and source archive</button>` : ''}<a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noreferrer">Inspect or export browser people</a><button id="back-continuity">Back</button>`,
   );
   const attempt = async (action: () => Promise<unknown>) => {
     try {
@@ -592,7 +583,9 @@ function continuityMenu() {
   });
   bind('departure', () => {
     if (!state) return;
-    apply(state, { kind: state.chapterPaused ? 'resume-chapter' : 'pause-chapter' });
+    apply(state, {
+      kind: state.chapterPaused ? 'resume-chapter' : 'pause-chapter',
+    });
     save();
     closeModal();
     update();
@@ -606,15 +599,6 @@ function continuityMenu() {
     button.onclick = () => {
       void attempt(() => continuity.checkpoint(button.dataset.fork ?? '', true));
     };
-  bind('allow-history', () => {
-    void attempt(() => continuity.recording(true));
-  });
-  bind('deny-history', () => {
-    void attempt(async () => {
-      await continuity.deny();
-      continuityMenu();
-    });
-  });
   bind('continuity-export', download);
   bind('back-continuity', () => {
     closeModal();
