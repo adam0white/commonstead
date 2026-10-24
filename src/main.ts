@@ -1,13 +1,20 @@
-import { CAST, DISCOVERIES } from './cast.ts';
+import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
+import { CAST as ALLOCATION, CAST, DISCOVERIES } from './cast.ts';
+import { Continuity, LOCAL_KEY } from './continuity.ts';
 import './style.css';
 import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
 import { downloadJson, telemetryNotice, telemetryToggle } from '@adam0white/lab-kit';
 import { draw } from './draw.ts';
-import { apply, type Command, createGame, exportRun, importRun, NODES, type State, step } from './sim.ts';
+import { apply, type Command, createGame, exportRun, NODES, type State, step } from './sim.ts';
 
 const root = document.getElementById('app') as HTMLElement;
 const lab = createLab({ game: 'commonstead' });
-const SAVE = 'commonstead-v2',
+const continuity = new Continuity(lab, personaChannel(), () => {
+  const el = document.getElementById('continuity-status');
+  if (el) el.textContent = continuity.status;
+  if (state) save();
+});
+const SAVE = LOCAL_KEY,
   NAME = 'commonstead-name';
 let state: State | null = null,
   selected: string[] = [],
@@ -55,11 +62,11 @@ function remember(key: string, value: string) {
 function save() {
   if (!state) return;
   const run = exportRun(state);
-  remember(SAVE, JSON.stringify(run));
+  remember(SAVE, continuity.localSave(state));
   lab.captureSave(run);
 }
 function download() {
-  if (state) downloadJson('commonstead-run.json', exportRun(state));
+  if (state) downloadJson('commonstead-run.json', continuity.export(state));
 }
 function issue(cmd: Command) {
   if (!state || state.ended || paused) return;
@@ -79,27 +86,60 @@ function shellBindings() {
 }
 function title() {
   screen = 'title';
+  continuity.clear();
   state = null;
   selected = [];
   canvas = null;
   paused = false;
   lab.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">◇ All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">A residential workshop near Alder Quay</p><h1>Commonstead</h1><p>Assemble a kit store before the storm.<br>Eight residents. Prepared materials. Their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Prepared boards, small ballast bags, meal crates and hand tools. Trolleys carry loads; residents choose what they can manage. No regulated building work. The menu pauses for reading.</p>${stored(SAVE) ? '<button class="primary" id="continue">Continue workshop</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">Begin a new workshop</button><details style="margin-top:14px"><summary>Other ways in</summary><p class="small">Load a playtest run. Its seed and orders are replayed and checked before loading.</p><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details><p id="load-status" class="status" role="status"></p></section><footer>The lab records your play to improve the games. Turn off in the menu. <a href="${PRIVACY_URL}" target="_blank" rel="noreferrer">Lab privacy</a></footer></main>`;
-  bind('new', () => {
-    if (
-      stored(SAVE) &&
-      !confirm('Replace the workshop saved on this device? Download it first to keep a copy.')
-    )
-      return;
-    start(createGame(418));
-  });
-  bind('continue', () => {
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">◇ All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">A residential workshop near Alder Quay</p><h1>Commonstead</h1><p>Assemble a kit store before the storm.<br>Eight residents. Prepared materials. Their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Prepared boards, small ballast bags, meal crates and hand tools. Trolleys carry loads; residents choose what they can manage. No regulated building work. The menu pauses for reading.</p>${stored(SAVE) ? '<button class="primary" id="continue">Continue workshop</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">Begin a new workshop</button><details style="margin-top:14px"><summary>Other ways in</summary><p class="small">Load a playtest run. Its seed and orders are replayed and checked before loading.</p><button id="fresh-local">Start fresh locally without browser histories</button><button id="browser-people">Browser people and continuity</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details><p id="load-status" class="status" role="status"></p></section><footer>The lab records your play to improve the games. Turn off in the menu. <a href="${PRIVACY_URL}" target="_blank" rel="noreferrer">Lab privacy</a></footer></main>`;
+  const begin = async (localOnly = false) => {
+    const status = document.getElementById('load-status');
     try {
-      start(importRun(JSON.parse(stored(SAVE) ?? '')));
-    } catch {
-      const el = document.getElementById('load-status');
-      if (el) el.textContent = 'This save could not be replayed. Begin a new workshop or load another run.';
+      const prepared = await continuity.fresh(418, localOnly);
+      closeModal();
+      start(prepared);
+      await continuity.recording();
+      save();
+    } catch (error) {
+      if (status) status.textContent = String(error);
+      const message = document.getElementById('setup-status');
+      if (message) message.textContent = String(error);
     }
+  };
+  bind('new', () => {
+    if (!stored(SAVE)) {
+      void begin();
+      return;
+    }
+    sheet(
+      '<h2>Begin another chapter?</h2><p>The saved workshop will be replaced after admission succeeds. Keep a copy first.</p><button id="backup-local">Download previous local save</button><button id="replace-run">Begin the new chapter</button><button id="cancel-new">Keep the saved chapter</button><p id="setup-status" role="status"></p>',
+    );
+    bind('backup-local', () =>
+      downloadJson('commonstead-local-backup.json', JSON.parse(stored(SAVE) ?? 'null')),
+    );
+    bind('replace-run', () => {
+      void begin();
+    });
+    bind('cancel-new', closeModal);
+  });
+  bind('fresh-local', () => {
+    if (stored(SAVE)) remember('commonstead-preserved-before-fresh-local', stored(SAVE) ?? '');
+    void begin(true);
+  });
+  bind('browser-people', continuityMenu);
+  bind('continue', () => {
+    void (async () => {
+      try {
+        const loaded = await continuity.loadLocal(stored(SAVE) ?? '');
+        start(loaded);
+        await continuity.recording();
+        save();
+      } catch (error) {
+        const el = document.getElementById('load-status');
+        if (el) el.textContent = String(error) + ' Start fresh or load another run.';
+      }
+    })();
   });
   document.getElementById('load')?.addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -110,7 +150,10 @@ function title() {
       return;
     }
     try {
-      start(importRun(JSON.parse(await file.text())));
+      const loaded = await continuity.importFile(await file.text());
+      start(loaded);
+      await continuity.recording();
+      save();
     } catch {
       if (status) status.textContent = 'That run did not match its replay. Your saved workshop is unchanged.';
     }
@@ -196,7 +239,7 @@ function update() {
     resident.dataset.person = person?.id ?? '';
     residentKey = nextResidentKey;
     resident.innerHTML = person
-      ? `<p class="small">${esc(person.name)}${entry ? ` · ${entry.age}` : ''} · ${esc(person.role)}</p><details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Light prepared-material work only. Use a trolley; choose a comfortable load. No electrical, structural or powered-tool work.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">Spend a minute together. Offer a break, wait five seconds, then invite conversation.</p><button id="listen">Invite conversation</button><button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button></details>`
+      ? `<p class="small">${esc(person.name)}${entry ? ` · ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)}` : ''} · ${esc(person.role)} · ${esc(person.assignment)}</p>${person.lifeLine ? `<p class="small">${esc(person.lifeLine)}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Light prepared-material work only. Use a trolley; choose a comfortable load. No electrical, structural or powered-tool work.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">Spend a minute together. Offer a break, wait five seconds, then invite conversation.</p><button id="listen">Invite conversation</button><button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button></details>`
       : '';
     bind('listen', () => issue({ kind: 'order', ids: selected, target: 'listen' }));
     bind('collaborate', () => issue({ kind: 'order', ids: selected, target: 'collaborate' }));
@@ -420,9 +463,10 @@ function info() {
 }
 function menu() {
   sheet(
-    `<h2>Game menu · Paused</h2><p>Your workshop waits while this menu is open. Play is saved on this device.</p><button id="feedback">Send feedback</button><button id="download">Download this run</button><button id="fullscreen">Full screen</button><button id="to-title">To the title page</button><a href="https://human.adamwhite.work/games/">All games</a><div class="spacer"></div><div id="toggle"></div><a href="${PRIVACY_URL}" target="_blank" rel="noreferrer">Lab privacy</a><button class="primary" id="resume">Resume</button>`,
+    `<h2>Game menu · Paused</h2><p>Your workshop waits while this menu is open. Play is saved on this device.</p><button id="continuity-menu">People between chapters</button><button id="feedback">Send feedback</button><button id="download">Download this run</button><button id="fullscreen">Full screen</button><button id="to-title">To the title page</button><a href="https://human.adamwhite.work/games/">All games</a><div class="spacer"></div><div id="toggle"></div><a href="${PRIVACY_URL}" target="_blank" rel="noreferrer">Lab privacy</a><button class="primary" id="resume">Resume</button>`,
   );
   document.getElementById('toggle')?.append(telemetryToggle(lab));
+  bind('continuity-menu', continuityMenu);
   bind('resume', closeModal);
   bind('download', download);
   bind('feedback', feedback);
@@ -518,6 +562,66 @@ function end() {
   bind('end-download', download);
   bind('end-title', title);
 }
+function continuityMenu() {
+  sheet(
+    `<h2>People between chapters</h2><p id="continuity-status" role="status">${esc(continuity.status)}</p><p>Continuity stays in this browser. A fresh chapter checks all eight allocated people together. Loaded chapters keep their pinned people. Recording and character analysis are separate choices.</p><label><input type="checkbox" id="continuity-enabled" ${continuity.shelf.enabled ? 'checked' : ''}> Continue people between games</label>${state ? `<p>${state.chapterPaused ? 'Chapter paused for departure.' : state.pauseRequested ? 'Current acts are finishing.' : 'Play first, then pause at completed action boundaries. Unfinished assembly and source obligations still bind.'}</p><button id="departure">${state.chapterPaused ? 'Resume this chapter' : 'Pause chapter for departure'}</button><details><summary>Save a person to browser continuity</summary><p>A stale source cannot overwrite a newer chapter. Export first. An explicit alternative branch preserves old history and does not continue it.</p>${ALLOCATION.map((c) => `<div class="resident-checkpoint"><strong>${esc(c.name)}</strong><button data-checkpoint="${c.castId}">Save ${esc(c.name)}</button><button data-fork="${c.castId}">Save ${esc(c.name)} as an explicit alternative branch</button></div>`).join('')}</details><details><summary>Recording this history</summary><p>Recording a continuing or file history can link earlier play to the current recording identity. Default is local play until every carried history permits it. This does not grant character-analysis consent.</p><button id="allow-history">Allow recording all histories in this run</button><button id="deny-history">Keep this history local</button></details><button id="continuity-export">Download run and source archive</button>` : ''}<a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noreferrer">Inspect or export browser people</a><button id="back-continuity">Back</button>`,
+  );
+  const attempt = async (action: () => Promise<unknown>) => {
+    try {
+      await action();
+      if (state) save();
+    } catch (error) {
+      continuity.status = String(error);
+    }
+    const el = document.getElementById('continuity-status');
+    if (el) el.textContent = continuity.status;
+  };
+  document.getElementById('continuity-enabled')?.addEventListener('change', (e) => {
+    void attempt(() => continuity.setEnabled((e.target as HTMLInputElement).checked));
+  });
+  bind('departure', () => {
+    if (!state) return;
+    apply(state, { kind: state.chapterPaused ? 'resume-chapter' : 'pause-chapter' });
+    save();
+    closeModal();
+    update();
+    if (state.chapterPaused) continuityMenu();
+  });
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-checkpoint]'))
+    button.onclick = () => {
+      void attempt(() => continuity.checkpoint(button.dataset.checkpoint ?? ''));
+    };
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-fork]'))
+    button.onclick = () => {
+      void attempt(() => continuity.checkpoint(button.dataset.fork ?? '', true));
+    };
+  bind('allow-history', () => {
+    void attempt(() => continuity.recording(true));
+  });
+  bind('deny-history', () => {
+    void attempt(async () => {
+      await continuity.deny();
+      continuityMenu();
+    });
+  });
+  bind('continuity-export', download);
+  bind('back-continuity', () => {
+    closeModal();
+    if (state) menu();
+  });
+}
+const attemptedDeaths = new Set<string>();
+const invalidateHistory = () => continuity.invalidate();
+window.addEventListener('hf-lab-preference', invalidateHistory);
+window.addEventListener('hf-persona-preference', invalidateHistory);
+window.addEventListener('storage', invalidateHistory);
+document.addEventListener('change', (event) => {
+  if ((event.target as HTMLElement)?.getAttribute('aria-label') === 'Record play for the lab')
+    invalidateHistory();
+});
+watchPersonaCheckpoint(() => {
+  if (state?.chapterPaused) return continuity.checkpointAll();
+});
 lab.trackRun(() => (state ? exportRun(state) : null), {
   runKey: () => state?.seed ?? 'title',
   getLogs: () => state?.villagers.map((v) => `${v.name}: ${v.says}`) ?? [],
@@ -540,15 +644,29 @@ function frame(now: number) {
   const elapsed = Math.min(1, (now - last) / 1000);
   let advanced = false;
   last = now;
-  if (state && screen === 'play' && !paused && !document.hidden) {
+  if (state && screen === 'play' && !paused && !state.chapterPaused && !document.hidden) {
     carry += elapsed * speed;
-    while (carry >= 1 && !state.ended) {
+    while (carry >= 1 && !state.ended && !state.chapterPaused) {
       step(state);
       advanced = true;
       carry--;
-      if (state.tick % 10 === 0) save();
+      if (state.tick % 10 === 0 || state.chapterPaused) save();
     }
-    if (advanced) update();
+    if (advanced) {
+      update();
+      for (const head of continuity.heads) {
+        if (
+          !attemptedDeaths.has(head.revision) &&
+          !head.terminal &&
+          state.villagers.some((v) => v.person.id === head.castId && !v.person.body.alive)
+        ) {
+          attemptedDeaths.add(head.revision);
+          void continuity.checkpoint(head.castId).catch((error) => {
+            continuity.status = String(error);
+          });
+        }
+      }
+    }
     if (state.ended) end();
   }
   if (canvas && state)

@@ -1,153 +1,73 @@
-import { TRAIT_KEYS, type Traits, VALUE_KEYS, type Values } from '@adam0white/human-framework';
+import { castForGame } from '@adam0white/lab-client';
 
-// Registry edition 2026-10-23. No opening priors override a continuing Person.
-export const CAST = [
+const allocation = castForGame('commonstead');
+const roles = [
   {
     name: 'Nora',
     sex: 'female',
     role: 'Resident repair designer',
     castId: 'hf.cast.nora.smallworks',
-    age: 28,
-    family: 'Estranged older brother remains background; no canonical partner.',
-    traits: {
-      honesty: 0.7,
-      conscientiousness: 0.6,
-      extraversion: 0.45,
-      agreeableness: 0.5,
-      emotionality: 0.5,
-      openness: 0.85,
-    },
-    values: {
-      selfDirection: 0.9,
-      stimulation: 0.8,
-    },
+    family: 'She has an estranged older brother.',
   },
   {
     name: 'Sam',
     sex: 'male',
     role: 'Repair apprentice; resident game playtester',
     castId: 'hf.cast.sam.smallworks',
-    age: 18,
-    family: 'Mother and sister remain background; no merger with older source Neighbours Sam.',
-    traits: {
-      honesty: 0.65,
-      conscientiousness: 0.5,
-      extraversion: 0.6,
-      agreeableness: 0.65,
-      emotionality: 0.55,
-      openness: 0.8,
-    },
-    values: {
-      achievement: 0.8,
-      stimulation: 0.7,
-    },
+    family: 'His mother and sister are part of his life.',
   },
   {
     name: 'Dai',
     sex: 'male',
     role: 'Guest maintenance mentor; dam cover arranged',
     castId: 'hf.cast.dai.glance',
-    age: 63,
-    family: 'Separated; an adult daughter lives nearby, newly authored.',
-    traits: {
-      honesty: 0.7,
-      emotionality: 0.3,
-      extraversion: 0.35,
-      agreeableness: 0.35,
-      conscientiousness: 0.75,
-      openness: 0.45,
-    },
-    values: {},
+    family: 'Separated; an adult daughter lives near his home.',
   },
   {
     name: 'Nerys',
     sex: 'female',
     role: 'Guest host; inn cover arranged',
     castId: 'hf.cast.nerys.glance',
-    age: 47,
-    family: 'Lives with a long-term partner who remains background.',
-    traits: {
-      honesty: 0.75,
-      conscientiousness: 0.7,
-      extraversion: 0.75,
-      agreeableness: 0.6,
-      emotionality: 0.55,
-      openness: 0.65,
-    },
-    values: {},
+    family: 'Lives with a long-term partner.',
   },
   {
     name: 'Dilek',
     sex: 'female',
     role: 'Shared-kitchen resident; cold-station cook',
     castId: 'hf.cast.dilek.pass',
-    age: 34,
-    family: 'Younger brother and mother remain unnamed background relatives.',
-    traits: {
-      honesty: 0.7,
-      conscientiousness: 0.55,
-      extraversion: 0.6,
-      emotionality: 0.65,
-    },
-    values: {},
+    family: 'She has a younger brother and a mother.',
   },
   {
     name: 'Burak',
     sex: 'male',
     role: 'Resident treasurer; accountant',
     castId: 'hf.cast.burak.stairwell',
-    age: 31,
-    family: 'Single; family elsewhere remains unnamed.',
-    traits: {
-      honesty: 0.8,
-      extraversion: 0.3,
-      agreeableness: 0.7,
-      conscientiousness: 0.8,
-      openness: 0.5,
-    },
-    values: {},
+    family: 'Single; his family lives elsewhere.',
   },
   {
     name: 'Sevim',
     sex: 'female',
     role: 'Guest tutor and records reader',
     castId: 'hf.cast.sevim.stairwell',
-    age: 69,
-    family: 'Widowed; an adult child lives abroad, newly authored background.',
-    traits: {
-      honesty: 0.6,
-      extraversion: 0.6,
-      agreeableness: 0.35,
-      conscientiousness: 0.85,
-      openness: 0.4,
-    },
-    values: {},
+    family: 'Widowed; an adult child lives abroad.',
   },
   {
     name: 'Oskar',
     sex: 'male',
     role: 'Guest photographer; amateur climber',
     castId: 'hf.cast.oskar.rope',
-    age: 34,
-    family: 'Younger sister remains background; no canonical partner.',
-    traits: {
-      conscientiousness: 0.45,
-      emotionality: 0.2,
-      agreeableness: 0.4,
-      extraversion: 0.75,
-      openness: 0.6,
-      honesty: 0.55,
-    },
-    values: {},
+    family: 'He has a younger sister.',
   },
 ] as const;
-
-export function openingProfile(entry: (typeof CAST)[number]) {
-  return {
-    traits: { ...Object.fromEntries(TRAIT_KEYS.map((key) => [key, 0.5])), ...entry.traits } as Traits,
-    values: { ...Object.fromEntries(VALUE_KEYS.map((key) => [key, 0.5])), ...entry.values } as Values,
-  };
-}
+export const CAST = roles.map((role) => {
+  const canonical = allocation.find((p) => p.castId === role.castId);
+  if (!canonical) throw new Error('Canonical allocation missing');
+  return { ...canonical, ...role };
+});
+export const openingProfile = (entry: (typeof CAST)[number]) => ({
+  traits: structuredClone(entry.traits),
+  values: structuredClone(entry.values),
+});
 // Authored possibilities become known only through the chosen workshop encounters.
 export const DISCOVERIES = [
   [

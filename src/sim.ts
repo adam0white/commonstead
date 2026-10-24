@@ -9,7 +9,9 @@ import {
   readPerson,
   tick as tickPerson,
 } from '@adam0white/human-framework';
+import { canonicalPersona } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
+import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 
 export function taskLabel(target: string): string {
   return (
@@ -27,13 +29,18 @@ export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
   | { kind: 'order'; ids: string[]; target: string; x?: number; y?: number }
   | { kind: 'build'; ids: string[]; building: 'house' | 'storehouse'; x: number; y: number }
-  | { kind: 'train' };
+  | { kind: 'train' }
+  | { kind: 'pause-chapter' }
+  | { kind: 'resume-chapter' };
 export type Input = { tick: number; command: Command };
 type Order = { target: string; x: number; y: number };
 export type Villager = {
   id: string;
   name: string;
   role: string;
+  assignment: string;
+  lifeLine: string;
+  availableAt: number;
   family: string;
   discovery: number;
   invitedBreak: boolean;
@@ -57,6 +64,9 @@ export type Building = {
   complete: boolean;
 };
 export type State = {
+  chapter: Chapter | null;
+  pauseRequested: boolean;
+  chapterPaused: boolean;
   trainingUntil: number | null;
   seed: number;
   tick: number;
@@ -84,6 +94,9 @@ function makeVillager(seed: number, n: number): Villager {
   return {
     id,
     name,
+    assignment: entry?.work ?? 'Light prepared-material tasks',
+    lifeLine: '',
+    availableAt: 0,
     role: entry?.role ?? 'Episode helper; orientation covers light prepared-material tasks only',
     family: entry?.family ?? 'No maintained biography',
     discovery: 0,
@@ -111,14 +124,40 @@ function makeVillager(seed: number, n: number): Villager {
     status: 'waiting',
   };
 }
-export function createGame(seed: number): State {
+export function createGame(seed: number, chapter?: Chapter): State {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error('Invalid seed');
+  const villagers = Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1));
+  if (chapter) {
+    checkChapter(chapter);
+    for (const v of villagers) {
+      const input = chapter.inputs.find((i) => i.parent.castId === v.person.id);
+      const expected = input ? admitResident(input, v.person) : v.person;
+      if (canonicalPersona(chapter.initial[v.person.id]) !== canonicalPersona(expected))
+        throw new Error('Pinned initial actor differs from semantic admission.');
+      v.person = structuredClone(expected);
+      if (input) {
+        const facts = lifeAdmission(input, 'commonstead');
+        v.assignment = facts.assignment;
+        v.lifeLine = facts.line;
+        v.says = facts.line;
+        v.availableAt = facts.availableForExtraWork ? 0 : 30;
+        v.x = facts.life.place === 'public-garden' ? 220 : facts.startsAtHome ? 450 : 750;
+        v.y = facts.life.place === 'public-garden' ? 570 : facts.startsAtHome ? 425 : 410;
+        v.status = v.availableAt
+          ? 'attending own routine; light shared tasks after 0:30'
+          : 'available for agreed light tasks';
+      }
+    }
+  }
   return {
     seed,
+    chapter: chapter ? structuredClone(chapter) : null,
+    pauseRequested: false,
+    chapterPaused: false,
     trainingUntil: null,
     tick: 0,
     resources: { food: 100, wood: 80, stone: 0 },
-    villagers: Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1)),
+    villagers,
     buildings: [{ id: 'town', kind: 'town', x: 500, y: 350, progress: 1, complete: true }],
     inputs: [],
     message:
@@ -176,6 +215,11 @@ function choices(s: State): Affordance[] {
   return out;
 }
 function chooseWork(s: State, v: Villager, push = false) {
+  if (s.pauseRequested) {
+    v.task = 'idle';
+    v.status = 'chapter paused at action boundary';
+    return;
+  }
   interrupt(v);
   if (v.order && Math.hypot(v.order.x - v.x, v.order.y - v.y) > 15) {
     const a = offer('move', 10, 0.15, {});
@@ -256,8 +300,28 @@ function assign(s: State, v: Villager, order: Order) {
   chooseWork(s, v);
 }
 export function apply(s: State, c: Command): void {
-  if (s.ended) return;
+  if (s.ended && c.kind !== 'pause-chapter') return;
+  if (s.chapterPaused && c.kind !== 'resume-chapter') return;
   s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+  if (c.kind === 'pause-chapter') {
+    s.pauseRequested = true;
+    s.chapterPaused = s.villagers.every((v) => !v.person.activity);
+    s.message = s.chapterPaused
+      ? 'Chapter paused for departure. Source obligations still bind.'
+      : 'Finishing current acts before departure. No new acts will start.';
+    return;
+  }
+  if (c.kind === 'resume-chapter') {
+    s.pauseRequested = false;
+    s.chapterPaused = false;
+    for (const v of s.villagers) if (v.order) chooseWork(s, v);
+    s.message = 'Chapter resumed.';
+    return;
+  }
+  if (s.pauseRequested) {
+    s.message = 'Finish the departure pause, then resume before issuing new work.';
+    return;
+  }
   if (c.kind === 'train') {
     if (s.trainingUntil !== null) {
       s.message = 'One helper is already in orientation.';
@@ -281,6 +345,11 @@ export function apply(s: State, c: Command): void {
   const selected = s.villagers.filter((v) => c.ids.includes(v.id));
   if (!selected.length) {
     s.message = 'Select at least one person.';
+    return;
+  }
+  if (selected.some((v) => s.tick < v.availableAt)) {
+    s.message =
+      'A selected resident is keeping time for their carried routine until 0:30. Their occupation and obligations remain.';
     return;
   }
   if (c.kind === 'build') {
@@ -407,7 +476,7 @@ export function apply(s: State, c: Command): void {
   s.message = `${selected.map((v) => v.name).join(', ')} → ${c.target === 'move' ? 'move' : taskLabel(c.target)}.`;
 }
 export function step(s: State): void {
-  if (s.ended) return;
+  if (s.ended || s.chapterPaused) return;
   s.tick++;
   if (s.trainingUntil !== null && s.tick >= s.trainingUntil) {
     const arrival = makeVillager(s.seed, s.villagers.length + 1);
@@ -418,6 +487,8 @@ export function step(s: State): void {
   }
   for (const v of s.villagers) {
     tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
+    if (v.availableAt === s.tick && v.status.startsWith('attending own routine'))
+      v.status = 'available for agreed light tasks';
     if (v.recoveryUntil) {
       if (s.tick < v.recoveryUntil) continue;
       const action = v.person.activity?.action;
@@ -491,9 +562,18 @@ export function step(s: State): void {
       v.says = 'The building is finished.';
     }
   }
+  if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
+    s.chapterPaused = true;
+    s.message = 'Chapter paused for departure at completed action boundaries.';
+  }
   if (s.tick === 480) s.message = 'Storm warning: two minutes remain. Finish the storehouse.';
   if (s.tick === 600) {
     s.ended = true;
+    // The actual storm ends work. It interrupts remaining acts; it does not complete obligations.
+    for (const v of s.villagers) {
+      interrupt(v);
+      v.recoveryUntil = 0;
+    }
     s.won = s.buildings.some((b) => b.kind === 'storehouse' && b.complete);
     s.message = s.won
       ? 'The storehouse keeps the shared supplies dry. The workshop can open tomorrow.'
@@ -519,10 +599,10 @@ export function stateHash(s: State): string {
   }
   return (h >>> 0).toString(16).padStart(8, '0');
 }
-export function replay(seed: number, inputs: Input[], tick: number): State {
+export function replay(seed: number, inputs: Input[], tick: number, chapter?: Chapter): State {
   if (!Number.isInteger(tick) || tick < 0 || tick > 600 || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
-  const s = createGame(seed);
+  const s = createGame(seed, chapter);
   let previous = -1;
   for (const input of inputs) {
     if (
@@ -530,20 +610,29 @@ export function replay(seed: number, inputs: Input[], tick: number): State {
       input.tick < previous ||
       input.tick > tick ||
       input.tick < 0 ||
-      input.tick >= 600
+      (input.tick >= 600 && input.command.kind !== 'pause-chapter')
     )
       throw new Error('Invalid replay input tick');
-    while (s.tick < input.tick) step(s);
+    while (s.tick < input.tick) {
+      const before = s.tick;
+      step(s);
+      if (before === s.tick) throw new Error('Replay advances a paused chapter');
+    }
     apply(s, input.command);
     previous = input.tick;
   }
-  while (s.tick < tick) step(s);
+  while (s.tick < tick) {
+    const before = s.tick;
+    step(s);
+    if (before === s.tick) throw new Error('Replay advances a paused chapter');
+  }
   return s;
 }
 export function exportRun(s: State): unknown {
   return {
-    schema: 2,
-    framework: '2.14.1',
+    schema: 3,
+    framework: '2.18.0',
+    chapter: structuredClone(s.chapter),
     seed: s.seed,
     tick: s.tick,
     inputs: structuredClone(s.inputs),
@@ -555,6 +644,7 @@ export function importRun(raw: unknown): State {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
     const r = raw as {
+      chapter: Chapter | null;
       schema: number;
       framework: string;
       seed: number;
@@ -563,8 +653,8 @@ export function importRun(raw: unknown): State {
       state: State;
       hash: string;
     };
-    if (r.schema !== 2 || r.framework !== '2.14.1') throw new Error('version');
-    const s = replay(r.seed, r.inputs, r.tick);
+    if (r.schema !== 3 || r.framework !== '2.18.0') throw new Error('version');
+    const s = replay(r.seed, r.inputs, r.tick, r.chapter ?? undefined);
     if (stable(s) !== stable(r.state) || stateHash(s) !== r.hash) throw new Error('state mismatch');
     return s;
   } catch {

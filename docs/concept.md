@@ -29,7 +29,7 @@ The first two twists in this slice are embodied work pace and remembered treatme
 
 ## Framework boundary
 
-The content phase retains @adam0white/human-framework exactly 2.14.1. The authorized cast release will replace this only with exact published pins from the coordinator’s platform-ready contract. The host owns geometry, resource stocks, building progress, weather and RTS orders. Each villager owns an HF Person. HF owns body, temperament, memory and willingness. The host offers world affordances, advances HF deterministically, maps exertion into work rate and reads HF social responses; it does not reimplement a person model. Need acts occur at the person's position. All RNG is seeded and serialized. Input records use integer simulation ticks; replay does not depend on render rate, viewport, menu or speed. Export includes schema version, seed, input log and full state JSON. Import verifies replay equivalence before replacing a run.
+Pin @adam0white/human-framework exactly 2.18.0 (engine 2.17.0), lab-client 0.4.0 and lab-kit 0.5.0. The host owns geometry, resource stocks, building progress, weather and RTS orders. Each villager owns an HF Person. HF owns body, temperament, memory and willingness. The host offers world affordances, advances HF deterministically, maps exertion into work rate and reads HF social responses; it does not reimplement a person model. Need acts occur at the person's position. All RNG is seeded and serialized. Input records use integer simulation ticks; replay does not depend on render rate, viewport, menu or speed. Export includes schema version, seed, input log and full state JSON. Import verifies replay equivalence before replacing a run.
 
 ## Controls and screens
 
@@ -63,7 +63,7 @@ DL-32/33: selecting, moving, gathering and placing buildings act on the map imme
 
 ## Authorized canonical adoption — 2026-10-23
 
-This changes done for the bounded cast increment: all eight allocated residents use canonical profiles and playable private encounters; released browser life, recording gates, deterministic pinned replay, independent review, exact green CI, live release verification and two viewport cross-origin journeys are required before technical delivery. Owner accepts after playing. Content-phase work alone is not that delivery. See [cast-adoption.md](cast-adoption.md) for census and scope.
+This changes done for the bounded cast increment: all eight allocated residents use canonical profiles and playable private encounters; released browser life, recording gates, deterministic pinned replay, independent review, exact green CI, live release verification and two viewport cross-origin journeys are required before technical delivery. Owner accepts after playing. Technical delivery is separate from owner acceptance. See [cast-adoption.md](cast-adoption.md) for census and scope.
 
 Nora is a fictional repair designer and Sam a fictional resident game playtester. Neither supplies actual lab review or owner acceptance evidence. Fresh fiction explicitly arranges Dai’s dam cover and Nerys’s inn cover before their visits. Continuing branches must validate travel and obligations; biography alone cannot clear a source obligation.
 
