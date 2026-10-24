@@ -36,7 +36,7 @@ import {
   preparePersonaLife,
 } from '@adam0white/lab-client';
 import { CAST } from '../src/cast.ts';
-import { Continuity, watchShelfPreference } from '../src/continuity.ts';
+import { Continuity, resumeForPlay, watchShelfPreference } from '../src/continuity.ts';
 import { admitResident, residentTransfer } from '../src/passport.ts';
 
 const clock = 1_790_000_000_000;
@@ -396,4 +396,46 @@ test('recording metadata and checkpoint publication do not query historical reco
   await c.deny();
   playedPause(state);
   await c.checkpoint(CAST[0]!.castId);
+});
+
+test.each([false, true])(
+  'failed admission preserves installed save and receipts; accepted before lost reply: %s',
+  async (accepted) => {
+    const h = harness([await source()]);
+    const c = new Continuity(h.lab, h.shelf);
+    const state = await c.fresh(418);
+    const saved = c.localSave(state);
+    const receipts = structuredClone(c.heads);
+    const request = h.shelf.request.bind(h.shelf);
+    h.shelf.request = async (r) => {
+      if (r.action === 'putBatch') {
+        if (accepted) await request(r);
+        throw new Error('Accepted reply unavailable');
+      }
+      return request(r);
+    };
+    await expect(c.fresh(418)).rejects.toThrow(/Accepted reply unavailable/);
+    expect(c.heads).toEqual(receipts);
+    expect(c.localSave(state)).toBe(saved);
+    expect(h.requests.filter((r) => r.action === 'putBatch')).toHaveLength(accepted ? 2 : 1);
+    if (accepted) expect(h.data.heads[receipts[0]!.castId]).not.toBe(receipts[0]!.revision);
+  },
+);
+
+test('ordinary restore resumes departure-paused and pending chapters through replayed input', () => {
+  for (const pending of [false, true]) {
+    const state = createGame(418);
+    apply(state, { kind: 'order', ids: ['v1'], target: 'wood' });
+    step(state);
+    apply(state, { kind: 'pause-chapter' });
+    if (!pending) for (let i = 0; i < 50 && !state.chapterPaused; i++) step(state);
+    const restored = importRun(exportRun(state));
+    resumeForPlay(restored);
+    const tick = restored.tick;
+    step(restored);
+    expect(restored.tick).toBe(tick + 1);
+    expect(restored.chapterPaused).toBe(false);
+    expect(restored.pauseRequested).toBe(false);
+    expect(stateHash(importRun(exportRun(restored)))).toBe(stateHash(restored));
+  }
 });

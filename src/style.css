@@ -651,3 +651,222 @@ summary {
 .panel a {
   color: var(--ink-soft);
 }
+
+/* Text grows with available width, including descendants with their own sizes. */
+:root {
+  font-size: clamp(17px, 1.25vw + 7px, 22px);
+  line-height: 1.4;
+}
+body {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+#app {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.title,
+.game {
+  height: 100%;
+}
+.lab-footer {
+  padding: 4px 12px;
+  font-size: clamp(13px, 1vw + 5px, 16px);
+  line-height: 1.3;
+  border-top: 1px solid #b8ad98;
+}
+.lab-footer .telemetry-notice {
+  display: inline;
+  font-size: inherit;
+}
+.lab-footer a {
+  margin-left: 8px;
+}
+.small,
+small,
+.panel p,
+.panel label,
+.status,
+.task,
+.notice,
+.objective p,
+.speed button,
+.unit-list button,
+.actions button,
+.verdicts button,
+.feedback-actions button,
+.map-caption {
+  font-size: clamp(15px, 1.1vw + 9px, 21px);
+  line-height: 1.4;
+}
+.layout {
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 38vw, 490px);
+}
+.side {
+  overflow: auto;
+}
+.sheet {
+  min-height: 150px;
+  flex-shrink: 0;
+}
+.objective,
+.actions,
+.notice {
+  flex-shrink: 0;
+}
+.notice {
+  max-height: none;
+}
+.panel {
+  width: min(560px, 100%);
+}
+.panel:has(.feedback-body) {
+  max-height: 95dvh;
+}
+.feedback-actions #cancel-feedback {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 145px minmax(0, 1fr);
+  }
+  .map-wrap {
+    min-height: 0;
+  }
+  .side {
+    height: auto;
+    min-height: 0;
+    display: block;
+  }
+  .sheet {
+    overflow: visible;
+    min-height: 0;
+  }
+  .objective {
+    padding: 6px 12px;
+  }
+  .objective .details {
+    display: none;
+  }
+  .objective strong {
+    font-size: 16px;
+  }
+  .objective .speed {
+    position: static;
+  }
+  .unit-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--paper, #f3ecdd);
+  }
+  .notice {
+    max-height: none;
+  }
+  .title header span {
+    font-size: 13px;
+  }
+}
+@media (min-width: 761px) and (max-width: 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(240px, 34dvh) minmax(0, 1fr);
+  }
+  .side {
+    border-left: 0;
+    border-top: 1px solid #b8ad98;
+  }
+  .sheet {
+    flex: 1 0 auto;
+  }
+}
+
+/* Keep the deadline outside the scrolling resident sheet at every width. */
+.game {
+  grid-template-rows: 44px auto minmax(0, 1fr);
+}
+.side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+}
+.sheet {
+  min-height: 0;
+  overflow: auto;
+}
+.notice {
+  max-height: 3.8em;
+  overflow: auto;
+}
+.actions {
+  position: static;
+}
+.lab-footer .lk-telemetry-notice {
+  display: inline;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  font: inherit !important;
+}
+.lab-footer .lk-telemetry-notice button {
+  font: inherit;
+  padding: 4px 8px;
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-rows: 120px minmax(0, 1fr);
+  }
+  .side {
+    display: grid;
+  }
+  .sheet {
+    overflow: auto;
+  }
+  .actions {
+    position: static;
+  }
+}
+
+.map-wrap .speed {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: min(240px, calc(100% - 16px));
+  margin: 0;
+  z-index: 1;
+  background: var(--paper);
+}
+.lab-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lab-footer .lk-telemetry-notice {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  position: relative !important;
+  padding-right: 58px !important;
+}
+.lab-footer .lk-telemetry-notice button {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0 !important;
+  width: 54px;
+  min-height: 44px;
+  padding: 2px;
+}
+.lab-footer > a {
+  flex: none;
+  max-width: 50px;
+  margin: 0;
+}

@@ -12,7 +12,7 @@ import {
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
 import { admitResident, type Chapter, DIALECT, RULES, residentTransfer } from './passport.ts';
-import { createGame, exportRun, importRun, type State } from './sim.ts';
+import { apply, createGame, exportRun, importRun, type State } from './sim.ts';
 
 type Shelf = ReturnType<typeof personaChannel>;
 type SourceArchive = { revision: string; source: PersonaEnvelope['source']; snapshot: unknown };
@@ -320,4 +320,9 @@ export function watchShelfPreference(invalidate: () => void, events: EventTarget
     events.removeEventListener('hf-persona-preference', invalidate);
     events.removeEventListener('storage', stored);
   };
+}
+
+/** Resume historical departure pauses through a replayed command, never by changing flags. */
+export function resumeForPlay(state: State) {
+  if (!state.ended && (state.chapterPaused || state.pauseRequested)) apply(state, { kind: 'resume-chapter' });
 }

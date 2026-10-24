@@ -21,7 +21,18 @@ export function draw(
   }
   const c = canvas.getContext('2d');
   if (!c) return;
-  c.setTransform(canvas.width / 1000, 0, 0, canvas.height / 700, 0, 0);
+  const scale = Math.min(box.width / 1000, box.height / 700);
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.fillStyle = '#d9d8ba';
+  c.fillRect(0, 0, box.width, box.height);
+  c.setTransform(
+    dpr * scale,
+    0,
+    0,
+    dpr * scale,
+    (dpr * (box.width - 1000 * scale)) / 2,
+    (dpr * (box.height - 700 * scale)) / 2,
+  );
   c.fillStyle = '#d9d8ba';
   c.fillRect(0, 0, 1000, 700);
   c.lineWidth = 1.5;
@@ -54,13 +65,14 @@ export function draw(
       if (node.kind === 'food') c.fillText('+', x + 12, y + 15);
     }
     c.fillStyle = '#23201b';
-    c.font = '22px Georgia';
+    c.font = `${Math.max(22, 16 / scale)}px Georgia`;
     c.textAlign = 'center';
-    c.fillText(
-      node.kind === 'food' ? 'Meal crates' : node.kind === 'wood' ? 'Prepared boards' : 'Ballast bags',
-      0,
-      87,
-    );
+    if (scale >= 0.4)
+      c.fillText(
+        node.kind === 'food' ? 'Meal crates' : node.kind === 'wood' ? 'Prepared boards' : 'Ballast bags',
+        0,
+        87,
+      );
     c.restore();
   }
   for (const b of s.buildings) {
@@ -97,9 +109,9 @@ export function draw(
       c.stroke();
     }
     c.fillStyle = '#23201b';
-    c.font = '21px Georgia';
+    c.font = `${Math.max(21, 16 / scale)}px Georgia`;
     c.textAlign = 'center';
-    c.fillText(b.kind === 'town' ? 'Workshop hub' : b.kind === 'house' ? 'Guest cabin' : 'Kit store', 0, 76);
+    c.fillText(b.kind === 'town' ? 'Workshop hub' : b.kind === 'house' ? 'Guest cabin' : 'Storehouse', 0, 76);
     c.restore();
   }
   const colors = ['#3d5a73', '#865c46', '#4f6b3a', '#8a7152', '#6b617f'];
@@ -133,9 +145,9 @@ export function draw(
     c.stroke();
     c.rotate(tired ? -0.13 : 0);
     c.fillStyle = '#23201b';
-    c.font = '20px Georgia';
+    c.font = `${Math.max(20, 16 / scale)}px Georgia`;
     c.textAlign = 'center';
-    c.fillText(v.name, 0, 47);
+    if (scale >= 0.4 && selected.includes(v.id)) c.fillText(v.name, 0, 47);
     c.restore();
   }
   const command = s.inputs.at(-1)?.command;
@@ -159,8 +171,8 @@ export function draw(
     c.fillStyle = '#f3ecdd';
     c.fillRect(12, 12, 650, 46);
     c.fillStyle = '#c2412d';
-    c.font = '23px Georgia';
-    c.fillText(`Place ${placing} on open ground · Cancel below`, 26, 42);
+    c.font = `${Math.max(23, 16 / scale)}px Georgia`;
+    c.fillText('Choose a place.', 26, 42);
   }
   if (mark) {
     c.strokeStyle = '#c2412d';

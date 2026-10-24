@@ -11,19 +11,20 @@
   "scripts": {
     "dev": "vite",
     "build": "stamp-release && vite build",
-    "test": "vitest run",
+    "test": "node scripts/suite-lock.ts -- vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
     "check": "npm run lint && npm run typecheck && npm test",
     "ci": "npm run check && npm run build",
     "check:lane": "npm run ci",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "test:ui": "node scripts/simplify-ui-check.mjs"
   },
   "dependencies": {
     "@adam0white/human-framework": "2.18.0",
-    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.4.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.4.tgz"
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.6.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.6.tgz"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
