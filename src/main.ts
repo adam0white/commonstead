@@ -92,7 +92,7 @@ function title() {
   canvas = null;
   paused = false;
   lab.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">◇ All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">A residential workshop near Alder Quay</p><h1>Commonstead</h1><p>Assemble a kit store before the storm.<br>Eight residents. Prepared materials. Their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Prepared boards, small ballast bags, meal crates and hand tools. Trolleys carry loads; residents choose what they can manage. No regulated building work. The menu pauses for reading.</p>${stored(SAVE) ? '<button class="primary" id="continue">Continue workshop</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">Begin a new workshop</button><details style="margin-top:14px"><summary>Other ways in</summary><p class="small">Load a playtest run. Its seed and orders are replayed and checked before loading.</p><button id="fresh-local">Start fresh locally without browser histories</button><button id="browser-people">Browser people and continuity</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details><p id="load-status" class="status" role="status"></p></section><footer>The lab records your play to improve the games. Turn off in the menu. <a href="${PRIVACY_URL}" target="_blank" rel="noreferrer">Lab privacy</a></footer></main>`;
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">◇ All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">A residential workshop near Alder Quay</p><h1>Commonstead</h1><p>Assemble a kit store before the storm.<br>Eight residents. Prepared materials. Their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Prepared boards, small ballast bags, meal crates and hand tools. Trolleys carry loads; residents choose what they can manage. No regulated building work. The menu pauses for reading.</p>${stored(SAVE) ? '<button class="primary" id="continue">Continue workshop</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">Begin a new workshop</button><button id="title-feedback">Send feedback</button><details style="margin-top:14px"><summary>Other ways in</summary><p class="small">Load a playtest run. Its seed and orders are replayed and checked before loading.</p><button id="fresh-local">Start fresh locally without browser histories</button><button id="browser-people">Browser people and continuity</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details><p id="load-status" class="status" role="status"></p></section><footer>The lab records your play to improve the games. Turn off in the menu. <a href="${PRIVACY_URL}" target="_blank" rel="noreferrer">Lab privacy</a></footer></main>`;
   const begin = async (localOnly = false) => {
     const status = document.getElementById('load-status');
     try {
@@ -128,6 +128,7 @@ function title() {
     void begin(true);
   });
   bind('browser-people', continuityMenu);
+  bind('title-feedback', feedback);
   bind('continue', () => {
     void (async () => {
       try {
@@ -520,10 +521,11 @@ function feedback() {
         },
       }),
     );
+  const copy = document.getElementById('copy');
+  if (copy) copy.hidden = !state;
   bind('copy', download);
-  bind('cancel-feedback', menu);
+  bind('cancel-feedback', state ? menu : closeModal);
   send.onclick = async () => {
-    if (!state) return;
     send.disabled = true;
     const name = (document.getElementById('name') as HTMLInputElement).value.trim();
     remember(NAME, name);
@@ -535,12 +537,13 @@ function feedback() {
       } catch {
         // An unavailable optional run does not block the note.
       }
+      const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
       const id = await lab.sendFeedback(note, { name, run });
-      status.textContent = !lab.telemetryOn
+      status.textContent = noteOnly
         ? `Note and verdict queued without a run or history linkage · ${id}.`
         : `Note queued; run included when available. Persona history linked only if approved · ${id}.`;
       status.scrollIntoView({ block: 'nearest' });
-      send.textContent = 'Back to the game';
+      send.textContent = state ? 'Back to the game' : 'Back to the title page';
       send.disabled = false;
       send.onclick = closeModal;
     } catch (error) {
