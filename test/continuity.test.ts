@@ -411,7 +411,24 @@ test('recording preference changes do not cancel a chapter waiting for the shelf
   const stop = watchShelfPreference(() => continuity.invalidate(), events);
   const pending = continuity.fresh(42);
   events.dispatchEvent(new Event('hf-lab-preference'));
+  events.dispatchEvent(Object.assign(new Event('storage'), { key: 'hf-persona-recording:old-history' }));
   finish(true);
   await expect(pending).resolves.toBeDefined();
+  stop();
+});
+
+test('browser-person continuity changes still cancel a chapter waiting for the shelf', async () => {
+  const h = harness();
+  let finish: (value: boolean) => void = () => {};
+  h.shelf.ready = new Promise<boolean>((resolve) => {
+    finish = resolve;
+  });
+  const continuity = new Continuity(h.lab, h.shelf);
+  const events = new EventTarget();
+  const stop = watchShelfPreference(() => continuity.invalidate(), events);
+  const pending = continuity.fresh(42);
+  events.dispatchEvent(new Event('hf-persona-preference'));
+  finish(true);
+  await expect(pending).rejects.toThrow(/changed/i);
   stop();
 });
