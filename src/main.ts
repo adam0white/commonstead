@@ -3,7 +3,7 @@ import { CAST as ALLOCATION, CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY } from './continuity.ts';
 import './style.css';
 import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
-import { downloadJson, telemetryNotice, telemetryToggle } from '@adam0white/lab-kit';
+import { downloadJson, personaControls, telemetryNotice, telemetryToggle } from '@adam0white/lab-kit';
 import { draw } from './draw.ts';
 import { apply, type Command, createGame, exportRun, NODES, type State, step } from './sim.ts';
 
@@ -481,7 +481,7 @@ function menu() {
 }
 function feedback() {
   sheet(
-    `<h2>Send feedback</h2><div class="feedback-body"><p>Your run, saves and log reach us on their own while recording is on. Tell us what they can't show.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened, what you wanted, what got in the way.</label><textarea id="note" rows="4" maxlength="3900"></textarea><label for="name">Your name or tester id (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><p class="small">A name labels your linked play history on this device. Leave empty to stay pseudonymous.</p><details><summary>What is sent</summary><p>Seed, orders, full simulation state, logs and your note. No character analysis consent is included.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><div id="feedback-toggle"></div>${lab.privacySignalOn && !lab.privacyOverride ? '<label><input type="checkbox" id="consent"> Send this run with my note</label>' : ''}<p id="send-status" class="status" role="status"></p></div><div class="feedback-actions"><button id="copy">Keep a copy of this run</button><button class="primary" id="send">Send</button><button id="cancel-feedback">Back to the menu</button></div>`,
+    `<h2>Send feedback</h2><div class="feedback-body"><p>Your run, saves and log reach us on their own while recording is on. Tell us what they can't show.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened, what you wanted, what got in the way.</label><textarea id="note" rows="4" maxlength="3900"></textarea><label for="name">Your name or tester id (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><p class="small">A name labels your linked play history on this device. Leave empty to stay pseudonymous.</p><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Linked play history is included only when recording is allowed. No character analysis consent is included.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><div id="feedback-toggle"></div><div id="feedback-persona"></div><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions"><button id="copy">Keep a copy of this run</button><button class="primary" id="send">Send</button><button id="cancel-feedback">Back to the menu</button></div>`,
   );
   let verdict = '';
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
@@ -493,19 +493,21 @@ function feedback() {
   document.getElementById('feedback-toggle')?.append(telemetryToggle(lab));
   const send = document.getElementById('send') as HTMLButtonElement;
   const status = document.getElementById('send-status') as HTMLElement;
-  const refresh = () => {
-    const recordingOff =
-      stored('hf-lab-recording-off') === '1' || stored('hf-lab-events-off:commonstead') === '1';
-    const explicit = !!(document.getElementById('consent') as HTMLInputElement | null)?.checked;
-    send.disabled = recordingOff || (lab.privacySignalOn && !lab.privacyOverride && !explicit);
-    status.textContent = recordingOff
-      ? 'Recording is off, so nothing is sent.'
-      : lab.privacySignalOn && !lab.privacyOverride && !explicit
-        ? 'Check consent to send this run with your note.'
-        : '';
-  };
-  modal?.addEventListener('change', refresh);
-  refresh();
+  if (lab.personaRecordingRequired)
+    document.getElementById('feedback-persona')?.append(
+      personaControls({
+        enabled: continuity.shelf.enabled,
+        setEnabled: (value) => {
+          void continuity.setEnabled(value);
+        },
+        recordingAllowed: lab.personaRecordingAllowed,
+        allowRecording: (value) => {
+          void (value ? continuity.recording(true) : continuity.deny()).catch((error: unknown) => {
+            status.textContent = String(error);
+          });
+        },
+      }),
+    );
   bind('copy', download);
   bind('cancel-feedback', menu);
   send.onclick = async () => {
@@ -515,28 +517,20 @@ function feedback() {
     remember(NAME, name);
     const note = `${verdict ? `Verdict: ${verdict}\n` : ''}${(document.getElementById('note') as HTMLTextAreaElement).value}`;
     try {
-      const id =
-        lab.privacySignalOn && !lab.privacyOverride
-          ? await lab.sendRun(exportRun(state), { note, name })
-          : await lab.sendFeedback(note, { name });
-      status.textContent = `Queued for the lab · ${id}. This is a queue reference, not a delivery receipt.`;
+      let run: unknown;
+      try {
+        run = state ? exportRun(state) : undefined;
+      } catch {
+        // An unavailable optional run does not block the note.
+      }
+      const id = await lab.sendFeedback(note, { name, run });
+      status.textContent = !lab.telemetryOn
+        ? `Note and verdict queued without a run or history linkage · ${id}.`
+        : `Note queued; run included when available. Persona history linked only if approved · ${id}.`;
       send.textContent = 'Back to the game';
       send.disabled = false;
       send.onclick = closeModal;
     } catch (error) {
-      if (lab.privacySignalOn && !lab.privacyOverride) {
-        modal?.remove();
-        modal = null;
-        lab.openSendDialog({ getRun: () => (state ? exportRun(state) : null), note, name });
-        const observer = new MutationObserver(() => {
-          if (!document.querySelector('.hflab-veil')) {
-            observer.disconnect();
-            menu();
-          }
-        });
-        observer.observe(document.body, { childList: true });
-        return;
-      }
       status.textContent = `Could not queue feedback: ${error instanceof Error ? error.message : 'try again'}. Keep a copy or retry.`;
       send.disabled = false;
     }

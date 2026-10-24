@@ -625,3 +625,29 @@ summary {
     overflow: auto;
   }
 }
+
+/* The shared menu and feedback controls follow the same selected paper and ink. */
+.panel {
+  background: var(--paper);
+  color: var(--ink);
+}
+.panel button,
+.panel textarea,
+.panel input[type="text"] {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+.panel button:hover {
+  background: var(--paper-2);
+}
+.panel button.primary,
+.panel button[aria-pressed="true"] {
+  background: var(--rope);
+  color: var(--paper);
+  border-color: var(--rope);
+}
+.panel .small,
+.panel a {
+  color: var(--ink-soft);
+}
