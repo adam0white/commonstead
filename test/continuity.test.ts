@@ -271,22 +271,7 @@ describe('finite source, batch ownership and recording controls', () => {
     expect(JSON.stringify(exportRun(s))).not.toContain('castSources');
     expect((restored.export(resumed) as { castSources: unknown[] }).castSources.length).toBeGreaterThan(0);
   });
-  test('mixed recording cannot receive a late positive after denial', async () => {
-    const h = harness([await source()]);
-    const c = new Continuity(h.lab, h.shelf);
-    await c.fresh(42);
-    let release: (() => void) | undefined;
-    h.defer((resume) => {
-      release = resume as () => void;
-    });
-    const pending = c.recording(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    c.deny();
-    release?.();
-    await pending;
-    expect(h.allowed).toBe(false);
-    expect(h.requests.some((r) => r.action === 'recordingBatch' && r.allowRecording)).toBe(false);
-  });
+
   test('actual owned death writes terminal head and cannot be admitted again', async () => {
     const h = harness();
     const c = new Continuity(h.lab, h.shelf);
@@ -302,28 +287,6 @@ describe('finite source, batch ownership and recording controls', () => {
 });
 
 describe('review regressions', () => {
-  test('file-derived partial ownership still asks for every pinned imported branch', async () => {
-    const nora = await source();
-    const sam = await source(CAST[1]!.castId);
-    const h = harness([nora, sam]);
-    const original = new Continuity(h.lab, h.shelf);
-    const s = await original.fresh(42);
-    playedPause(s);
-    const imported = new Continuity(h.lab, h.shelf);
-    await imported.importFile(JSON.stringify(original.export(s)));
-    await imported.recording(true);
-    expect(h.allowed).toBe(true);
-    await imported.checkpoint(CAST[0]!.castId, true);
-    expect(h.allowed).toBe(false);
-    const before = h.requests.length;
-    await imported.recording(true);
-    const linked = h.requests
-      .slice(before)
-      .filter((r) => r.action === 'recordingBatch' && r.allowRecording)
-      .flatMap((r) => r.envelopes ?? []);
-    expect(linked.some((p) => p.castId === CAST[1]!.castId)).toBe(true);
-    expect(linked).toHaveLength(3);
-  });
   test('terminal receipt directly after admission retains local run ownership on reload', async () => {
     const h = harness([await source()]);
     const c = new Continuity(h.lab, h.shelf);
@@ -356,19 +319,6 @@ test('storm pause is exportable and deterministic at tick600', () => {
   apply(s, { kind: 'pause-chapter' });
   expect(s.chapterPaused).toBe(true);
   expect(stateHash(importRun(exportRun(s)))).toBe(stateHash(s));
-});
-
-test('multi-batch recording refuses a central epoch change between approvals', async () => {
-  const h = harness([await source(), await source(CAST[1]!.castId)]);
-  const original = new Continuity(h.lab, h.shelf);
-  const s = await original.fresh(42);
-  playedPause(s);
-  const imported = new Continuity(h.lab, h.shelf);
-  await imported.importFile(JSON.stringify(original.export(s)));
-  await imported.checkpoint(CAST[0]!.castId, true);
-  h.rotateAfterApproval();
-  await imported.recording(true);
-  expect(h.allowed).toBe(false);
 });
 
 describe('finite forwarded Commonstead passport', () => {
@@ -431,4 +381,19 @@ test('browser-person continuity changes still cancel a chapter waiting for the s
   finish(true);
   await expect(pending).rejects.toThrow(/changed/i);
   stop();
+});
+
+test('recording metadata and checkpoint publication do not query historical recording permission', async () => {
+  const h = harness();
+  const request = h.shelf.request.bind(h.shelf);
+  h.shelf.request = async (r) => {
+    if (r.action === 'recording' || r.action === 'recordingBatch') throw new Error('obsolete recording RPC');
+    return request(r);
+  };
+  const c = new Continuity(h.lab, h.shelf);
+  const state = await c.fresh(42);
+  await c.recording(true);
+  await c.deny();
+  playedPause(state);
+  await c.checkpoint(CAST[0]!.castId);
 });

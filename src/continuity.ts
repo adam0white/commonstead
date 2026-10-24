@@ -28,8 +28,6 @@ export class Continuity {
   status = 'Browser continuity and lab recording are separate choices.';
   runId = crypto.randomUUID();
   sources: SourceArchive[] = [];
-  private fileAllowed = false;
-  private denied = false;
   private key = crypto.randomUUID();
   private operation = Promise.resolve();
   private state: State | null = null;
@@ -50,8 +48,6 @@ export class Continuity {
   }
   invalidate() {
     this.generation++;
-    this.fileAllowed = false;
-    this.denied = true;
     this.key = crypto.randomUUID();
     this.lab.setPersonaRecording(this.key);
     this.changed();
@@ -105,8 +101,6 @@ export class Continuity {
       this.sources = [];
       this.heads = chapter?.claims ?? [];
       this.fileOrigin = false;
-      this.fileAllowed = false;
-      this.denied = false;
       this.status = chapter
         ? `Admitted ${chapter.inputs.length} applicable histories in one atomic whole-allocation claim. Other residents are canonical fresh openings.`
         : localOnly
@@ -161,7 +155,6 @@ export class Continuity {
     this.heads = heads;
     this.fileOrigin = saved.fileOrigin;
     this.sources = saved.sources;
-    this.denied = false;
     this.status =
       'Local chapter restored from pinned actors and exact last accepted ownership receipts. No newer shelf state loaded.';
     return state;
@@ -181,7 +174,6 @@ export class Continuity {
     this.runId = crypto.randomUUID();
     this.sources = sources;
     this.fileOrigin = true;
-    this.denied = false;
     this.status =
       'File-origin run: no embedded ownership is acquired. Recording and automatic cross-game linkage follow your menu choice.';
     return state;
@@ -206,102 +198,12 @@ export class Continuity {
     );
   }
 
-  private recordingBatches(pinned: PersonaEnvelope[]) {
-    const batches: PersonaEnvelope[][] = [];
-    for (const p of pinned) {
-      let batch = batches.find((b) => b.length < 8 && !b.some((other) => other.castId === p.castId));
-      if (!batch) {
-        batch = [];
-        batches.push(batch);
-      }
-      batch.push(p);
-    }
-    return batches;
-  }
-  async recording(allow = false) {
-    if (allow) {
-      this.invalidate();
-      this.denied = false;
-      this.fileAllowed = this.fileOrigin;
-    }
-    const generation = this.generation;
-    const pinned = structuredClone(this.pinnedHistories());
-    const revisions = pinned.map((p) => p.revision).join('/');
-    const current = () =>
-      generation === this.generation &&
-      revisions ===
-        this.pinnedHistories()
-          .map((p) => p.revision)
-          .join('/');
+  /** Legacy binding only. Recording and linkage follow the shared menu preference. */
+  async recording(_allow = false) {
     this.lab.setPersonaRecording(this.key);
-    if (this.denied || (this.fileOrigin && !this.fileAllowed)) return;
-    if (!pinned.length) {
-      if (this.fileOrigin) {
-        if (allow && current()) this.lab.allowPersonaRecording(true);
-      } else this.lab.setPersonaRecording(null);
-      return;
-    }
-    await this.shelf.ready;
-    if (!this.shelf.enabled || !current()) return;
-    let allPermitted = true;
-    let attemptEpoch: string | undefined;
-    // The published bridge permits one envelope per cast ID in a batch. Explicit forks can
-    // leave two historical branches for a person; every batch must pass before opening the gate.
-    for (const batch of this.recordingBatches(pinned)) {
-      const selected = batch.map((p) => p.revision).join('/');
-      const query = await this.shelf.request<{
-        sameEpoch: boolean;
-        revisions: string[];
-        recordingEpoch: string | null;
-      }>({ action: 'recordingBatch', envelopes: batch });
-      if (!current() || query.revisions.join('/') !== selected || !query.recordingEpoch) return;
-      if (attemptEpoch !== undefined && query.recordingEpoch !== attemptEpoch) return;
-      attemptEpoch = query.recordingEpoch;
-      if (allow) {
-        const accepted = await this.shelf.request<{
-          sameEpoch: boolean;
-          revisions: string[];
-          recordingEpoch: string | null;
-        }>({
-          action: 'recordingBatch',
-          envelopes: batch,
-          allowRecording: true,
-          recordingEpoch: query.recordingEpoch ?? undefined,
-        });
-        if (
-          !current() ||
-          accepted.revisions.join('/') !== selected ||
-          accepted.recordingEpoch !== attemptEpoch
-        )
-          return;
-        allPermitted = allPermitted && accepted.sameEpoch;
-      } else allPermitted = allPermitted && query.sameEpoch;
-    }
-    if (current()) this.lab.allowPersonaRecording(allPermitted);
   }
-
   async deny() {
-    this.invalidate();
-    this.status = 'Recording declined for this history. Local play and exports remain available.';
-    const generation = this.generation,
-      pinned = structuredClone(this.pinnedHistories());
-    if (!pinned.length) return;
-    await this.shelf.ready;
-    if (!this.shelf.enabled || generation !== this.generation) return;
-    for (const batch of this.recordingBatches(pinned)) {
-      const query = await this.shelf.request<{ recordingEpoch: string | null }>({
-        action: 'recordingBatch',
-        envelopes: batch,
-      });
-      if (generation !== this.generation) return;
-      await this.shelf.request({
-        action: 'recordingBatch',
-        envelopes: batch,
-        allowRecording: false,
-        recordingEpoch: query.recordingEpoch ?? undefined,
-      });
-      if (generation !== this.generation) return;
-    }
+    // Historical callers cannot create a separate continuing-person recording choice.
   }
 
   async setEnabled(value: boolean) {
@@ -374,14 +276,12 @@ export class Continuity {
         while (JSON.stringify(this.sources).length > maxArchive) this.sources.shift();
         this.changed();
       }
-      const epoch = await this.shelf.request<{ recordingEpoch: string | null }>({ action: 'recording' });
-      if (!current()) throw new Error('Identity changed before checkpoint.');
+      if (!current()) throw new Error('Run changed before checkpoint.');
       await this.shelf.request({
         action: 'put',
         envelope,
         fork,
         authored: !fork && !parent && !this.fileOrigin && !state.chapter?.inputs.length,
-        recordingEpoch: epoch.recordingEpoch ?? undefined,
       });
       if (!current()) return;
       this.heads = [...this.heads.filter((p) => p.castId !== castId), envelope].sort((a, b) =>
