@@ -40,6 +40,9 @@
     "fsevents": false
   },
   "overrides": {
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "miniflare": {
+      "undici": "7.30.1"
+    }
   }
 }
