@@ -66,6 +66,7 @@ for (const [name, type] of [
             node: notice.getBoundingClientRect().toJSON(),
             wrapper: footer.getBoundingClientRect().toJSON(),
             textBottom: range.getBoundingClientRect().bottom,
+            lines: new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top))).size,
             clipped: notice.scrollWidth > notice.clientWidth || notice.scrollHeight > notice.clientHeight,
             ellipsis: style.textOverflow === 'ellipsis',
             buttons: notice.querySelectorAll('button').length,
@@ -85,7 +86,13 @@ for (const [name, type] of [
         footerMetrics.textBottom > footerMetrics.node.bottom
       )
         throw Error(`Invalid compact footer ${JSON.stringify(footerMetrics)}`);
-      if (width === 360 && (footerMetrics.node.height > 55 || footerMetrics.wrapper.height > 65))
+      if (
+        width === 360 &&
+        (footerMetrics.node.height > 40 ||
+          footerMetrics.wrapper.height > 40 ||
+          footerMetrics.lines !== 1 ||
+          Math.abs(footerMetrics.font - 14) > 0.1)
+      )
         throw Error(`Oversized phone footer ${JSON.stringify(footerMetrics)}`);
       let enlargedFooter = null;
       if (width === 360) {
@@ -94,6 +101,8 @@ for (const [name, type] of [
         });
         enlargedFooter = await measureFooter();
         if (
+          enlargedFooter.lines <= 1 ||
+          enlargedFooter.node.height <= footerMetrics.node.height ||
           enlargedFooter.clipped ||
           enlargedFooter.overflow ||
           enlargedFooter.textBottom > enlargedFooter.node.bottom
