@@ -1,4 +1,34 @@
-# Commonstead current edition
+# Commonstead current state — 2026-10-25
+
+Remaining: owner play/readiness/recording acceptance; producer Glance source/live proof and an ordinary cross-game ownership journey; OPEN copied suite-lock maintenance with its assigned engineer. Docs reconciliation does not close those items. See docs/concept.md for the acceptance boundary and existing Deferred work. Docsweb runs no playtest rounds.
+
+## Source and delivery
+
+Current baseline: signed `db10f23bd7ae30c875d3fe367127bfdf90b2f9fd`, exact green CI `40239055794`. The v3 delivery report records clean deployment `e4ec937b-5390-4a0c-8bd2-243e9c310d4d`, matching live assets, Chrome/WebKit checks and removal of both delivery trees. A fresh docs inspection of live `/release.json` confirms that commit, framework `3.0.0`, app `0.2.0` and `dirty:false`. Those are technical receipts, not owner acceptance.
+
+Source pins HF package 3.0.0, person engine 2.23.0, immutable lab-client 0.4.10 and lab-kit 0.5.11. Replay rules remain `commonstead-3`, notebook schema 3 and portable dialect `commonstead-cast/1`. TypeScript support is 7+. Native simulation owns the world; HF owns people. See README for literal controls, local saves, recording and lab-only file controls.
+
+## Continuity boundaries
+
+New game automatically checks the enabled browser shelf for all eight residents together. Resume and file imports keep their pinned residents. Recording and automatic play linkage use one menu switch; file-origin ownership restrictions do not create a separate recording gate. Character analysis retains its separate opt-in.
+
+Native Commonstead sends engine 2.23.0. Finite historical Repair and forwarded Glance 3 routes retain engines 2.17.0 and 2.21.0. The exact native Glance 4 / engine 2.23.0 Nerys receiving guard and successive Commonstead claims are shipped. This receiving proof does not establish current producer delivery or an ordinary played ownership journey. Actual current Small Works Nora exports retain unsupported obligations and are refused; do not describe an admitted foreign Nora route or cleared duties. Source archives retain details that cannot carry over. Read docs/cast-adoption.md and source guards before extending any claim.
+
+## Workflow and policy
+
+Run the normal `npm run check:lane` (this repo runs full `npm run ci`) before every signed commit. It uses the normal machine suite lock. Fetch/rebase origin/main before push and require exact green CI. App changes require a fresh clean managed deployment and matching live release; source-only documentation does not. Preserve immutable SDK artifacts.
+
+The copied `scripts/suite-lock.ts` mkdir-before-owner-file orphan window remains OPEN with its assigned engineer. This documentation task neither fixes nor closes it. The existing Miniflare/Undici exception remains in the concept contract.
+
+Latest owner policy permits HF3 lab-panel rounds under the playtest director. Friends' playtests and Show HN remain paused. New Feedback labels are authorized work, but this host currently exposes “I'd keep playing”, “Not sure” and “I'd stop here”; “I'm stopping” and “I'm confused” are not shipped here. Owner review and technical completion remain separate.
+
+Current delivery evidence: `~/code/.lab-scratch/v3/commonstead/report.md` and `STATUS` (`LIVE_VERIFIED_CLEANED`). Older cast, simplify and hfadopt reports below are historical evidence.
+
+---
+
+# Historical handoff records — 2026-10-23 to 2026-10-25
+
+These records preserve the owner directions and receipts at the time. Their version pins and pending delivery steps are historical. Use the current state above for today’s source.
 
 ## Frictionless feedback (owner, 2026-10-23)
 
