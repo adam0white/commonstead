@@ -10,7 +10,7 @@ import {
   telemetryNotice,
   telemetryToggle,
 } from '@adam0white/lab-kit';
-import { personStatus } from './display.ts';
+import { personStatus, residentName } from './display.ts';
 import { draw } from './draw.ts';
 import { apply, type Command, exportRun, NODES, type State, step } from './sim.ts';
 
@@ -100,7 +100,7 @@ function title() {
   canvas = null;
   paused = false;
   lab.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Alder Quay.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each has their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><button id="title-feedback">Feedback</button>${isLab ? `<details style="margin-top:14px"><summary>More ways to start</summary><p class="small">Load a saved playtest. The game replays its orders and checks the result before loading it.</p><button id="fresh-local">Start without saved character histories</button><button id="browser-people">Saved character histories</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details>` : ''}<p id="load-status" class="status" role="status"></p></section></main>`;
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a>${isLab ? '<span class="small">A Human Framework experiment</span>' : ''}</header><section class="title-body"><p class="eyebrow">The residents share a workshop near Alder Quay.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><button id="title-feedback">Feedback</button>${isLab ? `<details style="margin-top:14px"><summary>More ways to start</summary><p class="small">Load a saved playtest. The game replays its orders and checks the result before loading it.</p><button id="fresh-local">Start without saved character histories</button><button id="browser-people">Saved character histories</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details>` : ''}<p id="load-status" class="status" role="status"></p></section></main>`;
   const begin = async (localOnly = false) => {
     const status = document.getElementById('load-status');
     try {
@@ -228,14 +228,16 @@ function update() {
     town
       ? 'Workshop hub'
       : people.length
-        ? people.map((v) => v.name).join(', ')
+        ? people.map((v) => residentName(v)).join(', ')
         : 'Select people, then choose work.',
   );
   put(
     'task',
     people.length > 1
-      ? `${people.length} people are selected. ${people[0]?.name} ${personStatus(people[0]?.status ?? 'waiting', s.buildings)}`
-      : people.map((v) => `${v.name} ${personStatus(v.status, s.buildings)}`).join(' · '),
+      ? `${people.length} people are selected. ${people[0] ? residentName(people[0]) : 'This person'} ${personStatus(people[0]?.status ?? 'waiting', s.buildings, people[0] ? residentName(people[0]) : 'This person')}`
+      : people
+          .map((v) => `${residentName(v)} ${personStatus(v.status, s.buildings, residentName(v))}`)
+          .join(' · '),
   );
   put(
     'said',
@@ -260,7 +262,7 @@ function update() {
     resident.dataset.person = person?.id ?? '';
     residentKey = nextResidentKey;
     resident.innerHTML = person
-      ? `<p class="small">${esc(person.name)}${entry ? ` is ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)} years old.` : '.'} ${esc(person.role)} ${esc(person.assignment)}</p>${person.lifeLine ? `<p class="small">${esc(person.lifeLine)}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Use a trolley and choose a comfortable load of prepared materials. Do not do electrical work, change the building structure or use powered tools.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">Spend a minute together. Offer this person a break. Wait five seconds, then choose Invite conversation.</p><button id="listen">Invite conversation</button><button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button></details>`
+      ? `<p class="small">${esc(residentName(person))}${entry ? ` is ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)} years old.` : ' is helping at the workshop today.'} ${esc(person.role)} ${esc(person.assignment)}</p>${person.lifeLine ? `<p class="small">${esc(person.lifeLine)}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Use a trolley and choose a comfortable load of prepared materials. Do not do electrical work, change the building structure or use powered tools.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">Spend a minute together. Offer this person a break. Wait five seconds, then choose Invite conversation.</p><button id="listen">Invite conversation</button><button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button></details>`
       : '';
     bind('listen', () => issue({ kind: 'order', ids: selected, target: 'listen' }));
     bind('collaborate', () => issue({ kind: 'order', ids: selected, target: 'collaborate' }));
@@ -272,7 +274,7 @@ function update() {
     units.innerHTML = `${s.villagers
       .map(
         (v) =>
-          `<button aria-pressed="${selected.includes(v.id)}" data-person="${esc(v.id)}">${esc(v.name)}</button>`,
+          `<button aria-pressed="${selected.includes(v.id)}" data-person="${esc(v.id)}">${esc(residentName(v))}</button>`,
       )
       .join('')}<button id="all">All</button><button id="clear">Clear</button>`;
     for (const b of units.querySelectorAll<HTMLButtonElement>('[data-person]'))
@@ -313,7 +315,7 @@ function update() {
       placing || moveMode
         ? '<button class="wide" id="cancel">Cancel placement or movement</button>'
         : town
-          ? `<button class="wide primary" id="train" ${s.resources.food < 35 || s.villagers.length >= capacity || s.trainingUntil !== null ? 'disabled' : ''}>Invite helper · 35 meals</button><button class="wide" id="select-workers">Select all people</button><p class="small wide">${s.villagers.length >= capacity ? 'Prepare an existing guest cabin to make room for a helper.' : s.resources.food < 35 ? 'Collect more meals before inviting a helper.' : s.trainingUntil !== null ? 'A helper is learning the light tasks and will arrive shortly.' : 'A helper arrives after 15 seconds of learning the light tasks. This does not grant a trade qualification.'}</p>`
+          ? `<button class="wide primary" id="train" ${s.resources.food < 35 || s.villagers.length >= capacity || s.trainingUntil !== null ? 'disabled' : ''}>Invite helper · 35 meals</button><button class="wide" id="select-workers">Select all people</button><p class="small wide">${s.villagers.length >= capacity ? 'Prepare an existing guest cabin to make room for a helper.' : s.resources.food < 35 ? 'Collect more meals before inviting a helper.' : s.trainingUntil !== null ? 'A helper is learning the light tasks and will arrive shortly.' : 'A helper arrives after 15 seconds of learning these light tasks.'}</p>`
           : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast bags</button><button id="rest" ${!people.length ? 'disabled' : ''}>Rest, then resume</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink</button><button id="move" ${!people.length ? 'disabled' : ''}>Move</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse</button><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>`;
     for (const b of actions.querySelectorAll<HTMLButtonElement>('[data-resource]'))
       b.onclick = () => {
@@ -491,7 +493,7 @@ function sheet(html: string, infoOnly = false) {
 }
 function info() {
   sheet(
-    '<h2>Controls · game paused</h2><p>Finish the storehouse before 10:00 to keep the shared supplies dry. If it is unfinished, the supplies get soaked. Preparing a guest cabin adds room for two people.</p><p>Select names, then choose Meals, Boards or Ballast bags. Select the workshop hub on the map to invite a local helper.</p><p>On a computer, drag a box to select people. Right-click a destination to give an order. On a phone, tap a person to select them. Drag a box to select a group. Hold a destination to give an order.</p><p>After a minute together, offer one person a break. Wait five seconds. Open About this resident and choose Invite conversation. They may share something private. A small collaboration is optional. These residents are fictional. Sam’s playtesting is not a real lab test.</p><p>Rest takes 35 seconds. Each person then returns to their own task. Eat and drink uses meals where each person is standing. Insist on work asks people to continue even if they object. They may remember the pressure.</p><p>The storehouse costs 180 boards and 120 ballast bags. Select builders. Choose Storehouse, then tap open ground. Opening the menu pauses the game. Slow, Steady and Fast change how quickly time passes.</p><button class="primary" id="close-info">Back to the workshop</button>',
+    '<h2>Controls · game paused</h2><p>Finish the storehouse before 10:00 to keep the shared supplies dry. If it is unfinished, the supplies get soaked. Preparing a guest cabin adds room for two people.</p><p>Select names, then choose Meals, Boards or Ballast bags. Select the workshop hub on the map to invite a local helper.</p><p>On a computer, drag a box to select people. Right-click a destination to give an order. On a phone, tap a person to select that person. Drag a box to select a group. Hold a destination to give an order.</p><p>After a minute together, offer one person a break. Wait five seconds. Open About this resident and choose Invite conversation. The person may share something private. A small collaboration is optional.</p><p>Rest takes 35 seconds. Work resumes after the break. Eat and drink uses meals where each person is standing. Insist on work asks people to continue even if they object. They may remember the pressure.</p><p>The storehouse costs 180 boards and 120 ballast bags. Select builders. Choose Storehouse, then tap open ground. Opening the menu pauses the game. Slow, Steady and Fast change how quickly time passes.</p><button class="primary" id="close-info">Back to the workshop</button>',
     true,
   );
   bind('close-info', closeModal);
@@ -598,7 +600,7 @@ function end() {
     .slice(0, 2)
     .map(
       (v) =>
-        `<p class="speech">${esc(v.name)}: ${esc(v.says || 'We made it through the work together.')}</p>`,
+        `<p class="speech">${esc(residentName(v))}: ${esc(v.says || 'We made it through the work together.')}</p>`,
     )
     .join(
       '',

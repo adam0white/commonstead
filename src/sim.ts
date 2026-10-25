@@ -11,7 +11,7 @@ import {
 } from '@adam0white/human-framework';
 import { canonicalPersona } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
-import { admissionLine, assignmentText, nextTask } from './display.ts';
+import { admissionLine, assignmentText, nextTask, residentName } from './display.ts';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 
 export function taskLabel(target: string): string {
@@ -95,12 +95,10 @@ function makeVillager(seed: number, n: number): Villager {
   return {
     id,
     name,
-    assignment: entry?.work ?? 'They help with light tasks using prepared materials.',
+    assignment: entry?.work ?? 'The helper uses prepared materials for light tasks.',
     lifeLine: '',
     availableAt: 0,
-    role:
-      entry?.role ??
-      'They are a helper for this game. They have learned only light tasks using prepared materials.',
+    role: entry?.role ?? '',
     family: entry?.family ?? 'No personal history is recorded for this helper.',
     discovery: 0,
     invitedBreak: false,
@@ -141,7 +139,7 @@ export function createGame(seed: number, chapter?: Chapter): State {
       v.person = structuredClone(expected);
       if (input) {
         const facts = lifeAdmission(input, 'commonstead');
-        v.assignment = assignmentText(facts.assignment);
+        v.assignment = assignmentText(facts.assignment, residentName(v));
         v.lifeLine = admissionLine(facts);
         v.says = v.lifeLine;
         v.availableAt = facts.availableForExtraWork ? 0 : 30;
@@ -311,7 +309,7 @@ export function apply(s: State, c: Command): void {
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
     s.message = s.chapterPaused
-      ? 'This chapter is paused so people can leave. They still have their earlier obligations.'
+      ? 'The game is paused so people can leave. Their other responsibilities remain.'
       : 'People will finish their current actions before leaving. They will not start new actions.';
     return;
   }
@@ -323,8 +321,7 @@ export function apply(s: State, c: Command): void {
     return;
   }
   if (s.pauseRequested) {
-    s.message =
-      'Wait until everyone has finished their current action. Then resume the chapter before giving new work orders.';
+    s.message = 'Wait until everyone has finished. Then resume the game before giving new work orders.';
     return;
   }
   if (c.kind === 'train') {
@@ -338,13 +335,12 @@ export function apply(s: State, c: Command): void {
       return;
     }
     if (s.resources.food < 35) {
-      s.message = 'You need 35 meal units to feed a helper while they learn the light tasks.';
+      s.message = 'You need 35 meal units to feed a helper during training.';
       return;
     }
     s.resources.food -= 35;
     s.trainingUntil = s.tick + 15;
-    s.message =
-      'A local helper will finish learning the light tasks in 15 seconds. This does not give them a trade qualification.';
+    s.message = 'A local helper will finish learning these light tasks in 15 seconds.';
     return;
   }
   const selected = s.villagers.filter((v) => c.ids.includes(v.id));
@@ -353,8 +349,7 @@ export function apply(s: State, c: Command): void {
     return;
   }
   if (selected.some((v) => s.tick < v.availableAt)) {
-    s.message =
-      'A selected resident is following their usual routine until 0:30. They still have their usual job and obligations.';
+    s.message = 'A selected resident is busy with a usual responsibility until 0:30.';
     return;
   }
   if (c.kind === 'build') {
@@ -397,7 +392,7 @@ export function apply(s: State, c: Command): void {
         x: b.x + 18 * Math.cos(Number(v.id.slice(1)) * 2.4),
         y: b.y + 18 * Math.sin(Number(v.id.slice(1)) * 2.4),
       });
-    s.message = `${selected.map((v) => v.name).join(', ')} will prepare the ${taskLabel(c.building)}.`;
+    s.message = `${selected.map((v) => residentName(v)).join(', ')} will prepare the ${taskLabel(c.building)}.`;
     return;
   }
   if (c.target === 'rest' || c.target === 'meal') {
@@ -412,8 +407,8 @@ export function apply(s: State, c: Command): void {
     }
     s.message =
       c.target === 'rest'
-        ? 'They will rest here for 35 seconds. Then they will return to their tasks.'
-        : 'They will eat and drink here. Then they will return to their tasks.';
+        ? `${selected.length === 1 && selected[0] ? residentName(selected[0]) : 'The selected people'} will rest here for 35 seconds. Work will resume after the break.`
+        : `${selected.length === 1 && selected[0] ? residentName(selected[0]) : 'The selected people'} will eat and drink here. Work will resume after the meal.`;
     return;
   }
   if (c.target === 'listen' || c.target === 'collaborate') {
@@ -480,7 +475,7 @@ export function apply(s: State, c: Command): void {
       x: Math.max(20, Math.min(980, x + (target ? 18 * Math.cos(Number(v.id.slice(1)) * 2.4) : 0))),
       y: Math.max(20, Math.min(680, y + (target ? 18 * Math.sin(Number(v.id.slice(1)) * 2.4) : 0))),
     });
-  s.message = `${selected.map((v) => v.name).join(', ')} will ${c.target === 'move' ? 'move to the selected place' : `start ${nextTask(c.target, s.buildings)}`}.`;
+  s.message = `${selected.map((v) => residentName(v)).join(', ')} will ${c.target === 'move' ? 'move to the selected place' : `start ${nextTask(c.target, s.buildings)}`}.`;
 }
 export function step(s: State): void {
   if (s.ended || s.chapterPaused) return;
@@ -490,7 +485,7 @@ export function step(s: State): void {
     tickPerson(arrival.person, START_MINUTE + s.tick * BODY_MINUTES);
     s.villagers.push(arrival);
     s.trainingUntil = null;
-    s.message = `${s.villagers.at(-1)?.name} has joined the workshop for this episode.`;
+    s.message = `${residentName(arrival)} has joined the workshop today.`;
   }
   for (const v of s.villagers) {
     tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
@@ -571,7 +566,7 @@ export function step(s: State): void {
   }
   if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
     s.chapterPaused = true;
-    s.message = 'Everyone has finished their current action. This chapter is paused so people can leave.';
+    s.message = 'Everyone has finished. The game is paused so people can leave.';
   }
   if (s.tick === 480) s.message = 'The storm will arrive in two minutes. Finish the storehouse.';
   if (s.tick === 600) {

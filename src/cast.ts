@@ -6,15 +6,15 @@ const roles = [
     name: 'Nora',
     work: 'She designs repairs and makes things.',
     sex: 'female',
-    role: 'She lives here and designs repairs.',
+    role: 'She lives here.',
     castId: 'hf.cast.nora.smallworks',
     family: 'She has an older brother, but they no longer have a close relationship.',
   },
   {
     name: 'Sam',
-    work: 'He is learning repair work. He sometimes works in a kitchen and tests games at Commonstead, where he lives.',
+    work: 'He is learning repair work. He sometimes works in a kitchen and tests games at Commonstead.',
     sex: 'male',
-    role: 'He lives here, learns repair work and tests games.',
+    role: 'He lives here.',
     castId: 'hf.cast.sam.smallworks',
     family: 'His mother and sister are part of his life.',
   },
@@ -22,7 +22,7 @@ const roles = [
     name: 'Dai',
     work: 'He looks after the dam and has worked there for thirty-one years.',
     sex: 'male',
-    role: 'He is visiting to teach maintenance. Someone else is covering his work at the dam.',
+    role: 'He is visiting to teach maintenance. A colleague is covering his usual work.',
     castId: 'hf.cast.dai.glance',
     family: 'He is separated from his partner. His adult daughter lives near his home.',
   },
@@ -38,7 +38,7 @@ const roles = [
     name: 'Dilek',
     work: 'She prepares cold dishes and later organises a shared kitchen.',
     sex: 'female',
-    role: 'She lives here and prepares cold dishes in the shared kitchen.',
+    role: 'She lives here.',
     castId: 'hf.cast.dilek.pass',
     family: 'She has a younger brother and a mother.',
   },
@@ -46,7 +46,7 @@ const roles = [
     name: 'Burak',
     work: 'He works as an accountant.',
     sex: 'male',
-    role: 'He lives here, manages the shared money and works as an accountant.',
+    role: 'He lives here and manages the shared money.',
     castId: 'hf.cast.burak.stairwell',
     family: 'He is single. His family lives elsewhere.',
   },
@@ -62,7 +62,7 @@ const roles = [
     name: 'Oskar',
     work: 'He works as a photographer and takes climbing seriously as a hobby.',
     sex: 'male',
-    role: 'He is visiting as a photographer. He also climbs as a hobby.',
+    role: 'He is visiting.',
     castId: 'hf.cast.oskar.rope',
     family: 'He has a younger sister.',
   },
@@ -80,7 +80,7 @@ export const openingProfile = (entry: (typeof CAST)[number]) => ({
 export const DISCOVERIES = [
   [
     'I left a feature out of a handle design that would have made it easier to use. I preferred the simpler shape. I did not ask the person who would use it.',
-    'Nora marks the workshop handle drawing as unfinished. She adds the easier grip back so a resident can try it. This does not show that the trial is complete or that she has repaired her relationship with her brother.',
+    'Nora marks the workshop handle drawing as unfinished. She adds the easier grip back so a resident can try it. The handle still needs testing. She and her brother are still distant.',
   ],
   [
     'I once copied another player’s description of a game problem into a report. I could not make the same problem happen, but I still said I had checked it.',
@@ -96,7 +96,7 @@ export const DISCOVERIES = [
   ],
   [
     'I record kitchen sounds on my phone. That loose lid has a wonderful rattle. I leave people’s voices out unless they agree.',
-    'Dilek records only the loose lid as a short personal sound recording. She does not record voices or upload or publish it. She can keep the recording to herself.',
+    'Dilek makes a short recording of the rattling lid, just for herself. She records no voices, and she does not share it.',
   ],
   [
     'This folded card has a moving ferry inside. I make moving paper models when I want to make something that does not have to be useful.',
@@ -107,7 +107,7 @@ export const DISCOVERIES = [
     'Sevim asks what makes this equipment card hard to use before she corrects it. She privately drafts a note admitting what she did wrong. She does not send a letter or claim that anyone has forgiven her.',
   ],
   [
-    'I combined two moments in a picture that people admired. My caption made it seem that a volunteer stayed through a storm. They had made the sensible choice to go home before then.',
+    'I combined two moments in a picture that people admired. My caption made it seem that a volunteer stayed through a storm. The volunteer had sensibly gone home before then.',
     'Oskar drafts an accurate workshop photo caption. He leaves out anyone who did not agree to a photograph. He marks the repair as unfinished. He still needs to correct the story he published earlier.',
   ],
 ] as const;

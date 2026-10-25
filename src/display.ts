@@ -23,6 +23,7 @@ export function nextTask(
 export function personStatus(
   status: string,
   buildings: ReadonlyArray<{ id: string; kind: string }> = [],
+  name = 'This person',
 ): string {
   const phrases: Record<string, string> = {
     waiting: 'is waiting.',
@@ -31,7 +32,7 @@ export function personStatus(
     'working under protest': 'is working under protest.',
     'waiting / refused': 'has refused this task and is waiting.',
     'available for agreed light tasks': 'can help with agreed light tasks.',
-    'chapter paused at action boundary': 'has finished their current action and is waiting.',
+    'chapter paused at action boundary': 'has finished and is waiting.',
   };
   if (phrases[status]) return phrases[status];
   const parts = status.split('; then ');
@@ -41,15 +42,15 @@ export function personStatus(
       .replace('waiting / refused; ', '')
       .replace('eating / drinking', 'eating and drinking');
     const target = parts[1] ?? 'idle';
-    return `${refused ? 'has refused work and ' : ''}is ${task}. Then they will ${target === 'idle' ? 'wait' : `resume ${nextTask(target, buildings)}`}.`;
+    return `${refused ? 'has refused work and ' : ''}is ${task}. Then ${name} will ${target === 'idle' ? 'wait' : `go back to ${nextTask(target, buildings)}`}.`;
   }
   return status === 'attending own routine; light shared tasks after 0:30'
-    ? 'is following their usual routine. They can help with light tasks after 0:30.'
+    ? `is following the usual routine. ${name} can help with light tasks after 0:30.`
     : status;
 }
 
 /** Package assignment keys describe occupations, not full player sentences. */
-export function assignmentText(assignment: string): string {
+export function assignmentText(assignment: string, name = 'This person'): string {
   const work: Record<string, string> = {
     'cold station': 'preparing cold food',
     'shared-kitchen planning': 'planning the shared kitchen',
@@ -68,7 +69,7 @@ export function assignmentText(assignment: string): string {
     'supervised repair bench': 'doing repair work with supervision',
     'kitchen assistance': 'helping in the kitchen',
   };
-  return work[assignment] ? `Their current work is ${work[assignment]}.` : assignment;
+  return work[assignment] ? `${name} is ${work[assignment]}.` : assignment;
 }
 
 export function admissionLine(facts: {
@@ -79,15 +80,65 @@ export function admissionLine(facts: {
 }): string {
   const time =
     facts.life.work === 'local-help'
-      ? 'They have set aside time to help locally.'
+      ? `${facts.cast.name} has set aside time to help locally.`
       : facts.life.work === 'free-time'
-        ? 'They have left some time free.'
-        : 'They have kept time for their usual routine.';
+        ? `${facts.cast.name} has left some time free.`
+        : `${facts.cast.name} has kept time for the usual routine.`;
   const place =
     facts.life.place === 'home'
       ? 'at home'
       : facts.life.place === 'public-garden'
         ? 'at the public garden'
-        : 'at their local workplace';
-  return `${facts.cast.name} has a current work assignment. ${assignmentText(facts.assignment)} ${time} They last stopped ${place}.${facts.contacts.length ? ` They read public work notes from ${facts.contacts.join(', ')}. The writers’ views are not recorded.` : ''}`;
+        : 'at the local workplace';
+  return `${time} The last stop was ${place}.${facts.contacts.length ? ` ${facts.cast.name} read public work notes from ${facts.contacts.join(', ')}. The writers’ views are not recorded.` : ''}`;
+}
+
+/** Helpers have stable simulation identities and natural names in the workshop. */
+export function residentName(person: { id: string; name: string }): string {
+  const names = [
+    'Aylin',
+    'Mina',
+    'Leyla',
+    'Elif',
+    'Zeynep',
+    'Esra',
+    'Selin',
+    'Ceren',
+    'Ece',
+    'Ipek',
+    'Deniz',
+    'Asli',
+    'Seda',
+    'Bahar',
+    'Lale',
+    'Gul',
+    'Ada',
+    'Beren',
+    'Defne',
+    'Duru',
+    'Ezgi',
+    'Funda',
+    'Gizem',
+    'Hande',
+    'Idil',
+    'Jale',
+    'Leman',
+    'Melis',
+    'Nazli',
+    'Oya',
+    'Pelin',
+    'Rana',
+    'Selen',
+    'Tulin',
+    'Yasemin',
+    'Zeliha',
+    'Suna',
+    'Nevin',
+    'Filiz',
+    'Ayla',
+  ];
+  const helperIndex = Number(person.id.slice(1)) - 9;
+  return person.id.startsWith('v') && helperIndex >= 0
+    ? (names[helperIndex] ?? 'A local helper')
+    : person.name;
 }

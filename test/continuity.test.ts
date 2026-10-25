@@ -239,7 +239,7 @@ describe('finite source, batch ownership and recording controls', () => {
     const c = new Continuity(h.lab, h.shelf);
     const s = await c.fresh(42);
     const v = s.villagers[0]!;
-    expect(v.assignment).toBe(assignmentText(facts.assignment));
+    expect(v.assignment).toBe(assignmentText(facts.assignment, v.name));
     expect(v.x).toBe(facts.life.place === 'public-garden' ? 220 : facts.startsAtHome ? 450 : 750);
     expect(v.availableAt).toBe(facts.availableForExtraWork ? 0 : 30);
     apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });

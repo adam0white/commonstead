@@ -1,3 +1,4 @@
+import { residentName } from './display.ts';
 import { NODES, type State } from './sim.ts';
 export interface PointerMark {
   x: number;
@@ -147,7 +148,7 @@ export function draw(
     c.fillStyle = '#23201b';
     c.font = `${Math.max(20, 16 / scale)}px Georgia`;
     c.textAlign = 'center';
-    if (scale >= 0.4 && selected.includes(v.id)) c.fillText(v.name, 0, 47);
+    if (scale >= 0.4 && selected.includes(v.id)) c.fillText(residentName(v), 0, 47);
     c.restore();
   }
   const command = s.inputs.at(-1)?.command;
