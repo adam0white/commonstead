@@ -76,4 +76,8 @@ The owner dropped Commonstead branch protection. GitHub main metadata reports `p
 
 The owner authorizes shared client 0.4.6 / kit 0.5.7 adoption. HF stays 2.18.0; native world / HF person ownership, rules and difficulty stay unchanged. Ordinary menus contain Resume, Feedback, Full screen, All games, one Recording switch and New game with inline confirmation. Diagnostics and replay/export/continuity controls require exact `?lab=1`. Continuity starts automatically. A stable footer mounts the actual shared notice node. The one-page Feedback form accepts notes with recording off and has one optional sharing checkbox.
 
-This increment ends with reviewed signed source, exact green CI, a fresh latest-origin deployment, a matching clean release stamp and eight browser/viewport checks. Owner acceptance remains separate. Friends’ playtests and Show HN stay paused. No new playtest round or cultural change is authorized. Turkish words and names remain unchanged pending owner discussion.
+This increment ends with reviewed signed source, exact green CI, a fresh latest-origin deployment, a matching clean release stamp and eight browser/viewport checks. Owner acceptance remains separate. Friends’ playtests and Show HN stay paused. No new playtest round is authorized. The owner’s setting direction below supersedes the earlier language restriction.
+
+## Setting owner direction — 2026-10-24
+
+Keep the setting, places and personal names. Every sentence must be understandable without Turkish. Use English for common nouns. On first use, call the kapıcı “the building’s caretaker”; later use “caretaker”. Keep at most two flavour words per game and explain each within its sentence on first use. Faith stays quiet background; source faith wording from human-framework research/ and do not invent rulings. Preserve meaning, rules, difficulty and simulation/replay data. Use display projections when translation would change stored simulation text.
