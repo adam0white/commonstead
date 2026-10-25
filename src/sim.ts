@@ -11,6 +11,7 @@ import {
 } from '@adam0white/human-framework';
 import { canonicalPersona } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
+import { admissionLine, assignmentText, nextTask } from './display.ts';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 
 export function taskLabel(target: string): string {
@@ -20,7 +21,7 @@ export function taskLabel(target: string): string {
       wood: 'prepared boards',
       stone: 'ballast bags',
       house: 'guest cabin',
-      storehouse: 'kit store',
+      storehouse: 'storehouse',
     }[target] ?? target
   );
 }
@@ -94,11 +95,13 @@ function makeVillager(seed: number, n: number): Villager {
   return {
     id,
     name,
-    assignment: entry?.work ?? 'Light prepared-material tasks',
+    assignment: entry?.work ?? 'They help with light tasks using prepared materials.',
     lifeLine: '',
     availableAt: 0,
-    role: entry?.role ?? 'Episode helper; orientation covers light prepared-material tasks only',
-    family: entry?.family ?? 'No maintained biography',
+    role:
+      entry?.role ??
+      'They are a helper for this game. They have learned only light tasks using prepared materials.',
+    family: entry?.family ?? 'No personal history is recorded for this helper.',
     discovery: 0,
     invitedBreak: false,
     breakStarted: -1,
@@ -117,7 +120,7 @@ function makeVillager(seed: number, n: number): Villager {
       enable: { suggestionReasons: true },
     }),
     task: 'idle',
-    says: 'Prepared boards, small ballast bags and hand tools only. No powered tools or structural work.',
+    says: 'We use prepared boards, small ballast bags and hand tools. We do not use powered tools or change the building structure.',
     order: null,
     recoveryUntil: 0,
     actionUntil: 0,
@@ -137,9 +140,9 @@ export function createGame(seed: number, chapter?: Chapter): State {
       v.person = structuredClone(expected);
       if (input) {
         const facts = lifeAdmission(input, 'commonstead');
-        v.assignment = facts.assignment;
-        v.lifeLine = facts.line;
-        v.says = facts.line;
+        v.assignment = assignmentText(facts.assignment);
+        v.lifeLine = admissionLine(facts);
+        v.says = v.lifeLine;
         v.availableAt = facts.availableForExtraWork ? 0 : 30;
         v.x = facts.life.place === 'public-garden' ? 220 : facts.startsAtHome ? 450 : 750;
         v.y = facts.life.place === 'public-garden' ? 570 : facts.startsAtHome ? 425 : 410;
@@ -161,7 +164,7 @@ export function createGame(seed: number, chapter?: Chapter): State {
     buildings: [{ id: 'town', kind: 'town', x: 500, y: 350, progress: 1, complete: true }],
     inputs: [],
     message:
-      'Alder Quay workshop: assemble the kit store before the storm at 10:00. Dai and Nerys have arranged work cover.',
+      'You are at the Alder Quay workshop. Assemble the storehouse before the storm at 10:00. Other people are covering Dai’s and Nerys’s usual work.',
     ended: false,
     won: false,
   };
@@ -173,7 +176,7 @@ function interrupt(v: Villager) {
       action: v.person.activity.action,
       at: v.person.now,
       status: 'interrupted',
-      summary: 'Changed my task.',
+      summary: 'I changed my task.',
     });
   v.actionUntil = 0;
 }
@@ -202,8 +205,8 @@ function recover(s: State, v: Villager, kind: 'rest' | 'meal', automatic = false
   v.says =
     kind === 'rest'
       ? automatic
-        ? 'I am tired. I need relief; then I will return.'
-        : 'A short rest, then back to my task.'
+        ? 'I am tired. I need a break. Then I will return to my task.'
+        : 'I will rest for a short time. Then I will return to my task.'
       : 'I need food and water. I can have them here.';
 }
 function choices(s: State): Affordance[] {
@@ -274,10 +277,10 @@ function chooseWork(s: State, v: Villager, push = false) {
       r.suggestion?.reason === 'distrust'
         ? r.suggestion.says
         : a.action === 'rest'
-          ? 'I am tired. I need relief; then I will return.'
+          ? 'I am tired. I need a break. Then I will return to my task.'
           : a.action === 'eat'
             ? 'I need to eat and drink here.'
-            : 'I need water. A drink, then back to work.';
+            : 'I need water. I will have a drink. Then I will return to work.';
   } else {
     v.task = taskLabel(v.order?.target ?? 'idle');
     v.status = v.person.activity?.protest ? 'working under protest' : 'working';
@@ -285,7 +288,7 @@ function chooseWork(s: State, v: Villager, push = false) {
     v.says = push
       ? (r.suggestion?.says ?? 'I heard you insist.')
       : s.tick >= 60 && body.perceived.fatigue > 0.35
-        ? 'I am tired. My work is slower; I need relief.'
+        ? 'I am tired. I am working more slowly. I need a break.'
         : 'I will work on that.';
   }
 }
@@ -307,39 +310,40 @@ export function apply(s: State, c: Command): void {
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
     s.message = s.chapterPaused
-      ? 'Chapter paused for departure. Source obligations still bind.'
-      : 'Finishing current acts before departure. No new acts will start.';
+      ? 'This chapter is paused so people can leave. They still have their earlier obligations.'
+      : 'People will finish their current actions before leaving. They will not start new actions.';
     return;
   }
   if (c.kind === 'resume-chapter') {
     s.pauseRequested = false;
     s.chapterPaused = false;
     for (const v of s.villagers) if (v.order) chooseWork(s, v);
-    s.message = 'Chapter resumed.';
+    s.message = 'This chapter has resumed.';
     return;
   }
   if (s.pauseRequested) {
-    s.message = 'Finish the departure pause, then resume before issuing new work.';
+    s.message =
+      'Wait until everyone has finished their current action. Then resume the chapter before giving new work orders.';
     return;
   }
   if (c.kind === 'train') {
     if (s.trainingUntil !== null) {
-      s.message = 'One helper is already in orientation.';
+      s.message = 'One helper is already learning the light tasks.';
       return;
     }
     const cap = 10 + s.buildings.filter((b) => b.kind === 'house' && b.complete).length * 2;
     if (s.villagers.length >= cap) {
-      s.message = 'More housing is needed.';
+      s.message = 'You need room for more people.';
       return;
     }
     if (s.resources.food < 35) {
-      s.message = 'A helper’s meal and orientation need 35 meal units.';
+      s.message = 'You need 35 meal units to feed a helper while they learn the light tasks.';
       return;
     }
     s.resources.food -= 35;
     s.trainingUntil = s.tick + 15;
     s.message =
-      'A local helper will finish light-task orientation in 15 seconds. No qualification is granted.';
+      'A local helper will finish learning the light tasks in 15 seconds. This does not give them a trade qualification.';
     return;
   }
   const selected = s.villagers.filter((v) => c.ids.includes(v.id));
@@ -349,7 +353,7 @@ export function apply(s: State, c: Command): void {
   }
   if (selected.some((v) => s.tick < v.availableAt)) {
     s.message =
-      'A selected resident is keeping time for their carried routine until 0:30. Their occupation and obligations remain.';
+      'A selected resident is following their usual routine until 0:30. They still have their usual job and obligations.';
     return;
   }
   if (c.kind === 'build') {
@@ -368,11 +372,11 @@ export function apply(s: State, c: Command): void {
       return;
     }
     if (s.resources.wood < wood || s.resources.stone < stone) {
-      s.message = `${taskLabel(c.building)} needs ${wood} boards${stone ? ` and ${stone} ballast bags` : ''}.`;
+      s.message = `The ${taskLabel(c.building)} needs ${wood} boards${stone ? ` and ${stone} ballast bags` : ''}.`;
       return;
     }
     if (c.building === 'storehouse' && s.buildings.some((b) => b.kind === 'storehouse')) {
-      s.message = 'The storehouse is already placed.';
+      s.message = 'You have already chosen a place for the storehouse.';
       return;
     }
     s.resources.wood -= wood;
@@ -392,7 +396,7 @@ export function apply(s: State, c: Command): void {
         x: b.x + 18 * Math.cos(Number(v.id.slice(1)) * 2.4),
         y: b.y + 18 * Math.sin(Number(v.id.slice(1)) * 2.4),
       });
-    s.message = `Prepare ${taskLabel(c.building)}: ${selected.map((v) => v.name).join(', ')}.`;
+    s.message = `${selected.map((v) => v.name).join(', ')} will prepare the ${taskLabel(c.building)}.`;
     return;
   }
   if (c.target === 'rest' || c.target === 'meal') {
@@ -406,7 +410,9 @@ export function apply(s: State, c: Command): void {
       v.breakStarted = s.tick;
     }
     s.message =
-      c.target === 'rest' ? 'Rest here for 35 seconds, then resume.' : 'Food and water here, then resume.';
+      c.target === 'rest'
+        ? 'They will rest here for 35 seconds. Then they will return to their tasks.'
+        : 'They will eat and drink here. Then they will return to their tasks.';
     return;
   }
   if (c.target === 'listen' || c.target === 'collaborate') {
@@ -425,7 +431,7 @@ export function apply(s: State, c: Command): void {
       s.tick - v.breakStarted < 5
     ) {
       s.message =
-        'Spend a minute together, then offer a break and give it five seconds. Private conversation is optional.';
+        'Spend a minute together. Then offer a break and wait five seconds. You can then invite a private conversation. Talking is optional.';
       return;
     }
     const invitation = offer('talk', 5, 0, { belonging: 0.5 }, ['social']);
@@ -473,7 +479,7 @@ export function apply(s: State, c: Command): void {
       x: Math.max(20, Math.min(980, x + (target ? 18 * Math.cos(Number(v.id.slice(1)) * 2.4) : 0))),
       y: Math.max(20, Math.min(680, y + (target ? 18 * Math.sin(Number(v.id.slice(1)) * 2.4) : 0))),
     });
-  s.message = `${selected.map((v) => v.name).join(', ')} → ${c.target === 'move' ? 'move' : taskLabel(c.target)}.`;
+  s.message = `${selected.map((v) => v.name).join(', ')} will ${c.target === 'move' ? 'move to the selected place' : `start ${nextTask(c.target, s.buildings)}`}.`;
 }
 export function step(s: State): void {
   if (s.ended || s.chapterPaused) return;
@@ -499,7 +505,7 @@ export function step(s: State): void {
           at: v.person.now,
           status: 'completed',
           needs: action === 'eat' ? { food: 0.7, water: 0.8 } : action === 'drink' ? { water: 0.8 } : {},
-          summary: `Finished ${action}; returning to my task.`,
+          summary: `I finished ${action === 'rest' ? 'resting' : action === 'eat' ? 'eating' : 'drinking'}. I am returning to my task.`,
         });
       v.recoveryUntil = 0;
       v.actionUntil = 0;
@@ -517,7 +523,7 @@ export function step(s: State): void {
           action: v.person.activity.action,
           at: v.person.now,
           status: 'completed',
-          summary: `Worked at ${taskLabel(v.order.target)}.`,
+          summary: `I worked on ${taskLabel(v.order.target)}.`,
           material: 1,
         });
       chooseWork(s, v);
@@ -551,7 +557,7 @@ export function step(s: State): void {
       b.progress = Math.min(1, b.progress + capacity / (b.kind === 'house' ? 35 : 180));
       if (b.progress === 1) {
         b.complete = true;
-        s.message = `${taskLabel(b.kind)} completed${b.kind === 'storehouse' ? '; shared supplies are ready for the storm' : '; two more housing spaces'}.`;
+        s.message = `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? 'The shared supplies are ready for the storm.' : 'There is room for two more people.'}`;
       }
     }
     if (b?.complete) {
@@ -564,9 +570,9 @@ export function step(s: State): void {
   }
   if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
     s.chapterPaused = true;
-    s.message = 'Chapter paused for departure at completed action boundaries.';
+    s.message = 'Everyone has finished their current action. This chapter is paused so people can leave.';
   }
-  if (s.tick === 480) s.message = 'Storm warning: two minutes remain. Finish the storehouse.';
+  if (s.tick === 480) s.message = 'The storm will arrive in two minutes. Finish the storehouse.';
   if (s.tick === 600) {
     s.ended = true;
     // The actual storm ends work. It interrupts remaining acts; it does not complete obligations.
@@ -658,6 +664,8 @@ export function importRun(raw: unknown): State {
     if (stable(s) !== stable(r.state) || stateHash(s) !== r.hash) throw new Error('state mismatch');
     return s;
   } catch {
-    throw new Error('Invalid or older run. Start fresh; replay state verification failed.');
+    throw new Error(
+      'This file does not replay the same way in this version of Commonstead. It may come from an older version. The file was not loaded. Start a new game instead.',
+    );
   }
 }

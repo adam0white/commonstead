@@ -25,7 +25,8 @@ export class Continuity {
   heads: PersonaEnvelope[] = [];
   fileOrigin = false;
   busy = false;
-  status = 'Browser continuity and lab recording are separate choices.';
+  status =
+    'You can choose separately whether this browser saves people between games and whether the lab records your play.';
   runId = crypto.randomUUID();
   sources: SourceArchive[] = [];
   private key = crypto.randomUUID();
@@ -59,13 +60,15 @@ export class Continuity {
     this.sources = [];
   }
   async fresh(seed: number, localOnly = false) {
-    if (this.busy) throw new Error('A chapter is already being prepared.');
+    if (this.busy)
+      throw new Error('A chapter is already being prepared. Wait for it to finish before starting another.');
     this.busy = true;
     this.invalidate();
     const generation = this.generation;
     try {
       await this.shelf.ready;
-      if (generation !== this.generation) throw new Error('Run changed before admission.');
+      if (generation !== this.generation)
+        throw new Error('The game changed before the residents could join. Try starting the chapter again.');
       const base = createGame(seed);
       let chapter: Chapter | undefined;
       if (this.shelf.enabled && !localOnly) {
@@ -79,7 +82,10 @@ export class Continuity {
             );
             for (const input of inputs) {
               const opening = initial[input.parent.castId];
-              if (!opening) throw new Error('Unallocated person.');
+              if (!opening)
+                throw new Error(
+                  'This person is not in the Commonstead resident list. Start a fresh local chapter.',
+                );
               initial[input.parent.castId] = admitResident(input, opening);
             }
             return initial;
@@ -94,7 +100,10 @@ export class Continuity {
             claims: result.claims,
           };
       }
-      if (generation !== this.generation) throw new Error('Run changed. No late chapter started.');
+      if (generation !== this.generation)
+        throw new Error(
+          'The game changed while the chapter was being prepared. No new chapter started. Try starting it again.',
+        );
       const state = createGame(seed, chapter);
       this.state = state;
       this.runId = crypto.randomUUID();
@@ -102,10 +111,10 @@ export class Continuity {
       this.heads = chapter?.claims ?? [];
       this.fileOrigin = false;
       this.status = chapter
-        ? `Admitted ${chapter.inputs.length} applicable histories in one atomic whole-allocation claim. Other residents are canonical fresh openings.`
+        ? `This chapter carries over ${chapter.inputs.length} supported histories. All residents were checked together. The other residents begin with their original histories.`
         : localOnly
-          ? 'Explicit fresh local chapter; browser histories are untouched.'
-          : 'Canonical fresh chapter; no carried histories.';
+          ? 'You started a fresh local chapter. Saved browser histories have not changed.'
+          : 'You started a fresh chapter with the residents’ original histories. No saved histories were carried over.';
       // Caller installs the prepared state before opening any recording hook.
       return state;
     } finally {
@@ -134,7 +143,9 @@ export class Continuity {
       !Array.isArray(saved.sources) ||
       JSON.stringify(saved.sources).length > maxArchive
     )
-      throw new Error('Invalid local ownership/archive wrapper. Start fresh.');
+      throw new Error(
+        'This local save has invalid records of saved residents or their source data. Start a fresh chapter.',
+      );
     const heads = await Promise.all(saved.heads.map((p: unknown) => validatePersona(p)));
     if (
       new Set(heads.map((p) => p.castId)).size !== heads.length ||
@@ -148,15 +159,18 @@ export class Continuity {
           ),
       )
     )
-      throw new Error('Ownership receipt belongs to another run.');
-    if (generation !== this.generation) throw new Error('Run changed during load.');
+      throw new Error(
+        'The saved resident records belong to another game. Load a different save or start a fresh chapter.',
+      );
+    if (generation !== this.generation)
+      throw new Error('The game changed while the save was loading. Try loading it again.');
     this.state = state;
     this.runId = saved.runId;
     this.heads = heads;
     this.fileOrigin = saved.fileOrigin;
     this.sources = saved.sources;
     this.status =
-      'Local chapter restored from pinned actors and exact last accepted ownership receipts. No newer shelf state loaded.';
+      'The local chapter has loaded with the residents and saved resident records it used before. It has not loaded newer browser histories.';
     return state;
   }
   async importFile(text: string) {
@@ -167,15 +181,18 @@ export class Continuity {
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];
     if (!Array.isArray(sources) || JSON.stringify(sources).length > maxArchive)
-      throw new Error('Source archive is too large.');
-    if (generation !== this.generation) throw new Error('Run changed during import.');
+      throw new Error(
+        'The file contains too much saved source data. Load a smaller file or start a fresh chapter.',
+      );
+    if (generation !== this.generation)
+      throw new Error('The game changed while the file was loading. Try loading it again.');
     this.state = state;
     this.heads = [];
     this.runId = crypto.randomUUID();
     this.sources = sources;
     this.fileOrigin = true;
     this.status =
-      'File-origin run: no embedded ownership is acquired. Recording and automatic cross-game linkage follow your menu choice.';
+      'This game was loaded from a file. It does not take control of any saved resident histories in the file. Your menu choice controls recording and automatic links between games.';
     return state;
   }
   localSave(state: State) {
@@ -211,7 +228,7 @@ export class Continuity {
     await this.shelf.ready;
     this.shelf.setEnabled(value);
     this.status =
-      'Continuity choice changed. This loaded chapter stays pinned; only a new chapter admits browser histories.';
+      'You changed whether people continue between games. This chapter keeps its current residents. Only a new chapter can load saved browser histories.';
   }
   checkpoint(castId: string, fork = false) {
     const generation = this.generation,
@@ -230,17 +247,24 @@ export class Continuity {
           state.villagers.find((v) => v.person.id === castId)?.person.body.alive !== false)
       )
         throw new Error(
-          'Play, then pause this chapter at its real action boundaries before saving a person.',
+          'Play the chapter first. Then pause it and wait for current actions to finish before saving a person.',
         );
       await this.shelf.ready;
-      if (!current() || !this.shelf.enabled) throw new Error('Continuity is off or run changed.');
+      if (!current() || !this.shelf.enabled)
+        throw new Error(
+          'Saving people between games is off, or the game has changed. Check the setting and try saving the person again.',
+        );
       const villager = state.villagers.find((v) => v.person.id === castId);
-      if (!villager || !CAST.some((c) => c.castId === castId)) throw new Error('Not an allocated resident.');
+      if (!villager || !CAST.some((c) => c.castId === castId))
+        throw new Error('This person is not a Commonstead resident. Choose someone from the resident list.');
       const parent = this.heads.find((p) => p.castId === castId);
       let envelope: PersonaEnvelope;
       let raw: unknown;
       if (!villager.person.body.alive) {
-        if (!parent) throw new Error('No owned living branch to close.');
+        if (!parent)
+          throw new Error(
+            'This game has no saved living history for this person that it can close. Keep a copy by downloading the game.',
+          );
         if (parent.terminal) return;
         raw = snapshot(villager.person);
         const closed = await closePersonaBranch(parent, this.source(), villager.person.now);
@@ -249,7 +273,7 @@ export class Continuity {
       } else {
         if (villager.order && state.buildings.some((b) => b.id === villager.order?.target && !b.complete))
           throw new Error(
-            'This resident still has unfinished shared assembly work. Finish it before departure.',
+            'This resident still has shared building work to finish. Finish it before the resident leaves.',
           );
         const captured = await residentTransfer(villager.person);
         raw = captured.raw;
@@ -269,14 +293,16 @@ export class Continuity {
           limitations: captured.limitations,
         });
       }
-      if (!current()) throw new Error('Run changed before checkpoint.');
+      if (!current())
+        throw new Error('The game changed before the person could be saved. Try saving the person again.');
       // Preserve full actual source before publication, including failed CAS attempts, local only.
       if (raw) {
         this.sources.push({ revision: envelope.revision, source: envelope.source, snapshot: raw });
         while (JSON.stringify(this.sources).length > maxArchive) this.sources.shift();
         this.changed();
       }
-      if (!current()) throw new Error('Run changed before checkpoint.');
+      if (!current())
+        throw new Error('The game changed before the person could be saved. Try saving the person again.');
       await this.shelf.request({
         action: 'put',
         envelope,
@@ -289,7 +315,7 @@ export class Continuity {
       );
       this.key = crypto.randomUUID();
       this.lab.setPersonaRecording(this.key);
-      this.status = `${villager.name}: accepted ${envelope.terminal ? 'terminal closure' : 'source checkpoint'}. Unsupported state remains in the local export.`;
+      this.status = `${villager.name}: ${envelope.terminal ? 'The end of this person’s history has been saved.' : 'This person’s current history has been saved.'} Details that cannot carry over remain in the local game data and are included when you download the game file.`;
       this.changed();
       await this.recording();
     });

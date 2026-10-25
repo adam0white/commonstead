@@ -10,7 +10,7 @@ import {
   telemetryNotice,
   telemetryToggle,
 } from '@adam0white/lab-kit';
-import { displayText, personStatus } from './display.ts';
+import { personStatus } from './display.ts';
 import { draw } from './draw.ts';
 import { apply, type Command, exportRun, NODES, type State, step } from './sim.ts';
 
@@ -83,7 +83,7 @@ function issue(cmd: Command) {
   update();
 }
 function top(title: string) {
-  return `<header class="top"><span>${title}</span><div class="row"><button id="info" aria-label="Controls and help">i</button><button id="menu">Menu · pause</button></div></header>`;
+  return `<header class="top"><span>${title}</span><div class="row"><button id="info" aria-label="Controls and help">i</button><button id="menu">Pause menu</button></div></header>`;
 }
 function bind(id: string, fn: () => void) {
   document.getElementById(id)?.addEventListener('click', fn);
@@ -100,7 +100,7 @@ function title() {
   canvas = null;
   paused = false;
   lab.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">A residential workshop near Alder Quay</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each has their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags (weights) and hand tools. Trolleys carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><button id="title-feedback">Feedback</button>${isLab ? `<details style="margin-top:14px"><summary>Other ways in</summary><p class="small">Load a playtest run. Its seed and orders are replayed and checked before loading.</p><button id="fresh-local">Start fresh locally without browser histories</button><button id="browser-people">Browser people and continuity</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details>` : ''}<p id="load-status" class="status" role="status"></p></section></main>`;
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a><span class="small">A Human Framework experiment</span></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Alder Quay.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each has their own limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><button id="title-feedback">Feedback</button>${isLab ? `<details style="margin-top:14px"><summary>More ways to start</summary><p class="small">Load a saved playtest. The game replays its orders and checks the result before loading it.</p><button id="fresh-local">Start without saved character histories</button><button id="browser-people">Saved character histories</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details>` : ''}<p id="load-status" class="status" role="status"></p></section></main>`;
   const begin = async (localOnly = false) => {
     const status = document.getElementById('load-status');
     try {
@@ -114,9 +114,10 @@ function title() {
       if (status)
         status.textContent = isLab
           ? String(error)
-          : 'The new game could not start. Your saved workshop is unchanged. Try again or send Feedback.';
+          : 'The new game could not start. Your saved game is unchanged. Try again or choose Feedback to report the problem.';
       const message = document.getElementById('setup-status');
-      if (message) message.textContent = 'The new game could not start. Your saved workshop is unchanged.';
+      if (message)
+        message.textContent = 'The new game could not start. Your saved game is unchanged. Try again.';
     }
   };
   bind('new', () => {
@@ -128,7 +129,7 @@ function title() {
     if (!button || document.getElementById('replace-run')) return;
     button.insertAdjacentHTML(
       'afterend',
-      '<div id="new-confirm"><p>Replace the saved workshop? It stays saved until the new game is ready.</p><button id="replace-run">Replace saved game</button><button id="cancel-new">Keep saved game</button></div>',
+      '<div id="new-confirm"><p>Do you want to replace the saved game? It stays saved until the new game is ready.</p><button id="replace-run">Replace saved game</button><button id="cancel-new">Keep saved game</button></div>',
     );
     bind('replace-run', () => {
       void begin();
@@ -154,7 +155,7 @@ function title() {
         if (el)
           el.textContent = isLab
             ? String(error)
-            : 'The saved workshop could not open. It is unchanged. Try again or send Feedback.';
+            : 'The saved game could not open. It is unchanged. Try again or choose Feedback to report the problem.';
       }
     })();
   });
@@ -163,7 +164,7 @@ function title() {
     if (!file) return;
     const status = document.getElementById('load-status');
     if (file.size > 5_000_000) {
-      if (status) status.textContent = 'Choose a run smaller than 5 MB.';
+      if (status) status.textContent = 'This playtest file is too large. Choose a file smaller than 5 MB.';
       return;
     }
     try {
@@ -172,7 +173,9 @@ function title() {
       await continuity.recording();
       save();
     } catch {
-      if (status) status.textContent = 'That run did not match its replay. Your saved workshop is unchanged.';
+      if (status)
+        status.textContent =
+          'This playtest did not match its replay, so it could not load. Your saved game is unchanged. Choose another file.';
     }
   });
 }
@@ -188,7 +191,7 @@ function start(s: State) {
   carry = 0;
   last = performance.now();
   lab.screen('play');
-  root.innerHTML = `<main class="game">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="Workshop yard. Use named person and resource controls below as an alternative to gestures."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry</strong><p id="deadline" class="deadline"></p><p class="details">Finish a storehouse by 10:00. Without it, the supplies get soaked. Preparing an existing cabin adds two spaces.</p></section><section class="sheet"><h2 id="selection">Select a person or the workshop hub</h2><div id="units" class="unit-list"></div><p id="task" class="task"></p><p id="said" class="speech"></p><div id="resident"></div></section><div class="notice" id="notice" role="status"></div><section class="actions" id="actions"></section></aside></div></main>`;
+  root.innerHTML = `<main class="game">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="The map shows the workshop yard. You can use the person and resource buttons below to give orders."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry.</strong><p id="deadline" class="deadline"></p><p class="details">Finish a storehouse by 10:00. Without it, the supplies get soaked. Preparing an existing guest cabin makes room for two more people.</p></section><section class="sheet"><h2 id="selection">Select a person or the workshop hub.</h2><div id="units" class="unit-list"></div><p id="task" class="task"></p><p id="said" class="speech"></p><div id="resident"></div></section><div class="notice" id="notice" role="status"></div><section class="actions" id="actions"></section></aside></div></main>`;
   canvas = document.getElementById('map') as HTMLCanvasElement;
   shellBindings();
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-speed]'))
@@ -207,16 +210,16 @@ function update() {
   const t = `${Math.floor(s.tick / 60)}:${String(s.tick % 60).padStart(2, '0')}`;
   const put = (id: string, text: string) => {
     const el = document.getElementById(id);
-    if (el) el.textContent = displayText(text);
+    if (el) el.textContent = text;
   };
   const capacity = 10 + s.buildings.filter((b) => b.kind === 'house' && b.complete).length * 2;
   const stock = document.getElementById('stock');
   if (stock)
-    stock.innerHTML = `<span><b>Meals</b> ${Math.floor(s.resources.food)}</span><span><b>Boards</b> ${Math.floor(s.resources.wood)}</span><span><b>Ballast</b> ${Math.floor(s.resources.stone)}</span><span><b>People</b> ${s.villagers.length}/${capacity}</span>`;
+    stock.innerHTML = `<span><b>Meals</b> ${Math.floor(s.resources.food)}</span><span><b>Boards</b> ${Math.floor(s.resources.wood)}</span><span><b>Ballast bags</b> ${Math.floor(s.resources.stone)}</span><span><b>People</b> ${s.villagers.length}/${capacity}</span>`;
   const store = s.buildings.find((b) => b.kind === 'storehouse');
   put(
     'deadline',
-    `${t} / Storm 10:00 · ${store?.complete ? 'Storehouse ready' : store ? `Storehouse ${Math.floor(store.progress * 100)}%` : 'Storehouse: 180 boards + 120 ballast bags'}`,
+    `The time is ${t}. The storm arrives at 10:00. ${store?.complete ? 'The storehouse is ready.' : store ? `The storehouse is ${Math.floor(store.progress * 100)}% complete.` : 'The storehouse costs 180 boards and 120 ballast bags.'}`,
   );
   const people = s.villagers.filter((v) => selected.includes(v.id));
   const town = s.buildings.find((b) => b.kind === 'town' && selected.includes(b.id));
@@ -226,7 +229,7 @@ function update() {
       ? 'Workshop hub'
       : people.length
         ? people.map((v) => v.name).join(', ')
-        : 'Select people, then choose work',
+        : 'Select people, then choose work.',
   );
   put(
     'task',
@@ -237,14 +240,14 @@ function update() {
   put(
     'said',
     people.find((v) => v.says)?.says ??
-      (s.tick < 60 ? 'Select a person, then tap Meals, Boards or Ballast.' : s.message),
+      (s.tick < 60 ? 'Select a person, then tap Meals, Boards or Ballast bags.' : s.message),
   );
   put(
     'notice',
     placing
       ? `Tap open ground for the ${placing === 'house' ? 'guest cabin' : 'storehouse'}.`
       : moveMode
-        ? 'Tap ground to move selected people.'
+        ? 'Tap the ground to move the selected people.'
         : s.message,
   );
   const resident = document.getElementById('resident');
@@ -257,7 +260,7 @@ function update() {
     resident.dataset.person = person?.id ?? '';
     residentKey = nextResidentKey;
     resident.innerHTML = person
-      ? `<p class="small">${esc(person.name)}${entry ? ` is ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)} years old.` : '.'} ${esc(displayText(person.role))}. Current work: ${esc(displayText(person.assignment.replace(/\.$/, '')))}.</p>${person.lifeLine ? `<p class="small">${esc(displayText(person.lifeLine))}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(displayText(person.family))}</p><p class="small">Use a trolley and choose a comfortable load of prepared materials. Do not do electrical work, change the building structure or use powered tools.</p>${person.discovery && scene ? `<p>${esc(displayText(scene[person.discovery === 2 ? 1 : 0]))}</p>` : ''}<p class="small">Spend a minute together. Offer a break, wait five seconds, then invite conversation.</p><button id="listen">Invite conversation</button><button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button></details>`
+      ? `<p class="small">${esc(person.name)}${entry ? ` is ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)} years old.` : '.'} ${esc(person.role)} ${esc(person.assignment)}</p>${person.lifeLine ? `<p class="small">${esc(person.lifeLine)}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Use a trolley and choose a comfortable load of prepared materials. Do not do electrical work, change the building structure or use powered tools.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">Spend a minute together. Offer this person a break. Wait five seconds, then choose Invite conversation.</p><button id="listen">Invite conversation</button><button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button></details>`
       : '';
     bind('listen', () => issue({ kind: 'order', ids: selected, target: 'listen' }));
     bind('collaborate', () => issue({ kind: 'order', ids: selected, target: 'collaborate' }));
@@ -308,10 +311,10 @@ function update() {
     actionKey = nextActionKey;
     actions.innerHTML =
       placing || moveMode
-        ? '<button class="wide" id="cancel">Cancel placement / move</button>'
+        ? '<button class="wide" id="cancel">Cancel placement or movement</button>'
         : town
-          ? `<button class="wide primary" id="train" ${s.resources.food < 35 || s.villagers.length >= capacity || s.trainingUntil !== null ? 'disabled' : ''}>Invite helper · 35 meal units</button><button class="wide" id="select-workers">Select all people</button><p class="small wide">${s.villagers.length >= capacity ? 'Prepare an existing guest cabin to make room.' : s.resources.food < 35 ? 'Prepare food for a helper.' : s.trainingUntil !== null ? 'A helper is learning the light tasks and will arrive shortly.' : 'A helper arrives after 15 seconds of learning the light tasks. This does not grant a trade qualification.'}</p>`
-          : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast</button><button id="rest" ${!people.length ? 'disabled' : ''}>Rest, then resume</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink</button><button id="move" ${!people.length ? 'disabled' : ''}>Move</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse</button><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>`;
+          ? `<button class="wide primary" id="train" ${s.resources.food < 35 || s.villagers.length >= capacity || s.trainingUntil !== null ? 'disabled' : ''}>Invite helper · 35 meals</button><button class="wide" id="select-workers">Select all people</button><p class="small wide">${s.villagers.length >= capacity ? 'Prepare an existing guest cabin to make room for a helper.' : s.resources.food < 35 ? 'Collect more meals before inviting a helper.' : s.trainingUntil !== null ? 'A helper is learning the light tasks and will arrive shortly.' : 'A helper arrives after 15 seconds of learning the light tasks. This does not grant a trade qualification.'}</p>`
+          : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast bags</button><button id="rest" ${!people.length ? 'disabled' : ''}>Rest, then resume</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink</button><button id="move" ${!people.length ? 'disabled' : ''}>Move</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse</button><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>`;
     for (const b of actions.querySelectorAll<HTMLButtonElement>('[data-resource]'))
       b.onclick = () => {
         const node = NODES.find((n) => n.kind === b.dataset.resource);
@@ -320,7 +323,11 @@ function update() {
     bind('rest', () => order('rest'));
     bind('meal', () => order('meal'));
     bind('push', () => {
-      if (confirm('Insist on current work? People may work under protest and remember the pressure.'))
+      if (
+        confirm(
+          'Do you want to insist that these people keep working? They may object and remember the pressure.',
+        )
+      )
         order('push');
     });
     bind('move', () => {
@@ -484,14 +491,14 @@ function sheet(html: string, infoOnly = false) {
 }
 function info() {
   sheet(
-    '<h2>Controls · paused</h2><p>Keep the shared supplies dry: finish the storehouse before 10:00. If it is unfinished, the supplies get soaked. Preparing a cabin only adds room for two people.</p><p>Select names, then choose Meals, Boards or Ballast. Select the workshop hub on the map to invite a local helper.</p><p>Desktop: drag a box to select people; right-click to order. Phone: tap selects, drag selects a group, hold a destination to order.</p><p>After a minute together, offer one person a break. Wait five seconds, then open About this resident and Invite conversation. They may share something private. A small collaboration is optional. These are fictional residents; Sam’s playtesting is not a real lab test.</p><p>Rest takes 35 seconds, then each person resumes their own job. Eat and drink uses food in place. Insist on work asks people to continue even if they object. They may remember the pressure.</p><p>Storehouse costs 180 boards and 120 ballast bags. Select builders, choose Storehouse, then tap open ground. The menu pauses. Slow / Steady / Fast change the clock.</p><button class="primary" id="close-info">Back to the workshop</button>',
+    '<h2>Controls · game paused</h2><p>Finish the storehouse before 10:00 to keep the shared supplies dry. If it is unfinished, the supplies get soaked. Preparing a guest cabin adds room for two people.</p><p>Select names, then choose Meals, Boards or Ballast bags. Select the workshop hub on the map to invite a local helper.</p><p>On a computer, drag a box to select people. Right-click a destination to give an order. On a phone, tap a person to select them. Drag a box to select a group. Hold a destination to give an order.</p><p>After a minute together, offer one person a break. Wait five seconds. Open About this resident and choose Invite conversation. They may share something private. A small collaboration is optional. These residents are fictional. Sam’s playtesting is not a real lab test.</p><p>Rest takes 35 seconds. Each person then returns to their own task. Eat and drink uses meals where each person is standing. Insist on work asks people to continue even if they object. They may remember the pressure.</p><p>The storehouse costs 180 boards and 120 ballast bags. Select builders. Choose Storehouse, then tap open ground. Opening the menu pauses the game. Slow, Steady and Fast change how quickly time passes.</p><button class="primary" id="close-info">Back to the workshop</button>',
     true,
   );
   bind('close-info', closeModal);
 }
 function menu() {
   sheet(
-    `<h2>Paused</h2><p>Your workshop is saved on this device.</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div>${isLab ? '<button id="continuity-menu">People between chapters</button><button id="download">Download this run</button>' : ''}`,
+    `<h2>Paused</h2><p>Your game is saved on this device.</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div>${isLab ? '<button id="continuity-menu">Character histories between games</button><button id="download">Download this run</button>' : ''}`,
   );
   document.getElementById('toggle')?.append(telemetryToggle(lab));
   bind('continuity-menu', continuityMenu);
@@ -505,7 +512,7 @@ function menu() {
     const holder = document.getElementById('menu-confirm');
     if (!holder) return;
     holder.innerHTML =
-      '<p>Replace this workshop? It stays saved until the new game is ready.</p><button id="replace-menu">Replace saved game</button><button id="keep-menu">Keep this game</button><p id="setup-status" role="status"></p>';
+      '<p>Do you want to replace this saved game? It stays saved until the new game is ready.</p><button id="replace-menu">Replace saved game</button><button id="keep-menu">Keep this game</button><p id="setup-status" role="status"></p>';
     bind('keep-menu', () => {
       holder.innerHTML = '';
     });
@@ -523,7 +530,7 @@ function menu() {
           if (status)
             status.textContent = isLab
               ? String(error)
-              : 'The new game could not start. Your saved workshop is unchanged. Try again or send Feedback.';
+              : 'The new game could not start. Your saved game is unchanged. Try again or choose Feedback to report the problem.';
         }
       })();
     });
@@ -531,7 +538,7 @@ function menu() {
 }
 function feedback() {
   sheet(
-    `<h2>Feedback</h2><div class="feedback-body"><p>Tell us what happened.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened? What did you want to do?</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Your name labels this feedback and any shared play history. Sharing follows the Recording switch or the optional sharing checkbox.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions">${isLab ? '<button id="copy">Keep a copy of this run</button>' : ''}<button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
+    `<h2>Feedback</h2><div class="feedback-body"><p>Tell us what happened.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened? What did you want to do?</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Your name appears with this feedback and any play history you share. Play history is shared when Recording is on or you select the optional sharing checkbox.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions">${isLab ? '<button id="copy">Keep a copy of this run</button>' : ''}<button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
   );
   let verdict = '';
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
@@ -562,7 +569,7 @@ function feedback() {
       }
       const sharePlay = feedbackSharePlay(share);
       const id = await lab.sendFeedback(note, { name, run, sharePlay });
-      status.textContent = `Sent. Your note is stored. Reference: ${id}.`;
+      status.textContent = `Your feedback was sent. Your note is stored. Reference: ${id}.`;
       status.scrollIntoView({ block: 'nearest' });
       send.textContent = state ? 'Back to the game' : 'Back to the title page';
       send.disabled = false;
@@ -571,7 +578,7 @@ function feedback() {
       console.error(error);
       status.textContent = isLab
         ? String(error)
-        : 'Your feedback could not be sent. Your note is still here. Try Submit again.';
+        : 'Your feedback could not be sent. Your note is still here. Choose Submit to try again.';
       status.scrollIntoView({ block: 'nearest' });
       send.disabled = false;
     }
@@ -587,11 +594,11 @@ function end() {
     void continuity.checkpointAll();
   }
   save();
-  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">10:00 · the storm arrived</p><h1>${state.won ? 'Supplies kept dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p><div>${state.villagers
+  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">The storm arrived at 10:00.</p><h1>${state.won ? 'The supplies stayed dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p><div>${state.villagers
     .slice(0, 2)
     .map(
       (v) =>
-        `<p class="speech">${esc(v.name)}: ${esc(displayText(v.says || 'We made it through the work together.'))}</p>`,
+        `<p class="speech">${esc(v.name)}: ${esc(v.says || 'We made it through the work together.')}</p>`,
     )
     .join(
       '',
@@ -604,7 +611,7 @@ function end() {
 function continuityMenu() {
   if (!isLab) return;
   sheet(
-    `<h2>People between chapters</h2><p id="continuity-status" role="status">${esc(continuity.status)}</p><p>Continuity stays in this browser. A fresh chapter checks all eight allocated people together. Loaded chapters keep their pinned people. Recording and character analysis are separate choices.</p><label><input type="checkbox" id="continuity-enabled" ${continuity.shelf.enabled ? 'checked' : ''}> Continue people between games</label>${state ? `<p>${state.chapterPaused ? 'Chapter paused for departure.' : state.pauseRequested ? 'Current acts are finishing.' : 'Play first, then pause at completed action boundaries. Unfinished assembly and source obligations still bind.'}</p><button id="departure">${state.chapterPaused ? 'Resume this chapter' : 'Pause chapter for departure'}</button><details><summary>Save a person to browser continuity</summary><p>A stale source cannot overwrite a newer chapter. Export first. An explicit alternative branch preserves old history and does not continue it.</p>${ALLOCATION.map((c) => `<div class="resident-checkpoint"><strong>${esc(c.name)}</strong><button data-checkpoint="${c.castId}">Save ${esc(c.name)}</button><button data-fork="${c.castId}">Save ${esc(c.name)} as an explicit alternative branch</button></div>`).join('')}</details><p>Recorded play links across games on this device. Switch recording off in the game menu.</p><button id="continuity-export">Download run and source archive</button>` : ''}<a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noreferrer">Inspect or export browser people</a><button id="back-continuity">Back</button>`,
+    `<h2>Character histories between games</h2><p id="continuity-status" role="status">${esc(continuity.status)}</p><p>Character histories stay in this browser. A new game checks the saved histories of all eight residents together. A loaded game keeps its saved versions of the residents. Recording and character analysis are separate choices.</p><label><input type="checkbox" id="continuity-enabled" ${continuity.shelf.enabled ? 'checked' : ''}> Keep character histories between games</label>${state ? `<p>${state.chapterPaused ? 'The game is paused. Residents must finish shared building work before you save their histories.' : state.pauseRequested ? 'The residents are finishing their current actions.' : 'Start playing before you pause to save character histories. Residents must finish their current actions first. They keep their unfinished construction work and existing responsibilities.'}</p><button id="departure">${state.chapterPaused ? 'Resume this game' : 'Pause to save character histories'}</button><details><summary>Save a character history in this browser</summary><p>An older character history cannot replace a newer one. Download an archive first. Saving a separate version preserves the older history without continuing the newer one.</p>${ALLOCATION.map((c) => `<div class="resident-checkpoint"><strong>${esc(c.name)}</strong><button data-checkpoint="${c.castId}">Save ${esc(c.name)}</button><button data-fork="${c.castId}">Save ${esc(c.name)} as a separate version</button></div>`).join('')}</details><p>Recorded play is linked across games on this device. You can switch Recording off in the game menu.</p><button id="continuity-export">Download game and character archive</button>` : ''}<a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noreferrer">View or download saved character histories</a><button id="back-continuity">Back</button>`,
   );
   const attempt = async (action: () => Promise<unknown>) => {
     try {

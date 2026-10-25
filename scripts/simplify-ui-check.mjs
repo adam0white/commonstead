@@ -126,7 +126,7 @@ for (const [name, type] of [
       ]);
       if (canvasFonts.some((x) => x.text !== '+' && x.font < 15.9))
         throw Error('Tiny canvas labels ' + JSON.stringify(canvasFonts));
-      await page.getByRole('button', { name: 'Menu · pause', exact: true }).click();
+      await page.getByRole('button', { name: 'Pause menu', exact: true }).click();
       const controls = await page.locator('.panel button').allTextContents();
       if (controls.join('|') !== 'Resume|Feedback|Full screen|New game') throw Error(`Menu ${controls}`);
       if (await page.locator('#download,#continuity-menu,#load').count()) throw Error('ordinary diagnostics');

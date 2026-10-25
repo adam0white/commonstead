@@ -37,6 +37,7 @@ import {
 } from '@adam0white/lab-client';
 import { CAST } from '../src/cast.ts';
 import { Continuity, resumeForPlay, watchShelfPreference } from '../src/continuity.ts';
+import { assignmentText } from '../src/display.ts';
 import { admitResident, residentTransfer } from '../src/passport.ts';
 
 const clock = 1_790_000_000_000;
@@ -220,7 +221,7 @@ describe('finite source, batch ownership and recording controls', () => {
     const invalid = await createPersona({ ...body, source: { ...original.source, game: 'unknown' } });
     const h = harness([invalid]);
     const c = new Continuity(h.lab, h.shelf);
-    await expect(c.fresh(42)).rejects.toThrow(/adapter/);
+    await expect(c.fresh(42)).rejects.toThrow(/cannot carry over/);
     expect(h.data.heads[original.castId]).toBe(invalid.revision);
     expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
     const empty = harness();
@@ -235,7 +236,7 @@ describe('finite source, batch ownership and recording controls', () => {
     const c = new Continuity(h.lab, h.shelf);
     const s = await c.fresh(42);
     const v = s.villagers[0]!;
-    expect(v.assignment).toBe(facts.assignment);
+    expect(v.assignment).toBe(assignmentText(facts.assignment));
     expect(v.x).toBe(facts.life.place === 'public-garden' ? 220 : facts.startsAtHome ? 450 : 750);
     expect(v.availableAt).toBe(facts.availableForExtraWork ? 0 : 30);
     apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });

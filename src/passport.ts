@@ -41,9 +41,13 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     p.castRevision !== cast.revision ||
     p.terminal
   )
-    throw new Error('Unsupported identity, edition or closed branch.');
+    throw new Error(
+      'This resident history has an unsupported identity or version, or it has ended. Start a fresh local chapter.',
+    );
   if (!same(preparePersonaLife(p, input.clockMs).life, input.life))
-    throw new Error('Pinned life result differs.');
+    throw new Error(
+      'This resident’s saved life history does not match the expected history. Start a fresh local chapter.',
+    );
   const peerRole =
     p.castId === 'hf.cast.nora.smallworks' ? 'nora' : p.castId === 'hf.cast.sam.smallworks' ? 'sam' : null;
   const peer =
@@ -63,7 +67,7 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     p.transfer.sourceRole === p.castId;
   if (!peer && !native)
     throw new Error(
-      'This source has no registered Commonstead semantic adapter. Export it or start fresh locally.',
+      'Commonstead cannot carry over a resident history from this source. Download the source game to keep a copy, or start a fresh local chapter.',
     );
   const portable = validateCalendarPersona(p.transfer.person);
   const sourceId = peer ? String(peerRole) : p.castId;
@@ -74,7 +78,9 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     portable.person.source.engine !== '2.17.0' ||
     portable.person.name !== cast.name
   )
-    throw new Error('Source role, mapping, engine or name differs.');
+    throw new Error(
+      'This resident history does not match the required role, transfer format, simulation version or name. Start a fresh local chapter.',
+    );
   const receipt = p.transfer.checkpoint as Record<string, unknown> | undefined;
   if (
     !receipt ||
@@ -84,15 +90,21 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     typeof receipt.sha256 !== 'string' ||
     !/^[a-f0-9]{64}$/.test(receipt.sha256)
   )
-    throw new Error('Missing full-source checkpoint receipt.');
+    throw new Error(
+      'This resident history has no valid record of the complete source save. Save the person again in the source game, or start a fresh local chapter.',
+    );
   if (portable.calendar.norms.some((norm) => !DEFAULT_NORMS.some((known) => same(known, norm))))
-    throw new Error('Unknown norm meanings.');
+    throw new Error(
+      'Commonstead cannot interpret some rules in this resident history. Keep the history in its source game, or start a fresh local chapter.',
+    );
   if (
     [...portable.calendar.commitments, ...portable.calendar.owed].some((c) =>
       [...c.actions, ...(c.violatedBy ?? [])].some((a) => !supportedActions.has(a)),
     )
   )
-    throw new Error('A source obligation has no supported action here. Keep it at source.');
+    throw new Error(
+      'This person has an obligation from another game that Commonstead cannot support. Keep the person in that game, or start a fresh local chapter.',
+    );
   const target = restore(snapshot(opening));
   const shifted = structuredClone(portable);
   const offset = target.now - portable.person.source.now;
@@ -109,7 +121,10 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
   }
   if (shifted.calendar.lapse) shifted.calendar.lapse.since += offset;
   const age = portable.person.source.now - portable.person.life.bornAt;
-  if (age < cast.age * 525600) throw new Error('Canonical age provenance differs.');
+  if (age < cast.age * 525600)
+    throw new Error(
+      'This resident history gives an age below the resident’s original age. Start a fresh local chapter.',
+    );
   target.life.bornAt = portable.person.life.bornAt + offset;
   target.body.fitness = portable.person.health.fitness;
   target.body.circadianPeak = portable.person.health.circadianPeak;
@@ -119,7 +134,7 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     shifted.person.skills = {};
     if (skills.length)
       shifted.person.limitations.push(
-        `Repair skills stay in source archive: ${skills.join(', ')}. No workshop qualification inferred.`,
+        `These repair skills remain in the saved source data: ${skills.join(', ')}. They do not count as qualifications in this workshop.`,
       );
   }
   return admitCalendarPersona(shifted, target, {
@@ -140,7 +155,9 @@ export function checkChapter(chapter: Chapter) {
     new Set(chapter.inputs.map((i) => i.parent.castId)).size !== chapter.inputs.length ||
     !same(Object.keys(chapter.initial).sort(), CAST.map((c) => c.castId).sort())
   )
-    throw new Error('Invalid complete initial cast.');
+    throw new Error(
+      'The chapter’s starting resident list is invalid. Load a different save or start a fresh local chapter.',
+    );
   for (const input of chapter.inputs) {
     const claim = chapter.claims.find((p) => p.castId === input.parent.castId);
     if (
@@ -154,7 +171,9 @@ export function checkChapter(chapter: Chapter) {
       claim.source.rules !== RULES ||
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )
-      throw new Error('Invalid pinned claim.');
+      throw new Error(
+        'The chapter’s saved resident record is invalid. Load a different save or start a fresh local chapter.',
+      );
   }
 }
 
@@ -204,7 +223,7 @@ export async function residentTransfer(person: Person) {
     },
     limitations: [
       ...projection.person.limitations,
-      'Geometry, supplies, shared building work, fictional discoveries, source social memories and transient body/needs remain in the full source archive. Zero-duration calendar adaptation is not travel, healing, payment or qualification.',
+      'The complete source save keeps the layout, supplies, shared building work, story discoveries, social memories and temporary physical states and needs from that game. Transferring the calendar takes no simulation time. It does not count as travel, healing, payment or a qualification.',
     ],
   };
 }
