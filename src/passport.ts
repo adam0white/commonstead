@@ -30,10 +30,10 @@ export type Chapter = {
 const same = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPersona(b);
 const identity = (keys: string[]) => Object.fromEntries(keys.map((key) => [key, key]));
 // Only these released engines share the finite calendar dialects below.
-const supportedEngine = (engine: string) => engine === '2.17.0' || engine === '2.21.0';
+const supportedEngine = (engine: string) => engine === '2.17.0' || engine === '2.21.0' || engine === '2.23.0';
 const supportedActions = new Set(['rest', 'eat', 'drink']);
 
-/** Finite Small Works Nora/Sam, native Commonstead and forwarded Glance Nerys maps. No clinical or duty waiver. */
+/** Finite Small Works Nora/Sam, native Commonstead and exact native/forwarded Glance Nerys maps. No clinical or duty waiver. */
 export function admitResident(input: LifePreparation, opening: Person): Person {
   const p = input.parent;
   const cast = canonicalCast(p.castId);
@@ -63,22 +63,39 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     p.castId === 'hf.cast.nerys.glance' &&
     p.source.game === 'glance' &&
     p.source.rules === 'glance-3' &&
-    supportedEngine(p.source.engine);
+    (p.source.engine === '2.17.0' || p.source.engine === '2.21.0');
+  // Glance4's actual native Nerys passport, including an own claim retaining it.
+  const glanceNerys =
+    p.castId === 'hf.cast.nerys.glance' &&
+    p.source.engine === '2.23.0' &&
+    ((p.source.game === 'glance' && p.source.rules === 'glance-4') ||
+      (p.source.game === 'commonstead' && p.source.rules === RULES)) &&
+    p.transfer.castPassport === 'glance-cast/1' &&
+    p.transfer.sourceRole === 'nerys';
   const native =
     (p.source.game === 'commonstead' || forwardedNerys) &&
     p.transfer.castPassport === DIALECT &&
     p.transfer.sourceRole === p.castId;
-  if (!peer && !native)
+  const currentCommonstead = p.source.game === 'commonstead' && p.source.rules === RULES;
+  if (
+    (!peer && !native && !glanceNerys) ||
+    (p.source.engine === '2.23.0' && !currentCommonstead && !glanceNerys)
+  )
     throw new Error(
       'Commonstead cannot carry over a resident history from this source. Download the source game to keep a copy, or start a fresh local chapter.',
     );
   const portable = validateCalendarPersona(p.transfer.person);
-  const sourceId = peer ? String(peerRole) : p.castId;
-  const mapping = peer ? 'workshop-calendar/1' : MAPPING;
+  const sourceId = peer ? String(peerRole) : glanceNerys ? 'nerys' : p.castId;
+  const mapping = peer ? 'workshop-calendar/1' : glanceNerys ? 'glance-calendar/1' : MAPPING;
   if (
     portable.person.mappingVersion !== mapping ||
     portable.person.source.id !== sourceId ||
     !supportedEngine(portable.person.source.engine) ||
+    (glanceNerys && portable.person.source.engine !== '2.23.0') ||
+    (peer &&
+      p.source.engine === '2.23.0' &&
+      portable.person.source.engine !== '2.17.0' &&
+      portable.person.source.engine !== '2.21.0') ||
     portable.person.name !== cast.name
   )
     throw new Error(
@@ -170,7 +187,7 @@ export function checkChapter(chapter: Chapter) {
       claim.branchId !== input.parent.branchId ||
       claim.parentRevision !== input.parent.revision ||
       claim.source.game !== 'commonstead' ||
-      claim.source.engine !== '2.21.0' ||
+      claim.source.engine !== '2.23.0' ||
       claim.source.rules !== RULES ||
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )

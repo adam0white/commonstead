@@ -1,0 +1,3116 @@
+{
+  "source": {
+    "game": "repair",
+    "rules": "canonical-workshop-2",
+    "engine": "2.23.0",
+    "build": "8002352943cd8f2f95b31bc2a9fb5566d5bfb93c"
+  },
+  "transfer": {
+    "castPassport": "workshop-cast/1",
+    "sourceRole": "nora",
+    "person": {
+      "format": "hf-persona-calendar/1",
+      "person": {
+        "format": "hf-persona-state/1",
+        "mappingVersion": "workshop-calendar/1",
+        "source": {
+          "schema": "human/person@1",
+          "engine": "2.23.0",
+          "id": "nora",
+          "now": 1980
+        },
+        "name": "Nora",
+        "life": {
+          "bornAt": -14716260,
+          "sex": "female"
+        },
+        "rng": {
+          "a": 1254313033,
+          "b": 1061033341,
+          "c": 215739932,
+          "d": 3765034368
+        },
+        "traits": {
+          "honesty": 0.7,
+          "emotionality": 0.5,
+          "extraversion": 0.45,
+          "agreeableness": 0.5,
+          "conscientiousness": 0.6,
+          "openness": 0.85
+        },
+        "values": {
+          "benevolence": 0.5,
+          "universalism": 0.5,
+          "tradition": 0.5,
+          "conformity": 0.5,
+          "security": 0.5,
+          "achievement": 0.5,
+          "power": 0.5,
+          "hedonism": 0.5,
+          "stimulation": 0.8,
+          "selfDirection": 0.9
+        },
+        "health": {
+          "health": 1,
+          "fitness": 0.49808198656573566,
+          "circadianPeak": 960
+        },
+        "family": null,
+        "bonds": null,
+        "skills": {},
+        "skillRetention": null,
+        "episodes": [],
+        "commitments": [],
+        "limitations": [
+          "source transient body/needs/affect/ambient omitted; target arrival policy",
+          "source habits/methods/beliefs/social and conscience breaches omitted; target authored state; held norms transported",
+          "source optional behaviour stores and decision history omitted; target authored state",
+          "family/bonds provenance checked; target authored state",
+          "episode:e0",
+          "episode:e1",
+          "episode:e2",
+          "episode:e3",
+          "episode:e4",
+          "episode:e5",
+          "episode:e6",
+          "episode:e7",
+          "episode:e8",
+          "episode:e9",
+          "episode:e10",
+          "episode:e11",
+          "episode:e12",
+          "episode:e13",
+          "episode:e14",
+          "episode:e15"
+        ]
+      },
+      "calendar": {
+        "offset": 0,
+        "commitments": [
+          {
+            "kind": "promise",
+            "actions": [
+              "personal"
+            ],
+            "from": 2340,
+            "until": 2460,
+            "importance": 0.7,
+            "label": "Work on my own design",
+            "id": "c2",
+            "status": "pending"
+          }
+        ],
+        "owed": [],
+        "lapse": null,
+        "heldNorms": [
+          {
+            "normId": "salah",
+            "standing": "obligatory",
+            "conviction": 0.475
+          },
+          {
+            "normId": "sawm-ramadan",
+            "standing": "obligatory",
+            "conviction": 0.475
+          },
+          {
+            "normId": "zakat",
+            "standing": "obligatory",
+            "conviction": 0.475
+          },
+          {
+            "normId": "charity",
+            "standing": "recommended",
+            "conviction": 0.475
+          },
+          {
+            "normId": "lying",
+            "standing": "forbidden",
+            "conviction": 0.75
+          },
+          {
+            "normId": "theft",
+            "standing": "forbidden",
+            "conviction": 0.75
+          },
+          {
+            "normId": "keep-promise",
+            "standing": "obligatory",
+            "conviction": 0.75
+          },
+          {
+            "normId": "kindness-to-parents",
+            "standing": "obligatory",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "backbiting",
+            "standing": "forbidden",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "help-neighbor",
+            "standing": "recommended",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "gratitude",
+            "standing": "recommended",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "harm-others",
+            "standing": "forbidden",
+            "conviction": 0.75
+          },
+          {
+            "normId": "intoxicants",
+            "standing": "forbidden",
+            "conviction": 0.475
+          },
+          {
+            "normId": "forbidden-food",
+            "standing": "forbidden",
+            "conviction": 0.475
+          },
+          {
+            "normId": "fairness",
+            "standing": "obligatory",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "care-dependents",
+            "standing": "obligatory",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "punctuality",
+            "standing": "recommended",
+            "conviction": 0.6000000000000001
+          },
+          {
+            "normId": "eid-prayer",
+            "standing": "recommended",
+            "conviction": 0.475
+          }
+        ],
+        "norms": [
+          {
+            "id": "salah",
+            "label": "Perform the daily prayers",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:43"
+              },
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 4:103 (prayer at prescribed times)"
+              },
+              {
+                "kind": "interpretation",
+                "ref": "A missed prayer is still owed (qada); sleep, forgetting and unconsciousness lift the blame, not the debt; the debt for a stretch of unconsciousness beyond five prayer times drops (Hanafi count, kept as the default): research/capacity-and-excuse-sources.md §0, §2, §4; research/decisions.md"
+              },
+              {
+                "kind": "assumption",
+                "ref": "Window boundaries (Fajr until sunrise, one-shadow Asr, red-twilight Maghrib) are the most common positions, chosen in research/decisions.md; agenda/prayer.ts"
+              }
+            ]
+          },
+          {
+            "id": "sawm-ramadan",
+            "label": "Fast in Ramadan",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:183"
+              },
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:185 (the month of Ramadan)"
+              },
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:187 (eat and drink until dawn, then complete the fast until nightfall)"
+              }
+            ],
+            "exemptions": [
+              {
+                "when": "illness",
+                "makeUp": true,
+                "sources": [
+                  {
+                    "kind": "revelation",
+                    "ref": "Qur'an 2:184 (whoever is ill or on a journey: an equal number of days after)"
+                  },
+                  {
+                    "kind": "revelation",
+                    "ref": "Qur'an 2:185 (repeated; Allah intends ease, not hardship)"
+                  },
+                  {
+                    "kind": "assumption",
+                    "ref": "Which illness qualifies is the person’s judgment; the severity threshold is an engineering stand-in"
+                  },
+                  {
+                    "kind": "interpretation",
+                    "ref": "Qur'an 2:184 continues: 'For those who can only fast with extreme difficulty, compensation can be made by feeding a needy person' (quran.com, checked 2026-10-03). Commonly read as covering chronic illness with no expected recovery (fidya instead of make-up); NOT modelled: every qualifying illness, chronic or acute, owes a make-up, because whether a condition is beyond recovery cannot be derived from body state"
+                  }
+                ]
+              },
+              {
+                "when": "travel",
+                "makeUp": true,
+                "sources": [
+                  {
+                    "kind": "revelation",
+                    "ref": "Qur'an 2:184 (whoever is ill or on a journey: an equal number of days after)"
+                  },
+                  {
+                    "kind": "revelation",
+                    "ref": "Qur'an 2:185"
+                  },
+                  {
+                    "kind": "assumption",
+                    "ref": "What counts as a journey is supplied by the host as a traveling flag"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "zakat",
+            "label": "Pay zakat",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:43"
+              }
+            ]
+          },
+          {
+            "id": "charity",
+            "label": "Give voluntary charity (sadaqah)",
+            "standing": "recommended",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:261"
+              }
+            ]
+          },
+          {
+            "id": "lying",
+            "label": "Lying (truthfulness is required)",
+            "standing": "forbidden",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 22:30 (shun words of falsehood; quran.com, checked 2026-10-03)"
+              },
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 9:119 (be with the truthful)"
+              }
+            ]
+          },
+          {
+            "id": "theft",
+            "label": "Theft",
+            "standing": "forbidden",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 5:38"
+              },
+              {
+                "kind": "assumption",
+                "ref": "Listed in CONSCIENCE_DEFAULTS.necessityEligible: taking food in extremity is a juristic extension of the 2:173 necessity exception by analogy (2:173 itself names forbidden food); not yet sourced in research/, recorded as an engineering assumption pending a Hanafi source"
+              }
+            ]
+          },
+          {
+            "id": "keep-promise",
+            "label": "Keep promises and commitments",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 17:34"
+              }
+            ]
+          },
+          {
+            "id": "kindness-to-parents",
+            "label": "Kindness to parents",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 17:23"
+              }
+            ]
+          },
+          {
+            "id": "backbiting",
+            "label": "Backbiting",
+            "standing": "forbidden",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 49:12"
+              }
+            ]
+          },
+          {
+            "id": "help-neighbor",
+            "label": "Help and be good to neighbours",
+            "standing": "recommended",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 4:36 (be kind to neighbours; a command)"
+              },
+              {
+                "kind": "interpretation",
+                "ref": "Standing recorded as recommended for everyday help beyond basic kindness is an engineering simplification; the verse itself is a command"
+              }
+            ]
+          },
+          {
+            "id": "gratitude",
+            "label": "Gratitude",
+            "standing": "recommended",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:152 (thank Me, and never be ungrateful)"
+              },
+              {
+                "kind": "interpretation",
+                "ref": "Standing as recommended for expressed gratitude toward people is an engineering simplification"
+              }
+            ]
+          },
+          {
+            "id": "harm-others",
+            "label": "Harming others without right",
+            "standing": "forbidden",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 33:58 (abusing believers unjustifiably)"
+              },
+              {
+                "kind": "interpretation",
+                "ref": "General prohibition of unjust harm to any person, extended from specific texts; scope of \"without right\" left to the host"
+              }
+            ]
+          },
+          {
+            "id": "intoxicants",
+            "label": "Intoxicants",
+            "standing": "forbidden",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 5:90"
+              }
+            ]
+          },
+          {
+            "id": "forbidden-food",
+            "label": "Eating forbidden food (carrion, blood, swine)",
+            "standing": "forbidden",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 2:173 ('if someone is compelled by necessity—neither driven by desire nor exceeding immediate need—they will not be sinful'; quran.com, checked 2026-10-03)"
+              }
+            ]
+          },
+          {
+            "id": "fairness",
+            "label": "Deal fairly (no cheating in trade)",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "revelation",
+                "ref": "Qur'an 83:1-3 (woe to the defrauders)"
+              },
+              {
+                "kind": "assumption",
+                "ref": "Generalised to fair dealing for secular hosts"
+              }
+            ]
+          },
+          {
+            "id": "care-dependents",
+            "label": "Care for those who depend on you",
+            "standing": "obligatory",
+            "sources": [
+              {
+                "kind": "interpretation",
+                "ref": "Obligations toward family alongside those toward Allah and oneself (Bukhari 1968, as cited in research/islamic-foundations.md §2); extending it to every dependent’s urgent needs is the host’s reading"
+              },
+              {
+                "kind": "assumption",
+                "ref": "Standing obligatory for secular hosts as a shared caregiving norm; engineering default"
+              }
+            ]
+          },
+          {
+            "id": "punctuality",
+            "label": "Be on time",
+            "standing": "recommended",
+            "sources": [
+              {
+                "kind": "assumption",
+                "ref": "Secular social norm; engineering default"
+              }
+            ]
+          },
+          {
+            "id": "eid-prayer",
+            "label": "Pray the Eid prayer in congregation",
+            "standing": "recommended",
+            "sources": [
+              {
+                "kind": "interpretation",
+                "ref": "Strongly emphasised in every school: wajib for Hanafis, sunnah mu'akkada (Maliki), sunnah (Shafi'i), fard kifaya (Hanbali), per TDV \"Bayram\" in research/eid-and-mourning-sources.md §1"
+              },
+              {
+                "kind": "assumption",
+                "ref": "Recorded as recommended (the most common standing overall, research/decisions.md), so missing it is no breach; congregational, with no individual make-up (eid-and-mourning-sources.md §1)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "checkpoint": {
+      "schema": "human/person@1",
+      "sourceMinute": 1980,
+      "rng": {
+        "a": 1254313033,
+        "b": 1061033341,
+        "c": 215739932,
+        "d": 3765034368
+      },
+      "sha256": "1471e719b8706e9b437176559421cbd9ae12144bcd12e62abd8b652d7b38faa0"
+    }
+  },
+  "raw": {
+    "schema": "human/person@1",
+    "engine": "2.23.0",
+    "id": "nora",
+    "name": "Nora",
+    "now": 1980,
+    "rng": {
+      "a": 1254313033,
+      "b": 1061033341,
+      "c": 215739932,
+      "d": 3765034368
+    },
+    "life": {
+      "bornAt": -14716260,
+      "sex": "female"
+    },
+    "body": {
+      "satiety": 0.36633523559894965,
+      "hydration": 0.5780258081008348,
+      "sleepPressure": 0.03609723950872981,
+      "exertion": 1.1585835515886873e-14,
+      "circadianPeak": 960,
+      "pain": 0,
+      "health": 1,
+      "fitness": 0.49808198656573566,
+      "sleepDebt": 0,
+      "alive": true,
+      "asleep": false,
+      "since": 1980,
+      "injuries": [],
+      "illnesses": [],
+      "nextId": 0,
+      "depletion": 0,
+      "fullness": true,
+      "lastSleep": {
+        "from": 1020,
+        "to": 1980
+      }
+    },
+    "needs": {
+      "safety": 0.8,
+      "belonging": 0.587269042337775,
+      "esteem": 0.5870550563296124,
+      "autonomy": 0.953242239033907,
+      "competence": 0.5870550563296124,
+      "leisure": 0.9646889954232865,
+      "meaning": 0.567634588035358
+    },
+    "traits": {
+      "honesty": 0.7,
+      "emotionality": 0.5,
+      "extraversion": 0.45,
+      "agreeableness": 0.5,
+      "conscientiousness": 0.6,
+      "openness": 0.85
+    },
+    "values": {
+      "benevolence": 0.5,
+      "universalism": 0.5,
+      "tradition": 0.5,
+      "conformity": 0.5,
+      "security": 0.5,
+      "achievement": 0.5,
+      "power": 0.5,
+      "hedonism": 0.5,
+      "stimulation": 0.8,
+      "selfDirection": 0.9
+    },
+    "conscience": {
+      "norms": [
+        {
+          "normId": "salah",
+          "standing": "obligatory",
+          "conviction": 0.475
+        },
+        {
+          "normId": "sawm-ramadan",
+          "standing": "obligatory",
+          "conviction": 0.475
+        },
+        {
+          "normId": "zakat",
+          "standing": "obligatory",
+          "conviction": 0.475
+        },
+        {
+          "normId": "charity",
+          "standing": "recommended",
+          "conviction": 0.475
+        },
+        {
+          "normId": "lying",
+          "standing": "forbidden",
+          "conviction": 0.75
+        },
+        {
+          "normId": "theft",
+          "standing": "forbidden",
+          "conviction": 0.75
+        },
+        {
+          "normId": "keep-promise",
+          "standing": "obligatory",
+          "conviction": 0.75
+        },
+        {
+          "normId": "kindness-to-parents",
+          "standing": "obligatory",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "backbiting",
+          "standing": "forbidden",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "help-neighbor",
+          "standing": "recommended",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "gratitude",
+          "standing": "recommended",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "harm-others",
+          "standing": "forbidden",
+          "conviction": 0.75
+        },
+        {
+          "normId": "intoxicants",
+          "standing": "forbidden",
+          "conviction": 0.475
+        },
+        {
+          "normId": "forbidden-food",
+          "standing": "forbidden",
+          "conviction": 0.475
+        },
+        {
+          "normId": "fairness",
+          "standing": "obligatory",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "care-dependents",
+          "standing": "obligatory",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "punctuality",
+          "standing": "recommended",
+          "conviction": 0.6000000000000001
+        },
+        {
+          "normId": "eid-prayer",
+          "standing": "recommended",
+          "conviction": 0.475
+        }
+      ],
+      "breaches": [],
+      "intentions": [
+        {
+          "at": 585,
+          "action": "personal",
+          "intention": "I want to enjoy myself."
+        },
+        {
+          "at": 615,
+          "action": "rest",
+          "intention": "I want to enjoy myself."
+        },
+        {
+          "at": 660,
+          "action": "personal",
+          "intention": "I am doing this out of habit."
+        },
+        {
+          "at": 690,
+          "action": "rest",
+          "intention": "I am doing this out of habit."
+        },
+        {
+          "at": 715,
+          "action": "eat",
+          "intention": "I want to feed myself."
+        },
+        {
+          "at": 745,
+          "action": "rest",
+          "intention": "I am doing this because it suits me."
+        },
+        {
+          "at": 790,
+          "action": "personal",
+          "intention": "I am doing this out of habit."
+        },
+        {
+          "at": 820,
+          "action": "rest",
+          "intention": "I am doing this because it suits me."
+        },
+        {
+          "at": 850,
+          "action": "rest",
+          "intention": "I am doing this because it suits me."
+        },
+        {
+          "at": 895,
+          "action": "personal",
+          "intention": "I am doing this out of habit."
+        },
+        {
+          "at": 940,
+          "action": "personal",
+          "intention": "I want to keep my promise."
+        },
+        {
+          "at": 970,
+          "action": "rest",
+          "intention": "I am doing this because it suits me."
+        },
+        {
+          "at": 975,
+          "action": "drink",
+          "intention": "I want to drink."
+        },
+        {
+          "at": 1005,
+          "action": "rest",
+          "intention": "I am doing this because it suits me."
+        },
+        {
+          "at": 1020,
+          "action": "rest",
+          "intention": "I am doing this because it suits me."
+        },
+        {
+          "at": 1980,
+          "action": "sleep",
+          "intention": "I want to sleep."
+        }
+      ],
+      "nextBreach": 0
+    },
+    "affect": {
+      "mood": {
+        "valence": 0.26805013744146783,
+        "arousal": 0.3027878675906914
+      },
+      "emotions": [
+        {
+          "id": "joy",
+          "intensity": 0.04585963655969908,
+          "cause": "outcome:sleep@home",
+          "since": 1980,
+          "halfLife": 90
+        }
+      ],
+      "regulation": 0.3227015884552129,
+      "lastUpdated": 1980
+    },
+    "skills": {},
+    "habits": [
+      {
+        "cue": {
+          "hour": 9
+        },
+        "action": "personal",
+        "strength": 0.03748558979868991,
+        "repetitions": 1,
+        "lastAt": 585,
+        "withheld": 2,
+        "lastWithheldAt": 1980
+      },
+      {
+        "cue": {
+          "hour": 10,
+          "after": "personal"
+        },
+        "action": "rest",
+        "strength": 0.03954294516545658,
+        "repetitions": 2,
+        "lastAt": 690
+      },
+      {
+        "cue": {
+          "hour": 11,
+          "after": "rest"
+        },
+        "action": "personal",
+        "strength": 0.038355682037452384,
+        "repetitions": 1,
+        "lastAt": 660,
+        "withheld": 1,
+        "lastWithheldAt": 715
+      },
+      {
+        "cue": {
+          "hour": 11,
+          "after": "rest"
+        },
+        "action": "eat",
+        "strength": 0.03840462987307859,
+        "repetitions": 1,
+        "lastAt": 715
+      },
+      {
+        "cue": {
+          "hour": 12,
+          "after": "eat"
+        },
+        "action": "rest",
+        "strength": 0.038409251689516845,
+        "repetitions": 1,
+        "lastAt": 745
+      },
+      {
+        "cue": {
+          "hour": 13,
+          "after": "rest"
+        },
+        "action": "personal",
+        "strength": 0.03837936994603309,
+        "repetitions": 1,
+        "lastAt": 790,
+        "withheld": 1,
+        "lastWithheldAt": 850
+      },
+      {
+        "cue": {
+          "hour": 13,
+          "after": "personal"
+        },
+        "action": "rest",
+        "strength": 0.03842080866419455,
+        "repetitions": 1,
+        "lastAt": 820
+      },
+      {
+        "cue": {
+          "hour": 14,
+          "after": "rest"
+        },
+        "action": "rest",
+        "strength": 0.038392290492205286,
+        "repetitions": 1,
+        "lastAt": 850,
+        "withheld": 1,
+        "lastWithheldAt": 895
+      },
+      {
+        "cue": {
+          "hour": 14,
+          "after": "rest"
+        },
+        "action": "personal",
+        "strength": 0.03843236911625482,
+        "repetitions": 1,
+        "lastAt": 895
+      },
+      {
+        "cue": {
+          "hour": 15,
+          "after": "personal"
+        },
+        "action": "personal",
+        "strength": 0.03842088822243838,
+        "repetitions": 1,
+        "lastAt": 940,
+        "withheld": 1,
+        "lastWithheldAt": 970
+      },
+      {
+        "cue": {
+          "hour": 16,
+          "after": "personal"
+        },
+        "action": "rest",
+        "strength": 0.038443933046744025,
+        "repetitions": 1,
+        "lastAt": 970
+      },
+      {
+        "cue": {
+          "hour": 16,
+          "after": "rest"
+        },
+        "action": "drink",
+        "strength": 0.038411545541860895,
+        "repetitions": 1,
+        "lastAt": 975,
+        "withheld": 1,
+        "lastWithheldAt": 1020
+      },
+      {
+        "cue": {
+          "hour": 16,
+          "after": "drink"
+        },
+        "action": "rest",
+        "strength": 0.03844933073832915,
+        "repetitions": 1,
+        "lastAt": 1005
+      },
+      {
+        "cue": {
+          "hour": 17,
+          "after": "rest"
+        },
+        "action": "rest",
+        "strength": 0.038451644266714165,
+        "repetitions": 1,
+        "lastAt": 1020
+      },
+      {
+        "cue": {
+          "hour": 9,
+          "after": "rest"
+        },
+        "action": "sleep",
+        "strength": 0.0386,
+        "repetitions": 1,
+        "lastAt": 1980
+      }
+    ],
+    "memory": {
+      "episodes": [
+        {
+          "at": 585,
+          "kind": "outcome",
+          "action": "personal",
+          "actorId": "nora",
+          "valence": 0.09232199999999999,
+          "summary": "Nora completed Work on a repair design.",
+          "tags": [
+            "leisure",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e0",
+          "salience": 0.3144968199924761
+        },
+        {
+          "at": 615,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.018421309679663097,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e1",
+          "salience": 0.2577768746678804
+        },
+        {
+          "at": 660,
+          "kind": "outcome",
+          "action": "personal",
+          "actorId": "nora",
+          "valence": 0.09040647294450548,
+          "summary": "Nora completed Work on a repair design.",
+          "tags": [
+            "leisure",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e2",
+          "salience": 0.3152001520282451
+        },
+        {
+          "at": 690,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.016984097650987514,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e3",
+          "salience": 0.25921261637756277
+        },
+        {
+          "at": 715,
+          "kind": "outcome",
+          "action": "eat",
+          "actorId": "nora",
+          "valence": 0.147874379072359,
+          "summary": "Nora completed Have food and water.",
+          "tags": [
+            "meal",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e4",
+          "salience": 0.3563067514019349
+        },
+        {
+          "at": 745,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.01585088080339826,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e5",
+          "salience": 0.2602323285594795
+        },
+        {
+          "at": 790,
+          "kind": "outcome",
+          "action": "personal",
+          "actorId": "nora",
+          "valence": 0.09008775339269665,
+          "summary": "Nora completed Work on a repair design.",
+          "tags": [
+            "leisure",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e6",
+          "salience": 0.31862088115422865
+        },
+        {
+          "at": 820,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.016249870991645814,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e7",
+          "salience": 0.2633251712230087
+        },
+        {
+          "at": 850,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.015775635592413198,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e8",
+          "salience": 0.26403424563024414
+        },
+        {
+          "at": 895,
+          "kind": "outcome",
+          "action": "personal",
+          "actorId": "nora",
+          "valence": 0.09000798634066033,
+          "summary": "Nora completed Work on a repair design.",
+          "tags": [
+            "leisure",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e9",
+          "salience": 0.3215433829018722
+        },
+        {
+          "at": 940,
+          "kind": "outcome",
+          "action": "personal",
+          "actorId": "nora",
+          "valence": 0.0900015530242817,
+          "summary": "Nora completed Work on a repair design.",
+          "tags": [
+            "leisure",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e10",
+          "salience": 0.3228240923278347
+        },
+        {
+          "at": 970,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.016546856888941225,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e11",
+          "salience": 0.2691558347837629
+        },
+        {
+          "at": 975,
+          "kind": "outcome",
+          "action": "drink",
+          "actorId": "nora",
+          "valence": 0.06443470084027439,
+          "summary": "Nora completed Get a glass of water.",
+          "tags": [
+            "work",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e12",
+          "salience": 0.305800998260124
+        },
+        {
+          "at": 1005,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.01590103831206639,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e13",
+          "salience": 0.2699495266834317
+        },
+        {
+          "at": 1020,
+          "kind": "outcome",
+          "action": "rest",
+          "actorId": "nora",
+          "valence": 0.015314639761470206,
+          "summary": "Nora completed Take a quiet break.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "ordinary-day",
+          "id": "e14",
+          "salience": 0.2700421762774494
+        },
+        {
+          "at": 1980,
+          "kind": "outcome",
+          "action": "sleep",
+          "actorId": "nora",
+          "valence": 0.04585963655969908,
+          "summary": "Nora completed Sleep through the night.",
+          "tags": [
+            "rest",
+            "completed"
+          ],
+          "targetId": "home",
+          "id": "e15",
+          "salience": 0.32751578193581943
+        }
+      ],
+      "beliefs": [],
+      "expectations": [
+        {
+          "key": "personal",
+          "needs": {
+            "leisure": 0.18,
+            "autonomy": 0.12
+          },
+          "successRate": 1,
+          "samples": 5,
+          "valence": 0.09056515314042883
+        },
+        {
+          "key": "personal@ordinary-day",
+          "needs": {
+            "leisure": 0.18,
+            "autonomy": 0.12
+          },
+          "successRate": 1,
+          "samples": 5,
+          "valence": 0.09056515314042883
+        },
+        {
+          "key": "rest",
+          "needs": {
+            "rest": 0.059424095588293105,
+            "leisure": 0.05
+          },
+          "successRate": 1,
+          "samples": 8,
+          "valence": 0.01638054121007321
+        },
+        {
+          "key": "rest@ordinary-day",
+          "needs": {
+            "rest": 0.059424095588293105,
+            "leisure": 0.05
+          },
+          "successRate": 1,
+          "samples": 8,
+          "valence": 0.01638054121007321
+        },
+        {
+          "key": "eat",
+          "needs": {
+            "food": 0.44999999999999996,
+            "water": 0.24282838888203506
+          },
+          "successRate": 1,
+          "samples": 1,
+          "valence": 0.147874379072359
+        },
+        {
+          "key": "eat@ordinary-day",
+          "needs": {
+            "food": 0.44999999999999996,
+            "water": 0.24282838888203506
+          },
+          "successRate": 1,
+          "samples": 1,
+          "valence": 0.147874379072359
+        },
+        {
+          "key": "drink",
+          "needs": {
+            "water": 0.44999999999999996
+          },
+          "successRate": 1,
+          "samples": 1,
+          "valence": 0.06443470084027439
+        },
+        {
+          "key": "drink@ordinary-day",
+          "needs": {
+            "water": 0.44999999999999996
+          },
+          "successRate": 1,
+          "samples": 1,
+          "valence": 0.06443470084027439
+        },
+        {
+          "key": "sleep",
+          "needs": {
+            "sleep": 0.65,
+            "rest": 0.44999999999999996
+          },
+          "successRate": 1,
+          "samples": 1,
+          "valence": 0.04585963655969908
+        },
+        {
+          "key": "sleep@home",
+          "needs": {
+            "sleep": 0.65,
+            "rest": 0.44999999999999996
+          },
+          "successRate": 1,
+          "samples": 1,
+          "valence": 0.04585963655969908
+        }
+      ],
+      "sourceTrust": {},
+      "nextEpisode": 16
+    },
+    "social": {
+      "relationships": []
+    },
+    "agenda": {
+      "commitments": [
+        {
+          "kind": "promise",
+          "actions": [
+            "personal"
+          ],
+          "from": 900,
+          "until": 1020,
+          "importance": 0.7,
+          "label": "Work on my own design",
+          "id": "c1",
+          "status": "kept"
+        },
+        {
+          "kind": "promise",
+          "actions": [
+            "personal"
+          ],
+          "from": 2340,
+          "until": 2460,
+          "importance": 0.7,
+          "label": "Work on my own design",
+          "id": "c2",
+          "status": "pending"
+        }
+      ],
+      "goals": [],
+      "nextId": 3,
+      "lastProposalDay": -1
+    },
+    "will": {
+      "voices": [
+        {
+          "voiceId": "player",
+          "trust": 0.85,
+          "pressure": 0,
+          "accepted": 0,
+          "refused": 0,
+          "history": [],
+          "seeded": true
+        }
+      ],
+      "precommitments": [],
+      "switchMargin": 0.15,
+      "temperature": 0
+    },
+    "activity": null,
+    "trace": [
+      {
+        "id": "d0",
+        "at": 540,
+        "chosenAffordanceId": "personal",
+        "chosenAction": "personal",
+        "considered": [
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": 0.0098,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0031
+              },
+              {
+                "source": "need:leisure",
+                "value": 0.0105
+              },
+              {
+                "source": "effort",
+                "value": -0.0038
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0.0033,
+            "terms": [
+              {
+                "source": "need:leisure",
+                "value": 0.0029
+              },
+              {
+                "source": "need:rest",
+                "value": 0.0004
+              }
+            ],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.7
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0107,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.002
+              },
+              {
+                "source": "full:water",
+                "value": -0.0127
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0175,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.002
+              },
+              {
+                "source": "need:water",
+                "value": 0.0012
+              },
+              {
+                "source": "full:food",
+                "value": -0.0134
+              },
+              {
+                "source": "full:water",
+                "value": -0.0073
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.7,
+              "water": 0.4
+            }
+          }
+        ],
+        "intention": "I want to enjoy myself.",
+        "narration": "I want to do something easier."
+      },
+      {
+        "id": "d1",
+        "at": 585,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0.0005,
+            "terms": [
+              {
+                "source": "need:leisure",
+                "value": 0.0003
+              },
+              {
+                "source": "need:rest",
+                "value": 0.0002
+              }
+            ],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.7
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0014,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0012
+              },
+              {
+                "source": "need:leisure",
+                "value": 0.001
+              },
+              {
+                "source": "effort",
+                "value": -0.0036
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0063,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0038
+              },
+              {
+                "source": "full:water",
+                "value": -0.0101
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0109,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0038
+              },
+              {
+                "source": "need:water",
+                "value": 0.0022
+              },
+              {
+                "source": "full:food",
+                "value": -0.0111
+              },
+              {
+                "source": "full:water",
+                "value": -0.0058
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.7,
+              "water": 0.4
+            }
+          }
+        ],
+        "intention": "I want to enjoy myself.",
+        "narration": "I need a break from all this."
+      },
+      {
+        "id": "d2",
+        "at": 615,
+        "chosenAffordanceId": "personal",
+        "chosenAction": "personal",
+        "considered": [
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": 0.0004,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0012
+              },
+              {
+                "source": "need:leisure",
+                "value": 0.0005
+              },
+              {
+                "source": "habit",
+                "value": 0.0022
+              },
+              {
+                "source": "effort",
+                "value": -0.0035
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0.0002,
+            "terms": [
+              {
+                "source": "need:leisure",
+                "value": 0.0001
+              },
+              {
+                "source": "need:rest",
+                "value": 0.0001
+              }
+            ],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.6375
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0034,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0052
+              },
+              {
+                "source": "full:water",
+                "value": -0.0086
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0063,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0052
+              },
+              {
+                "source": "need:water",
+                "value": 0.003
+              },
+              {
+                "source": "full:food",
+                "value": -0.0096
+              },
+              {
+                "source": "full:water",
+                "value": -0.0049
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.7,
+              "water": 0.4
+            }
+          }
+        ],
+        "intention": "I am doing this out of habit.",
+        "narration": "I am doing this out of habit."
+      },
+      {
+        "id": "d3",
+        "at": 660,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0.0044,
+            "terms": [
+              {
+                "source": "need:rest",
+                "value": 0.0001
+              },
+              {
+                "source": "habit",
+                "value": 0.0043
+              }
+            ],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.6375
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": 0.0014,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.008
+              },
+              {
+                "source": "full:water",
+                "value": -0.0066
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": 0.0011,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0079
+              },
+              {
+                "source": "need:water",
+                "value": 0.0045
+              },
+              {
+                "source": "full:food",
+                "value": -0.0076
+              },
+              {
+                "source": "full:water",
+                "value": -0.0037
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.7,
+              "water": 0.4
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0034,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0002
+              },
+              {
+                "source": "effort",
+                "value": -0.0036
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          }
+        ],
+        "intention": "I am doing this out of habit.",
+        "narration": "It is what I do at this hour."
+      },
+      {
+        "id": "d4",
+        "at": 690,
+        "chosenAffordanceId": "eat",
+        "chosenAction": "eat",
+        "considered": [
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": 0.0061,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.01
+              },
+              {
+                "source": "need:water",
+                "value": 0.0057
+              },
+              {
+                "source": "full:food",
+                "value": -0.0065
+              },
+              {
+                "source": "full:water",
+                "value": -0.0031
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.7,
+              "water": 0.4
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": 0.0046,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.01
+              },
+              {
+                "source": "full:water",
+                "value": -0.0054
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.5113223420691645
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0004,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0002
+              },
+              {
+                "source": "habit",
+                "value": 0.0029
+              },
+              {
+                "source": "effort",
+                "value": -0.0035
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          }
+        ],
+        "intention": "I want to feed myself.",
+        "narration": "My stomach is growling. I will eat first."
+      },
+      {
+        "id": "d5",
+        "at": 715,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.5113223420691645
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0033,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0002
+              },
+              {
+                "source": "effort",
+                "value": -0.0035
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.021,
+            "terms": [
+              {
+                "source": "full:water",
+                "value": -0.021
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.033,
+            "terms": [
+              {
+                "source": "full:food",
+                "value": -0.021
+              },
+              {
+                "source": "full:water",
+                "value": -0.012
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          }
+        ],
+        "intention": "I am doing this because it suits me.",
+        "narration": "I see no reason to choose something else."
+      },
+      {
+        "id": "d6",
+        "at": 745,
+        "chosenAffordanceId": "personal",
+        "chosenAction": "personal",
+        "considered": [
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": 0.0016,
+            "terms": [
+              {
+                "source": "need:autonomy",
+                "value": 0.0003
+              },
+              {
+                "source": "habit",
+                "value": 0.0048
+              },
+              {
+                "source": "effort",
+                "value": -0.0035
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.4265737148239281
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0187,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0001
+              },
+              {
+                "source": "full:water",
+                "value": -0.0188
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0278,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0001
+              },
+              {
+                "source": "need:water",
+                "value": 0.0001
+              },
+              {
+                "source": "full:food",
+                "value": -0.019
+              },
+              {
+                "source": "full:water",
+                "value": -0.0107
+              },
+              {
+                "source": "habit",
+                "value": 0.0017
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          }
+        ],
+        "intention": "I am doing this out of habit.",
+        "narration": "I am doing what I always do."
+      },
+      {
+        "id": "d7",
+        "at": 790,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.4265737148239281
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0037,
+            "terms": [
+              {
+                "source": "effort",
+                "value": -0.0037
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0149,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0008
+              },
+              {
+                "source": "full:water",
+                "value": -0.0157
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0241,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0007
+              },
+              {
+                "source": "need:water",
+                "value": 0.0004
+              },
+              {
+                "source": "full:food",
+                "value": -0.0162
+              },
+              {
+                "source": "full:water",
+                "value": -0.009
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          }
+        ],
+        "intention": "I am doing this because it suits me.",
+        "narration": "This is good enough for me."
+      },
+      {
+        "id": "d8",
+        "at": 820,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.36622953481131765
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0007,
+            "terms": [
+              {
+                "source": "habit",
+                "value": 0.0029
+              },
+              {
+                "source": "effort",
+                "value": -0.0036
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0123,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0015
+              },
+              {
+                "source": "full:water",
+                "value": -0.0138
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0201,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0014
+              },
+              {
+                "source": "need:water",
+                "value": 0.0008
+              },
+              {
+                "source": "full:food",
+                "value": -0.0144
+              },
+              {
+                "source": "full:water",
+                "value": -0.0079
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          }
+        ],
+        "intention": "I am doing this because it suits me.",
+        "narration": "I see no reason not to do this."
+      },
+      {
+        "id": "d9",
+        "at": 850,
+        "chosenAffordanceId": "personal",
+        "chosenAction": "personal",
+        "considered": [
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": 0.0011,
+            "terms": [
+              {
+                "source": "habit",
+                "value": 0.0048
+              },
+              {
+                "source": "effort",
+                "value": -0.0037
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.3207738067319711
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0096,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0024
+              },
+              {
+                "source": "full:water",
+                "value": -0.012
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0161,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0023
+              },
+              {
+                "source": "need:water",
+                "value": 0.0013
+              },
+              {
+                "source": "full:food",
+                "value": -0.0128
+              },
+              {
+                "source": "full:water",
+                "value": -0.0069
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          }
+        ],
+        "intention": "I am doing this out of habit.",
+        "narration": "I am doing this out of habit."
+      },
+      {
+        "id": "d10",
+        "at": 895,
+        "chosenAffordanceId": "personal",
+        "chosenAction": "personal",
+        "considered": [
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": 0.1362,
+            "terms": [
+              {
+                "source": "commitment:c1",
+                "value": 0.14
+              },
+              {
+                "source": "effort",
+                "value": -0.0038
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0.0004,
+            "terms": [
+              {
+                "source": "habit",
+                "value": 0.0004
+              }
+            ],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.3207738067319711
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0052,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0043
+              },
+              {
+                "source": "full:water",
+                "value": -0.0095
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0096,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.004
+              },
+              {
+                "source": "need:water",
+                "value": 0.0023
+              },
+              {
+                "source": "full:food",
+                "value": -0.0105
+              },
+              {
+                "source": "full:water",
+                "value": -0.0054
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          }
+        ],
+        "intention": "I want to keep my promise.",
+        "narration": "I said I would do it, so I will."
+      },
+      {
+        "id": "d11",
+        "at": 940,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.3207738067319711
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0005,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0068
+              },
+              {
+                "source": "full:water",
+                "value": -0.0073
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0026,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0064
+              },
+              {
+                "source": "need:water",
+                "value": 0.0036
+              },
+              {
+                "source": "full:food",
+                "value": -0.0084
+              },
+              {
+                "source": "full:water",
+                "value": -0.0042
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0038,
+            "terms": [
+              {
+                "source": "effort",
+                "value": -0.0038
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          }
+        ],
+        "intention": "I am doing this because it suits me.",
+        "narration": "I see no reason not to do this."
+      },
+      {
+        "id": "d12",
+        "at": 970,
+        "chosenAffordanceId": "drink",
+        "chosenAction": "drink",
+        "considered": [
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": 0.0026,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0087
+              },
+              {
+                "source": "full:water",
+                "value": -0.0061
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.7
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": 0.002,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0081
+              },
+              {
+                "source": "need:water",
+                "value": 0.0046
+              },
+              {
+                "source": "full:food",
+                "value": -0.0072
+              },
+              {
+                "source": "full:water",
+                "value": -0.0035
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          },
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.28570497916993104
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0038,
+            "terms": [
+              {
+                "source": "effort",
+                "value": -0.0038
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          }
+        ],
+        "intention": "I want to drink.",
+        "narration": "I am very thirsty. I will get water first."
+      },
+      {
+        "id": "d13",
+        "at": 975,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.28570497916993104
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0038,
+            "terms": [
+              {
+                "source": "effort",
+                "value": -0.0038
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.0105,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0085
+              },
+              {
+                "source": "full:food",
+                "value": -0.007
+              },
+              {
+                "source": "full:water",
+                "value": -0.012
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.021,
+            "terms": [
+              {
+                "source": "full:water",
+                "value": -0.021
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.6375
+            }
+          }
+        ],
+        "intention": "I am doing this because it suits me.",
+        "narration": "I see no reason to choose something else."
+      },
+      {
+        "id": "d14",
+        "at": 1005,
+        "chosenAffordanceId": "rest",
+        "chosenAction": "rest",
+        "considered": [
+          {
+            "affordanceId": "rest",
+            "action": "rest",
+            "label": "Take a quiet break",
+            "utility": 0,
+            "terms": [],
+            "advertised": {
+              "rest": 0.7,
+              "leisure": 0.05
+            },
+            "believed": {
+              "leisure": 0.05,
+              "rest": 0.25743444082860495
+            }
+          },
+          {
+            "affordanceId": "personal",
+            "action": "personal",
+            "label": "Work on a repair design",
+            "utility": -0.0038,
+            "terms": [
+              {
+                "source": "effort",
+                "value": -0.0038
+              }
+            ],
+            "advertised": {
+              "leisure": 0.18,
+              "autonomy": 0.12
+            },
+            "believed": {
+              "autonomy": 0.12,
+              "leisure": 0.18
+            }
+          },
+          {
+            "affordanceId": "eat",
+            "action": "eat",
+            "label": "Have food and water",
+            "utility": -0.006,
+            "terms": [
+              {
+                "source": "need:food",
+                "value": 0.0105
+              },
+              {
+                "source": "need:water",
+                "value": 0.0001
+              },
+              {
+                "source": "full:food",
+                "value": -0.0059
+              },
+              {
+                "source": "full:water",
+                "value": -0.0107
+              }
+            ],
+            "advertised": {
+              "food": 0.7,
+              "water": 0.4
+            },
+            "believed": {
+              "food": 0.6375,
+              "water": 0.36070709722050875
+            }
+          },
+          {
+            "affordanceId": "drink",
+            "action": "drink",
+            "label": "Get a glass of water",
+            "utility": -0.0158,
+            "terms": [
+              {
+                "source": "need:water",
+                "value": 0.0001
+              },
+              {
+                "source": "full:water",
+                "value": -0.0188
+              },
+              {
+                "source": "habit",
+                "value": 0.0029
+              }
+            ],
+            "advertised": {
+              "water": 0.7
+            },
+            "believed": {
+              "water": 0.6375
+            }
+          }
+        ],
+        "intention": "I am doing this because it suits me.",
+        "narration": "I see no reason to choose something else."
+      },
+      {
+        "id": "d15",
+        "at": 1020,
+        "chosenAffordanceId": "sleep",
+        "chosenAction": "sleep",
+        "considered": [
+          {
+            "affordanceId": "sleep",
+            "action": "sleep",
+            "label": "Sleep through the night",
+            "utility": 0.0338,
+            "terms": [
+              {
+                "source": "need:sleep",
+                "value": 0.0338
+              }
+            ],
+            "advertised": {
+              "sleep": 0.9,
+              "rest": 0.7
+            },
+            "believed": {
+              "rest": 0.7,
+              "sleep": 0.9
+            }
+          }
+        ],
+        "intention": "I want to sleep.",
+        "narration": "I am exhausted. I need to sleep."
+      }
+    ],
+    "nextDecision": 16,
+    "lexicon": {
+      "plainEnglish": true
+    },
+    "chronicleDay": {
+      "day": 1,
+      "baseline": {
+        "habits": {
+          "personal@h9": 0.03845125360643779,
+          "rest@h10,a:personal": 0.03962869137669523,
+          "personal@h11,a:rest": 0.038438853748624234,
+          "eat@h11,a:rest": 0.03848790772433273,
+          "rest@h12,a:eat": 0.0384925395628684,
+          "personal@h13,a:rest": 0.03846259302283805,
+          "rest@h13,a:personal": 0.03850412159806668,
+          "rest@h14,a:rest": 0.03847554158634372,
+          "personal@h14,a:rest": 0.038515707118188046,
+          "personal@h15,a:personal": 0.038504201328827224,
+          "rest@h16,a:personal": 0.03852729612428106,
+          "drink@h16,a:rest": 0.03849483838927664,
+          "rest@h16,a:drink": 0.03853270552039656,
+          "rest@h17,a:rest": 0.038535024065511944
+        },
+        "trust": {
+          "player": 0.85
+        },
+        "illnesses": {},
+        "openBreaches": []
+      },
+      "kept": [],
+      "broken": [],
+      "released": [],
+      "actions": [
+        {
+          "action": "sleep",
+          "done": 1,
+          "prompted": 0,
+          "by": {}
+        }
+      ],
+      "verdicts": [],
+      "material": 0,
+      "moodSum": 2.4306411377576795,
+      "moodSamples": 9,
+      "decisions": 0
+    },
+    "chronicle": [
+      {
+        "day": 0,
+        "kept": [
+          {
+            "id": "c1",
+            "kind": "promise",
+            "label": "Work on my own design",
+            "action": "personal"
+          }
+        ],
+        "broken": [],
+        "released": [],
+        "keptByKind": {
+          "promise": 1
+        },
+        "brokenByKind": {},
+        "prayers": {
+          "kept": [],
+          "missed": [],
+          "prompted": []
+        },
+        "actions": [
+          {
+            "action": "drink",
+            "done": 1,
+            "prompted": 0,
+            "by": {}
+          },
+          {
+            "action": "eat",
+            "done": 1,
+            "prompted": 0,
+            "by": {}
+          },
+          {
+            "action": "personal",
+            "done": 5,
+            "prompted": 0,
+            "by": {}
+          },
+          {
+            "action": "rest",
+            "done": 8,
+            "prompted": 0,
+            "by": {}
+          }
+        ],
+        "habits": [],
+        "trust": [],
+        "episodes": [
+          {
+            "id": "e4",
+            "summary": "Nora completed Have food and water.",
+            "valence": 0.147874379072359,
+            "salience": 0.36980068018320444,
+            "action": "eat",
+            "targetId": "ordinary-day"
+          },
+          {
+            "id": "e10",
+            "summary": "Nora completed Work on a repair design.",
+            "valence": 0.0900015530242817,
+            "salience": 0.33865316780960275,
+            "action": "personal",
+            "targetId": "ordinary-day"
+          }
+        ],
+        "breaches": [],
+        "repairs": [],
+        "material": 0,
+        "illness": {
+          "onset": [],
+          "recovered": [],
+          "worse": [],
+          "better": []
+        },
+        "mood": 0.1802542261959417,
+        "verdicts": [],
+        "decisions": 16,
+        "alive": true,
+        "state": {
+          "habits": {
+            "personal@h9": 0.03845125360643779,
+            "rest@h10,a:personal": 0.03962869137669523,
+            "personal@h11,a:rest": 0.038438853748624234,
+            "eat@h11,a:rest": 0.03848790772433273,
+            "rest@h12,a:eat": 0.0384925395628684,
+            "personal@h13,a:rest": 0.03846259302283805,
+            "rest@h13,a:personal": 0.03850412159806668,
+            "rest@h14,a:rest": 0.03847554158634372,
+            "personal@h14,a:rest": 0.038515707118188046,
+            "personal@h15,a:personal": 0.038504201328827224,
+            "rest@h16,a:personal": 0.03852729612428106,
+            "drink@h16,a:rest": 0.03849483838927664,
+            "rest@h16,a:drink": 0.03853270552039656,
+            "rest@h17,a:rest": 0.038535024065511944
+          },
+          "trust": {
+            "player": 0.85
+          },
+          "illnesses": {},
+          "openBreaches": []
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "source transient body/needs/affect/ambient omitted; target arrival policy",
+    "source habits/methods/beliefs/social and conscience breaches omitted; target authored state; held norms transported",
+    "source optional behaviour stores and decision history omitted; target authored state",
+    "family/bonds provenance checked; target authored state",
+    "episode:e0",
+    "episode:e1",
+    "episode:e2",
+    "episode:e3",
+    "episode:e4",
+    "episode:e5",
+    "episode:e6",
+    "episode:e7",
+    "episode:e8",
+    "episode:e9",
+    "episode:e10",
+    "episode:e11",
+    "episode:e12",
+    "episode:e13",
+    "episode:e14",
+    "episode:e15",
+    "Objects, money, repair methods, customer promises and medical and family context from the source game remain in the full source archive. This transfer does not settle debts, heal illness or grant qualifications."
+  ]
+}

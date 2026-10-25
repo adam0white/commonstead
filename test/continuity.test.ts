@@ -200,8 +200,8 @@ describe('finite source, batch ownership and recording controls', () => {
     const c = new Continuity(h.lab, h.shelf);
     const s = await c.fresh(42);
     expect(s.chapter?.inputs).toHaveLength(2);
-    expect(c.source().engine).toBe('2.21.0');
-    expect(s.chapter?.claims.every((p) => p.source.engine === '2.21.0')).toBe(true);
+    expect(c.source().engine).toBe('2.23.0');
+    expect(s.chapter?.claims.every((p) => p.source.engine === '2.23.0')).toBe(true);
     expect(s.villagers.every((v) => v.person.lexicon?.plainEnglish === true)).toBe(true);
     expect(s.chapter?.initial[CAST[0]!.castId]?.body.fitness).toBe(0.61);
     expect(s.villagers[0]?.person.rng).toEqual(
@@ -480,4 +480,127 @@ test('admits a real published 2.21.0 Repair Nora source without relaxing its fin
     { castId: 'hf.cast.sam.smallworks' },
   ])
     expect(() => admit({ ...envelope, ...patch })).toThrow();
+});
+
+// Actual Small Works producer at signed8002352, legal pause and exact notebook replay.
+test('preserves actual HF3 Small Works Nora obligations by refusing the unsupported foreign tuple', async () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL('./fixtures/repair-nora-hf-3.0.0.json', import.meta.url), 'utf8'),
+  );
+  expect(createHash('sha256').update(canonicalPersona(fixture.raw)).digest('hex')).toBe(
+    fixture.transfer.checkpoint.sha256,
+  );
+  expect(fixture.transfer.person.calendar.commitments).toEqual(
+    expect.arrayContaining([expect.objectContaining({ actions: ['personal'], status: 'pending' })]),
+  );
+  const castId = 'hf.cast.nora.smallworks';
+  const envelope = await createPersona({
+    format: 'hf-persona/1',
+    castId,
+    castRevision: canonicalCast(castId).revision,
+    branchId: 'actual-hf3-source-control',
+    parentRevision: null,
+    source: fixture.source,
+    transfer: { ...fixture.transfer, life: initialPersonaLife(castId, 'actual-hf3-source-control', clock) },
+    limitations: fixture.limitations,
+  });
+  const opening = createGame(42).villagers[0]?.person;
+  if (!opening) throw new Error('Missing Nora opening');
+  const admit = (p: PersonaEnvelope) => admitResident(preparePersonaLife(p, clock), opening);
+  expect(() => admit(envelope)).toThrow(/source/);
+  for (const source of [
+    { ...envelope.source, rules: 'unknown' },
+    { ...envelope.source, game: 'glance', rules: 'glance-3' },
+  ])
+    expect(() => admit({ ...envelope, source })).toThrow();
+});
+
+test('two successive current Commonstead claims retain an actual historical workshop donor', async () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL('./fixtures/repair-nora-hf-2.21.0.json', import.meta.url), 'utf8'),
+  );
+  const h = harness([fixture.envelope]);
+  const first = await new Continuity(h.lab, h.shelf).fresh(42);
+  expect(first.chapter?.claims[0]?.source.engine).toBe('2.23.0');
+  expect(first.chapter?.claims[0]?.transfer.castPassport).toBe('workshop-cast/1');
+  expect(importRun(exportRun(first))).toEqual(first);
+  const second = await new Continuity(h.lab, h.shelf).fresh(42);
+  expect(second.chapter?.inputs[0]?.parent.revision).toBe(first.chapter?.claims[0]?.revision);
+  expect(second.chapter?.claims[0]?.transfer.person).toEqual(fixture.envelope.transfer.person);
+  expect(importRun(exportRun(second))).toEqual(second);
+  const claim = first.chapter?.claims[0];
+  const opening = createGame(42).villagers[0]?.person;
+  if (!claim || !opening) throw new Error('Missing admitted Nora');
+  const wrongRules = { ...claim, source: { ...claim.source, rules: 'unknown' } };
+  expect(() => admitResident(preparePersonaLife(wrongRules, clock), opening)).toThrow();
+});
+
+// Actual Glance4 producer: host minute1330, untouched Person minute1329.
+test('admits actual Glance4 Nerys and preserves successive own claims with strict finite metadata', async () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL('./fixtures/glance-nerys-hf-3.0.0.json', import.meta.url), 'utf8'),
+  );
+  const envelope = fixture.envelope as PersonaEnvelope;
+  const sourceClock = fixture.envelope.transfer.life.clock.watermark * 3_600_000;
+  expect(createHash('sha256').update(canonicalPersona(fixture.raw)).digest('hex')).toBe(
+    (envelope.transfer.checkpoint as { sha256: string }).sha256,
+  );
+  const h = harness([envelope], sourceClock);
+  const first = await new Continuity(h.lab, h.shelf).fresh(42);
+  const nerys = first.villagers.find((v) => v.person.id === envelope.castId)?.person;
+  if (!nerys) throw new Error('Missing Nerys');
+  expect(nerys.rng).toEqual(fixture.raw.rng);
+  expect(nerys.traits).toEqual(fixture.raw.traits);
+  expect(nerys.values).toEqual(fixture.raw.values);
+  expect(nerys.body.fitness).toBe(fixture.raw.body.fitness);
+  expect(nerys.now - nerys.life.bornAt).toBe(fixture.raw.now - fixture.raw.life.bornAt);
+  expect(importRun(exportRun(first))).toEqual(first);
+  const second = await new Continuity(h.lab, h.shelf).fresh(42);
+  expect(second.chapter?.inputs[0]?.parent.revision).toBe(first.chapter?.claims[0]?.revision);
+  expect(importRun(exportRun(second))).toEqual(second);
+  const opening = createGame(42).villagers.find((v) => v.person.id === envelope.castId)?.person;
+  if (!opening) throw new Error('Missing Nerys opening');
+  const admit = (p: PersonaEnvelope) => admitResident(preparePersonaLife(p, sourceClock), opening);
+  for (const patch of [
+    { source: { ...envelope.source, rules: 'glance-3' } },
+    { source: { ...envelope.source, engine: '2.21.0' } },
+    { source: { ...envelope.source, game: 'unknown' } },
+    { transfer: { ...envelope.transfer, castPassport: 'unknown/1' } },
+    { transfer: { ...envelope.transfer, sourceRole: 'dai' } },
+    { castId: 'hf.cast.dai.smallworks' },
+  ])
+    expect(() => admit({ ...envelope, ...patch })).toThrow();
+  const changes: [string[], unknown][] = [
+    [['person', 'mappingVersion'], 'unknown/1'],
+    [['person', 'source', 'engine'], '2.21.0'],
+    [['person', 'health', 'health'], 0.5],
+    [
+      ['calendar', 'norms'],
+      [
+        ...fixture.envelope.transfer.person.calendar.norms,
+        { id: 'unknown', label: 'unknown', standing: 'obligatory', sources: [] },
+      ],
+    ],
+    [
+      ['calendar', 'commitments'],
+      [
+        {
+          id: 'unsupported',
+          kind: 'promise',
+          actions: ['personal'],
+          from: 1329,
+          until: 1400,
+          importance: 0.5,
+          status: 'pending',
+        },
+      ],
+    ],
+  ];
+  for (const [path, value] of changes) {
+    const changed = structuredClone(envelope);
+    let cursor = changed.transfer.person as Record<string, unknown>;
+    for (const key of path.slice(0, -1)) cursor = cursor[key] as Record<string, unknown>;
+    cursor[path.at(-1) ?? ''] = value;
+    expect(() => admit(changed)).toThrow();
+  }
 });

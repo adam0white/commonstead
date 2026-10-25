@@ -22,11 +22,11 @@ Exports contain schema, exact framework version, seed, ordered tick inputs and f
 
 Default seed 418, one-second steps to tick 600. All three controls finish before the storm. This demonstrates solvability and a measurable growth tradeoff; it does not establish expert balance or the value of every rotation policy.
 
-| Policy | Storehouse placed | Completed | Population | Final food | Final wood | Final stone | Final hash |
-|---|---:|---:|---:|---:|---:|---:|---|
-| Direct rush | 190 | 278 | 5 | 100 | 75.83 | 0.28 | fa1ad7ab |
-| Growth | 190 | 262 | 7 | 61.41 | 44.33 | 0.28 | 537bbd1a |
-| Rotation | 190 | 285 | 5 | 100 | 73.46 | 0.28 | f2bdc1e1 |
+| Policy      | Storehouse placed | Completed | Population | Final food | Final wood | Final stone | Final hash |
+| ----------- | ----------------: | --------: | ---------: | ---------: | ---------: | ----------: | ---------- |
+| Direct rush |               190 |       278 |          5 |        100 |      75.83 |        0.28 | fa1ad7ab   |
+| Growth      |               190 |       262 |          7 |      61.41 |      44.33 |        0.28 | 537bbd1a   |
+| Rotation    |               190 |       285 |          5 |        100 |      73.46 |        0.28 | f2bdc1e1   |
 
 All policies initially order v1–v3 to wood and v4–v5 to stone. When wood reaches 180 and stone reaches 120, place the storehouse at (760,470) and assign everyone. Record placement only after the building exists. Continue until tick 600.
 

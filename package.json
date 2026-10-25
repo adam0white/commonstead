@@ -22,18 +22,18 @@
     "test:ui": "node scripts/simplify-ui-check.mjs"
   },
   "dependencies": {
-    "@adam0white/human-framework": "2.21.0",
-    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.7.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.8.tgz"
+    "@adam0white/human-framework": "3.0.0",
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.10.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.11.tgz"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
+    "@biomejs/biome": "2.6.3",
     "@playwright/test": "1.64.1",
     "@types/node": "26.6.5",
     "typescript": "7.0.2",
-    "vite": "8.3.4",
+    "vite": "8.3.5",
     "vitest": "5.0.5",
-    "wrangler": "4.151.3"
+    "wrangler": "4.152.0"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

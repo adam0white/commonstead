@@ -207,13 +207,13 @@ describe('published HF plain narration', () => {
   test('opts every fresh canonical resident and episode helper into persisted plain narration', () => {
     const s = createGame(7);
     expect(s.villagers.every((v) => v.person.lexicon?.plainEnglish === true)).toBe(true);
-    expect(s.villagers.every((v) => v.person.engine === '2.21.0')).toBe(true);
+    expect(s.villagers.every((v) => v.person.engine === '2.23.0')).toBe(true);
     apply(s, { kind: 'train' });
     advance(s, 21);
     expect(s.villagers.length).toBeGreaterThan(8);
     expect(s.villagers.every((v) => v.person.lexicon?.plainEnglish === true)).toBe(true);
     const raw = exportRun(s) as { framework: string };
-    expect(raw.framework).toBe('2.21.0');
+    expect(raw.framework).toBe('3.0.0');
     expect(importRun(raw)).toEqual(s);
   });
 

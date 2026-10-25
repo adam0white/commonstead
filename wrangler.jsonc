@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "commonstead",
   "account_id": "a20259cba74e506296745f9c67c1f3bc",
-  "compatibility_date": "2026-10-23",
+  "compatibility_date": "2026-10-25",
   "workers_dev": false,
   "preview_urls": false,
   "routes": [{ "pattern": "commonstead.adamwhite.work", "custom_domain": true }],
