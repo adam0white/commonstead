@@ -25,3 +25,8 @@ Owner authorizes immutable kit 0.5.7 with unchanged client 0.4.6 and HF 2.18.0. 
 ## One-line footer correction — 2026-10-24
 
 Director rejected the prior technical delivery because the redundant outer privacy link and host padding narrowed the shared notice into two lines at360px. Remove that outer link and the obsolete host spacing and layout overrides. Normalize notice text to14px and shared baseline4px/8px padding at the game’s17px default root while retaining root-responsive text enlargement. Privacy remains in the existing Feedback disclosure. Keep the actual shared node and exact sentence. Normal360 checks require one text line, type at least14px and both node/wrapper at most40px. Enlarged text must wrap without clipping. Prior review remains complete; required source CI, fresh redeployment and DOM-only live checks still apply.
+
+
+## Published plain narration — 2026-10-25
+
+HF 2.21.0 / engine 2.21.0; immutable lab-client 0.4.7 and lab-kit 0.5.8. Fresh canonical residents and helpers persist plain narration. Exports pin 2.21.0 and verify exact replay; incompatible saved narration is refused without rewriting the supplied save. Incoming finite native calendars retain 2.17.0 and add exact 2.21.0 support. Source proof and remaining delivery steps are in `~/code/.lab-scratch/hfadopt/commonstead-report.md`. Commit, independent review, exact green CI, deployment and cleanup remain parent-owned.

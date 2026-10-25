@@ -22,7 +22,7 @@
     "test:ui": "node scripts/simplify-ui-check.mjs"
   },
   "dependencies": {
-    "@adam0white/human-framework": "2.18.0",
+    "@adam0white/human-framework": "2.21.0",
     "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.7.tgz",
     "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.8.tgz"
   },

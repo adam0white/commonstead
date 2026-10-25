@@ -29,6 +29,8 @@ export type Chapter = {
 };
 const same = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPersona(b);
 const identity = (keys: string[]) => Object.fromEntries(keys.map((key) => [key, key]));
+// Only these released engines share the finite calendar dialects below.
+const supportedEngine = (engine: string) => engine === '2.17.0' || engine === '2.21.0';
 const supportedActions = new Set(['rest', 'eat', 'drink']);
 
 /** Finite Small Works Nora/Sam, native Commonstead and forwarded Glance Nerys maps. No clinical or duty waiver. */
@@ -39,7 +41,8 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     !CAST.some((c) => c.castId === p.castId) ||
     p.castId !== opening.id ||
     p.castRevision !== cast.revision ||
-    p.terminal
+    p.terminal ||
+    !supportedEngine(p.source.engine)
   )
     throw new Error(
       'This resident history has an unsupported identity or version, or it has ended. Start a fresh local chapter.',
@@ -60,7 +63,7 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     p.castId === 'hf.cast.nerys.glance' &&
     p.source.game === 'glance' &&
     p.source.rules === 'glance-3' &&
-    p.source.engine === '2.17.0';
+    supportedEngine(p.source.engine);
   const native =
     (p.source.game === 'commonstead' || forwardedNerys) &&
     p.transfer.castPassport === DIALECT &&
@@ -75,7 +78,7 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
   if (
     portable.person.mappingVersion !== mapping ||
     portable.person.source.id !== sourceId ||
-    portable.person.source.engine !== '2.17.0' ||
+    !supportedEngine(portable.person.source.engine) ||
     portable.person.name !== cast.name
   )
     throw new Error(
@@ -167,7 +170,7 @@ export function checkChapter(chapter: Chapter) {
       claim.branchId !== input.parent.branchId ||
       claim.parentRevision !== input.parent.revision ||
       claim.source.game !== 'commonstead' ||
-      claim.source.engine !== '2.17.0' ||
+      claim.source.engine !== '2.21.0' ||
       claim.source.rules !== RULES ||
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )

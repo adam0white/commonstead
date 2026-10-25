@@ -118,6 +118,7 @@ function makeVillager(seed: number, n: number): Villager {
       body: { satiety: 0.95, hydration: 0.98, fitness: 0.35, sleepPressure: 0.05 },
       voices: [{ voiceId: 'commander', trust: 0.7 }],
       enable: { suggestionReasons: true },
+      lexicon: { plainEnglish: true },
     }),
     task: 'idle',
     says: 'We use prepared boards, small ballast bags and hand tools. We do not use powered tools or change the building structure.',
@@ -637,7 +638,7 @@ export function replay(seed: number, inputs: Input[], tick: number, chapter?: Ch
 export function exportRun(s: State): unknown {
   return {
     schema: 3,
-    framework: '2.18.0',
+    framework: '2.21.0',
     chapter: structuredClone(s.chapter),
     seed: s.seed,
     tick: s.tick,
@@ -659,7 +660,7 @@ export function importRun(raw: unknown): State {
       state: State;
       hash: string;
     };
-    if (r.schema !== 3 || r.framework !== '2.18.0') throw new Error('version');
+    if (r.schema !== 3 || r.framework !== '2.21.0') throw new Error('version');
     const s = replay(r.seed, r.inputs, r.tick, r.chapter ?? undefined);
     if (stable(s) !== stable(r.state) || stateHash(s) !== r.hash) throw new Error('state mismatch');
     return s;

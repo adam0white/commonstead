@@ -202,3 +202,35 @@ describe('Commonstead fixed-tick simulation', () => {
     expect(stateHash(s)).toBe(hash);
   });
 });
+
+describe('published HF plain narration', () => {
+  test('opts every fresh canonical resident and episode helper into persisted plain narration', () => {
+    const s = createGame(7);
+    expect(s.villagers.every((v) => v.person.lexicon?.plainEnglish === true)).toBe(true);
+    expect(s.villagers.every((v) => v.person.engine === '2.21.0')).toBe(true);
+    apply(s, { kind: 'train' });
+    advance(s, 21);
+    expect(s.villagers.length).toBeGreaterThan(8);
+    expect(s.villagers.every((v) => v.person.lexicon?.plainEnglish === true)).toBe(true);
+    const raw = exportRun(s) as { framework: string };
+    expect(raw.framework).toBe('2.21.0');
+    expect(importRun(raw)).toEqual(s);
+  });
+
+  test('displays the published plain HF reply directly', () => {
+    const s = createGame(42);
+    apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+    advance(s, 5);
+    apply(s, { kind: 'order', ids: ['v1'], target: 'push' });
+    expect(first(s).says).toBe('I trust you, so I will go.');
+  });
+
+  test('refuses a different saved narration choice without rewriting the supplied save', () => {
+    const s = createGame(42);
+    const raw = exportRun(s) as { state: typeof s };
+    first(raw.state).person.lexicon = { plainEnglish: false };
+    const before = structuredClone(raw);
+    expect(() => importRun(raw)).toThrow('Start a new game');
+    expect(raw).toEqual(before);
+  });
+});

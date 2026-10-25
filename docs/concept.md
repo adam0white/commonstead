@@ -29,7 +29,7 @@ The first two twists in this slice are embodied work pace and remembered treatme
 
 ## Framework boundary
 
-Pin @adam0white/human-framework exactly 2.18.0 (engine 2.17.0), lab-client 0.4.7 and lab-kit 0.5.8. The host owns geometry, resource stocks, building progress, weather and RTS orders. Each villager owns an HF Person. HF owns body, temperament, memory and willingness. The host offers world affordances, advances HF deterministically, maps exertion into work rate and reads HF social responses; it does not reimplement a person model. Need acts occur at the person's position. All RNG is seeded and serialized. Input records use integer simulation ticks; replay does not depend on render rate, viewport, menu or speed. Export includes schema version, seed, input log and full state JSON. Import verifies replay equivalence before replacing a run.
+Pin @adam0white/human-framework exactly 2.21.0 (engine 2.21.0), lab-client 0.4.7 and lab-kit 0.5.8. The host owns geometry, resource stocks, building progress, weather and RTS orders. Each villager owns an HF Person. HF owns body, temperament, memory and willingness. The host offers world affordances, advances HF deterministically, maps exertion into work rate and reads HF social responses; it does not reimplement a person model. Need acts occur at the person's position. All RNG is seeded and serialized. Input records use integer simulation ticks; replay does not depend on render rate, viewport, menu or speed. Export includes schema version, seed, input log and full state JSON. Import verifies replay equivalence before replacing a run.
 
 ## Controls and screens
 
@@ -81,3 +81,10 @@ This increment ends with reviewed signed source, exact green CI, a fresh latest-
 ## Setting owner direction — 2026-10-24
 
 Keep the setting, places and personal names. Every sentence must be understandable without Turkish. Use English for common nouns. On first use, call the kapıcı “the building’s caretaker”; later use “caretaker”. Keep at most two flavour words per game and explain each within its sentence on first use. Faith stays quiet background; source faith wording from human-framework research/ and do not invent rulings. Preserve meaning, rules, difficulty and simulation/replay data. Use display projections when translation would change stored simulation text.
+
+
+## Published plain narration — 2026-10-25
+
+The owner authorizes HF 2.21.0 with unchanged immutable lab-client 0.4.7 and lab-kit 0.5.8 artifacts. Every fresh resident, including canonical residents and episode helpers, persists `lexicon.plainEnglish: true`. Loading never rewrites a saved narration choice; incompatible exports receive the existing start-new-game message. The host keeps its domain wording and semantic display mappings. Mechanics and the owner acceptance boundary are unchanged. The finite incoming calendars accept exact historical 2.17.0 and current 2.21.0 engines.
+
+Lesson: narration is persisted person state. Seeded upgrade proofs must retain semantic history, decision identities, RNG and protocol fields. Exclude only named display prose and explicit release/narration metadata. Never erase a whole history to obtain equal hashes.
