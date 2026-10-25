@@ -561,11 +561,8 @@ function feedback() {
         // An unavailable optional run does not block the note.
       }
       const sharePlay = feedbackSharePlay(share);
-      const noteOnly = !lab.telemetryOn && !sharePlay;
       const id = await lab.sendFeedback(note, { name, run, sharePlay });
-      status.textContent = noteOnly
-        ? `Your feedback is queued without play history. Reference: ${id}.`
-        : `Your feedback is queued with available play history. Reference: ${id}.`;
+      status.textContent = `Sent. Your note is stored. Reference: ${id}.`;
       status.scrollIntoView({ block: 'nearest' });
       send.textContent = state ? 'Back to the game' : 'Back to the title page';
       send.disabled = false;
@@ -574,7 +571,7 @@ function feedback() {
       console.error(error);
       status.textContent = isLab
         ? String(error)
-        : 'Your feedback could not be queued. Your note is still here. Try Submit again.';
+        : 'Your feedback could not be sent. Your note is still here. Try Submit again.';
       status.scrollIntoView({ block: 'nearest' });
       send.disabled = false;
     }
