@@ -605,27 +605,30 @@ test('admits actual Glance4 Nerys and preserves successive own claims with stric
   }
 });
 
-test('fresh reply day exports no shelf authority and refuses native departure after reload', async () => {
-  const h = harness(),
-    c = new Continuity(h.lab, h.shelf);
-  const s = await c.fresh(42, true, { edition: 'settlement-replies/1' });
-  expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
-  playedPause(s);
-  expect(s.chapterPaused).toBe(true);
-  const raw = c.export(s);
-  expect(Object.hasOwn(raw, 'castSources')).toBe(false);
-  const loaded = new Continuity(h.lab, h.shelf);
-  const restored = await loaded.loadLocal(c.localSave(s));
-  expect(JSON.stringify(restored)).toBe(JSON.stringify(s));
-  expect(restored.settlement?.config.edition).toBe('settlement-replies/1');
-  await expect(loaded.checkpoint(CAST[0]!.castId)).rejects.toThrow(/does not support/);
-  const file = new Continuity(h.lab, h.shelf);
-  expect(JSON.stringify(await file.importFile(JSON.stringify(raw)))).toBe(JSON.stringify(s));
-  expect(file.fileOrigin).toBe(true);
-  expect(file.heads).toEqual([]);
-  await expect(file.checkpoint(CAST[0]!.castId)).rejects.toThrow(/does not support/);
-  const old = file.runId;
-  await expect(file.importFile(JSON.stringify({ ...raw, castSources: [] }))).rejects.toThrow(/replay/);
-  expect(file.runId).toBe(old);
-  expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
-});
+test.each(['settlement-replies/1', 'settlement-replies/2'] as const)(
+  'fresh %s exports no shelf authority and refuses native departure after reload',
+  async (edition) => {
+    const h = harness(),
+      c = new Continuity(h.lab, h.shelf);
+    const s = await c.fresh(42, true, { edition });
+    expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
+    playedPause(s);
+    expect(s.chapterPaused).toBe(true);
+    const raw = c.export(s);
+    const loaded = new Continuity(h.lab, h.shelf);
+    const restored = await loaded.loadLocal(c.localSave(s));
+    expect(JSON.stringify(restored)).toBe(JSON.stringify(s));
+    expect(restored.settlement?.config.edition).toBe(edition);
+    await expect(loaded.checkpoint(CAST[0]!.castId)).rejects.toThrow(/does not support/);
+    const file = new Continuity(h.lab, h.shelf);
+    expect(JSON.stringify(await file.importFile(JSON.stringify(raw)))).toBe(JSON.stringify(s));
+    expect(Object.hasOwn(raw, 'castSources')).toBe(false);
+    expect(file.fileOrigin).toBe(true);
+    expect(file.heads).toEqual([]);
+    await expect(file.checkpoint(CAST[0]!.castId)).rejects.toThrow(/does not support/);
+    const old = file.runId;
+    await expect(file.importFile(JSON.stringify({ ...raw, castSources: [] }))).rejects.toThrow(/replay/);
+    expect(file.runId).toBe(old);
+    expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
+  },
+);

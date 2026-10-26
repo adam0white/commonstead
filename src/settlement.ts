@@ -17,8 +17,19 @@ import {
 import { DISCOVERIES } from './cast.ts';
 import { blocked, MAPS, type Place, type Point, route } from './paths.ts';
 import {
+  activePeer,
+  hasReplies,
+  interruptPeer,
+  PEER_EDITION,
+  type PeerState,
+  requestPeer,
+  startPeerPair,
+  stepPeer,
+  witnessRoute,
+} from './settlement-dialogue.ts';
+import {
   REPLIES,
-  REPLY_EDITION,
+  type REPLY_EDITION,
   type ReplyAttempt,
   type ReplyResult,
   type ReplyScene,
@@ -34,7 +45,7 @@ import type { Command, Resource, State, Villager } from './sim.ts';
  * private-knowledge renderer, physiology, real outreach or real accessibility acceptance lives here.
  */
 export const EDITION = 'settlement-day/1';
-export type SettlementConfig = { edition: typeof EDITION | typeof REPLY_EDITION };
+export type SettlementConfig = { edition: typeof EDITION | typeof REPLY_EDITION | typeof PEER_EDITION };
 export const DAY_MINUTES = 0.8;
 export type Job = {
   kind: 'gather' | 'build' | 'move' | 'map' | 'inspect' | 'scene' | 'talk' | 'spar' | 'yield' | 'story';
@@ -65,6 +76,7 @@ export type ActorWorld = {
 export type Account = { at: number; speaker: string; listener: string; text: string };
 export type Settlement = {
   config: SettlementConfig;
+  peer?: PeerState;
   replyScenes?: Record<string, ReplyScene>;
   replyResults?: ReplyResult[];
   actors: Record<string, ActorWorld>;
@@ -87,7 +99,7 @@ export type Settlement = {
   };
 };
 export function initSettlement(s: State, config: SettlementConfig): void {
-  if (Object.keys(config).length !== 1 || (config.edition !== EDITION && config.edition !== REPLY_EDITION))
+  if (Object.keys(config).length !== 1 || (config.edition !== EDITION && !hasReplies(config.edition)))
     throw new Error('Unknown settlement edition.');
   if (s.chapter)
     throw new Error(
@@ -95,7 +107,8 @@ export function initSettlement(s: State, config: SettlementConfig): void {
     );
   s.settlement = {
     config: { edition: config.edition },
-    ...(config.edition === REPLY_EDITION ? { replyScenes: {}, replyResults: [] } : {}),
+    ...(hasReplies(config.edition) ? { replyScenes: {}, replyResults: [] } : {}),
+    ...(config.edition === PEER_EDITION ? { peer: { witnesses: [], attempts: [] } } : {}),
     actors: Object.fromEntries(
       s.villagers.map((v) => [
         v.id,
@@ -316,7 +329,12 @@ function startChoice(
   if (a.action === 'eat' && s.resources.food < 2) return false;
   if (!begin(v.person, a, decision)) return false;
   // Only an actual voluntary assent creates this bounded host appointment. HF owns its pressure/status.
-  if (aw.job && decision.suggestion?.verdict === 'assented' && !aw.commitment) {
+  if (
+    aw.job &&
+    !aw.job.target.startsWith('peer:') &&
+    decision.suggestion?.verdict === 'assented' &&
+    !aw.commitment
+  ) {
     aw.commitment = promise(v.person, {
       kind: 'appointment',
       toId: 'commander',
@@ -332,7 +350,10 @@ function startChoice(
   aw.running = {
     id: a.id,
     action: a.action,
-    until: s.tick + Math.max(1, Math.round(a.duration / DAY_MINUTES)),
+    until:
+      a.targetId?.startsWith('peer:') && v.person.activity
+        ? s.tick + Math.ceil((v.person.activity.endsAt - v.person.activity.startedAt) / DAY_MINUTES)
+        : s.tick + Math.max(1, Math.round(a.duration / DAY_MINUTES)),
     purpose,
     job: aw.job ? structuredClone(aw.job) : null,
     from: s.tick,
@@ -365,6 +386,7 @@ function go(s: State, v: Villager, point: Point): boolean {
   return true;
 }
 function cancel(s: State, v: Villager) {
+  interruptPeer(s, v.id, 'A participant explicitly stopped the unfinished route conversation.');
   interruptReply(s, v, 'The conversation stopped before it finished.');
   const aw = actor(s, v);
   if (v.person.activity)
@@ -427,6 +449,10 @@ function spend(s: State, boards: number, meals: number, paper = 0): boolean {
 }
 export function applySettlement(s: State, c: Command): void {
   const w = world(s);
+  if (c.kind === 'peer') {
+    requestPeer(s, c, peerHost);
+    return;
+  }
   if (c.kind === 'reply') {
     requestReply(s, c);
     return;
@@ -743,6 +769,7 @@ function pairStart(s: State, v: Villager): boolean {
   )
     return true;
   if (v.id > other.id) return true;
+  if (startPeerPair(s, v, other, peerHost)) return true;
   const duration = j.kind === 'scene' ? SCENES.trial.ticks : j.kind === 'spar' ? 12 : 8;
   const action = j.kind === 'scene' ? 'try-grip' : j.kind === 'spar' ? 'spar' : 'talk';
   const request = {
@@ -919,14 +946,17 @@ export function stepSettlement(s: State): void {
   const w = world(s);
   if (s.ended || s.chapterPaused) return;
   s.tick++;
+  // New edition only: catch up all actors before any shared act or hearing.
+  if (w.peer) for (const v of s.villagers) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
   for (const v of s.villagers) {
     const aw = actor(s, v);
-    tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
+    if (!w.peer) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
     if (!v.person.body.alive) {
       cancel(s, v);
       v.status = 'has died.';
       continue;
     }
+    if (stepPeer(s, v, peerHost)) continue;
     if (stepReply(s, v)) continue;
     const run = aw.running;
     if (run && s.tick >= run.until) {
@@ -1111,6 +1141,7 @@ export function stepSettlement(s: State): void {
           ) {
             w.dispute = [v.id, other.id];
             w.disputeAt = s.tick;
+            witnessRoute(s, v, other);
             for (const [p, q] of [
               [v, other],
               [other, v],
@@ -1195,7 +1226,7 @@ export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>):
   const w = world(s),
     branch = REPLIES[c.branch];
   const v = s.villagers.find((v) => v.id === c.ids[0]);
-  if (w.config.edition !== REPLY_EDITION || !branch || c.ids.length !== 1 || branch.actor !== c.ids[0] || !v)
+  if (!hasReplies(w.config.edition) || !branch || c.ids.length !== 1 || branch.actor !== c.ids[0] || !v)
     throw new Error('Choose one matching resident and reply line in the fresh reply day.');
   const scene = w.replyScenes?.[v.id];
   if (!scene) throw new Error('Wait for the actual completed private disclosure.');
@@ -1204,7 +1235,13 @@ export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>):
   if (!replyPresent(s, v)) throw new Error('Walk to the workshop hub to talk with the commander.');
   const aw = actor(s, v),
     last = latestReply(s, v);
-  if (aw.job || aw.carried || aw.path.length || (aw.running && aw.running.purpose !== 'body'))
+  if (
+    activePeer(s, v.id) ||
+    aw.job ||
+    aw.carried ||
+    aw.path.length ||
+    (aw.running && aw.running.purpose !== 'body')
+  )
     throw new Error('Finish the current task or explicitly cancel it before offering this reply.');
   if (
     scene.completedBranch ||
@@ -1431,3 +1468,5 @@ function stepReply(s: State, v: Villager): boolean {
   }
   return true;
 }
+
+const peerHost = { bodyChoices, startChoice, setJob, cancel, event };

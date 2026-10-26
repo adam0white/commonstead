@@ -387,3 +387,167 @@ describe('fresh local personal replies with real HF choices', () => {
       expect(w.records.letter).toBe('draft');
     });
 });
+
+function requiredPeerValue<T>(value: T | null | undefined): T {
+  if (value === undefined || value === null) throw new Error('Missing replayed peer value');
+  return value;
+}
+
+describe('fresh public route dialogue day', () => {
+  test('uses a separate native edition and refuses a peer input in every released edition', () => {
+    const s = createGame(418, undefined, { edition: 'settlement-replies/2' } as never);
+    expect((exportRun(s) as { schema: number }).schema).toBe(6);
+    expect(s.settlement?.replyScenes).toEqual({});
+    expect(importRun(exportRun(s))).toEqual(s);
+    expect(importRun(exportRun(s, true))).toEqual(s);
+    for (const config of [undefined, { edition: 'settlement-day/1' }, { edition: 'settlement-replies/1' }]) {
+      const old = createGame(418, undefined, config as never);
+      const before = JSON.stringify(old);
+      expect(() =>
+        apply(old, {
+          kind: 'peer',
+          ids: ['v1', 'v2'],
+          map: 'yard',
+          disputeAt: 0,
+          branch: 'route-wait',
+        } as never),
+      ).toThrow();
+      expect(JSON.stringify(old)).toBe(before);
+    }
+  });
+});
+
+test('one ordinary route dispute supports real paired talk, costed words, cancellation and complete native replay', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
+  apply(s, { kind: 'order', ids: ['v1', 'v2'], target: 'wood' });
+  until(s, () => !!s.settlement?.dispute, 160);
+  const w = requiredPeerValue(s.settlement);
+  const witness = requiredPeerValue(requiredPeerValue(w.peer).witnesses.at(-1));
+  expect(witness.disputeAt).toBe(17);
+  expect(witness.trolley).toBe('v1');
+  const command = {
+    kind: 'peer',
+    ids: [...witness.pair],
+    map: witness.map,
+    disputeAt: witness.disputeAt,
+    branch: 'route-wait',
+  } as const;
+  const input = { ...command, ids: [...command.ids] };
+  const before = JSON.stringify(s);
+  expect(() => apply(s, input)).toThrow(/current task/);
+  expect(JSON.stringify(s)).toBe(before);
+  request(s, [...witness.pair], 'cancel');
+  const free = JSON.stringify(s);
+  for (const bad of [
+    { ...input, extra: true },
+    { ...input, branch: 'unknown' },
+    { ...input, ids: ['v1', 'v3'] },
+    { ...input, ids: ['v2', 'v1'] },
+    { ...input, ids: ['v1', 'v1'] },
+    { ...input, disputeAt: 0 },
+    { ...input, disputeAt: s.tick + 1 },
+    { ...input, map: 'quay' },
+  ]) {
+    expect(() => apply(s, bad as never)).toThrow();
+    expect(JSON.stringify(s)).toBe(free);
+  }
+  apply(s, input);
+  until(s, () => requiredPeerValue(requiredPeerValue(w.peer).attempts[0]).status === 'talking', 100);
+  const attempt = requiredPeerValue(requiredPeerValue(w.peer).attempts[0]);
+  expect(attempt.talk).toHaveLength(2);
+  expect(attempt.talk.every((a) => a.status === 'running' && a.startedAt === 480 + a.from * 0.8)).toBe(true);
+  const running = exportRun(s),
+    compact = exportRun(s, true);
+  expect(importRun(running)).toEqual(s);
+  expect(importRun(compact)).toEqual(s);
+  const cancelled = importRun(compact),
+    untouched = importRun(running);
+  const cancelStart = cancelled.tick;
+  advance(cancelled, 3);
+  request(cancelled, ['v1'], 'cancel');
+  const stopped = requiredPeerValue(
+    requiredPeerValue(requiredPeerValue(cancelled.settlement).peer).attempts[0],
+  );
+  expect(cancelled.tick - cancelStart).toBe(3);
+  expect(stopped.status).toBe('interrupted');
+  expect(stopped.talk.every((a) => a.status === 'interrupted')).toBe(true);
+  expect(stopped.talkCompletedAt).toBeUndefined();
+  expect(stopped.speech).toEqual([]);
+  expect(requiredPeerValue(cancelled.settlement).routeAgreements).toEqual([]);
+  expect(requiredPeerValue(cancelled.settlement).disputeAt).toBe(witness.disputeAt);
+  expect(requiredPeerValue(cancelled.villagers[0]).person.now).toBeGreaterThan(
+    requiredPeerValue(attempt.talk[0]).startedAt,
+  );
+  expect(importRun(exportRun(cancelled))).toEqual(cancelled);
+  expect(importRun(exportRun(cancelled, true))).toEqual(cancelled);
+  until(s, () => attempt.status === 'speaking', 100);
+  const speaking = importRun(exportRun(s, true));
+  expect(speaking).toEqual(s);
+  until(s, () => attempt.status === 'completed' || attempt.status === 'withheld', 100);
+  // This single fixed seed actually reaches both outward acts; no seed search or body edits.
+  expect(attempt.status).toBe('completed');
+  expect(attempt.talkCompletedAt).toBe(26);
+  expect(attempt.endedAt).toBe(33);
+  expect(attempt.speech).toHaveLength(2);
+  for (const p of attempt.speech) {
+    expect(p.status).toBe('completed');
+    expect(requiredPeerValue(requiredPeerValue(p.act).endedAt) - requiredPeerValue(p.act).from).toBe(3);
+    expect(requiredPeerValue(p.act).endsAt - requiredPeerValue(p.act).startedAt).toBe(2);
+    expect(p.speakerAt).toBe(480 + requiredPeerValue(p.at) * 0.8);
+    expect(p.listenerAt).toBe(p.speakerAt);
+    expect(p.deliveredAt).toBe(p.speakerAt);
+    expect(p.attended).toBe(true);
+    const listener = resident(s, requiredPeerValue(witness.pair.find((id) => id !== p.actor)));
+    const episode = listener.person.memory.episodes.find((e) => e.summary === p.text);
+    expect(episode?.at).toBe(p.deliveredAt);
+  }
+  expect(requiredPeerValue(attempt.speech[0]).text).toBe(
+    'At 08:13 earlier today, I had the trolley. We were both trying to use the same route.',
+  );
+  expect(w.routeAgreements).toEqual([]);
+  expect(w.disputeAt).toBe(witness.disputeAt);
+  expect(w.trolley).toBeNull();
+  expect(w.caches.yard.wood).toBe(280);
+  expect(s.resources.wood).toBe(80);
+  expect(importRun(exportRun(s))).toEqual(s);
+  expect(importRun(exportRun(s, true))).toEqual(s);
+  while (untouched.tick < s.tick) step(untouched);
+  while (speaking.tick < s.tick) step(speaking);
+  expect(untouched).toEqual(s);
+  expect(speaking).toEqual(s);
+  const oneLine = importRun(running);
+  while (oneLine.tick < 30) step(oneLine);
+  expect(
+    requiredPeerValue(
+      requiredPeerValue(requiredPeerValue(oneLine.settlement).peer).attempts[0],
+    ).speech.filter((p) => p.status === 'completed'),
+  ).toHaveLength(1);
+  request(oneLine, ['v2'], 'cancel');
+  const partial = requiredPeerValue(
+    requiredPeerValue(requiredPeerValue(oneLine.settlement).peer).attempts[0],
+  );
+  expect(partial.status).toBe('interrupted');
+  expect(requiredPeerValue(partial.speech[0]).status).toBe('completed');
+  expect(requiredPeerValue(partial.speech[1]).status).toBe('interrupted');
+  expect(requiredPeerValue(oneLine.settlement).accounts).toHaveLength(1);
+  expect(importRun(exportRun(oneLine))).toEqual(oneLine);
+  expect(importRun(exportRun(oneLine, true))).toEqual(oneLine);
+  const paused = importRun(running);
+  apply(paused, { kind: 'pause-chapter' });
+  until(paused, () => paused.chapterPaused, 100);
+  expect(
+    requiredPeerValue(requiredPeerValue(requiredPeerValue(paused.settlement).peer).attempts[0]).status,
+  ).toBe('interrupted');
+  expect(
+    requiredPeerValue(requiredPeerValue(requiredPeerValue(paused.settlement).peer).attempts[0]).speech.every(
+      (p) => p.status !== 'completed',
+    ),
+  ).toBe(true);
+  expect(importRun(exportRun(paused, true))).toEqual(paused);
+  const continued = importRun(exportRun(s, true));
+  advance(s, 90);
+  advance(continued, 90);
+  expect(continued).toEqual(s);
+  expect(importRun(exportRun(s))).toEqual(s);
+  expect(importRun(exportRun(s, true))).toEqual(s);
+});

@@ -1,6 +1,7 @@
 import { MAPS, type Place } from './paths.ts';
 import { dayClock, validateReply } from './settlement.ts';
-import { REPLIES, REPLY_EDITION, SCENES } from './settlement-scenes.ts';
+import { hasReplies, PEER_EDITION, validatePeer } from './settlement-dialogue.ts';
+import { REPLIES, SCENES } from './settlement-scenes.ts';
 import type { Command, State } from './sim.ts';
 import { observedEvents } from './work-observation.ts';
 
@@ -104,7 +105,77 @@ export function updateSettlementControls(
       ),
   );
   list('day-events', observedEvents(w.events));
-  if (w.config.edition === REPLY_EDITION) {
+  if (w.config.edition === PEER_EDITION) {
+    let panel = host.querySelector<HTMLElement>('#peer-route');
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = 'peer-route';
+      host.prepend(panel);
+    }
+    const key = JSON.stringify([
+      selected,
+      w.peer,
+      selected.map((id) => w.actors[id]),
+      s.pauseRequested,
+      s.ended,
+      s.tick >= 1785,
+    ]);
+    if (panel.dataset.peerKey !== key) {
+      panel.dataset.peerKey = key;
+      panel.replaceChildren();
+      const text = (tag: string, value: string) => {
+        const e = document.createElement(tag);
+        e.textContent = value;
+        panel.append(e);
+      };
+      text('h3', 'Talk about the trolley route');
+      text(
+        'p',
+        'Select the two residents from a recorded route dispute. Finish their tasks and return carried supplies, or cancel their tasks explicitly. Both must choose to talk. Each may then speak or remain quiet. Only a separately completed Yield opens the route.',
+      );
+      for (const e of w.peer?.witnesses ?? []) {
+        if (selected.length !== 2 || !e.pair.every((id) => selected.includes(id))) continue;
+        const command = {
+          kind: 'peer',
+          ids: [...e.pair],
+          map: e.map,
+          disputeAt: e.disputeAt,
+          branch: 'route-wait',
+        } as const;
+        let reason = '';
+        try {
+          validatePeer(s, { ...command, ids: [...e.pair] });
+        } catch (error) {
+          reason = error instanceof Error ? error.message : 'This conversation is unavailable.';
+        }
+        text('p', `Their earlier route dispute was recorded ${e.disputeAt} seconds into this day.`);
+        const b = document.createElement('button');
+        b.textContent = 'Invite both residents to discuss that route wait';
+        b.disabled = !!reason;
+        b.onclick = () => issue({ ...command, ids: [...e.pair] });
+        panel.append(b);
+        if (reason) text('p', reason);
+      }
+      if (!w.peer?.witnesses.length) text('p', 'No route dispute has been witnessed in this day.');
+      for (const a of w.peer?.attempts ?? []) {
+        text(
+          'p',
+          `${a.status === 'requested' ? 'The invitation waits for actual travel and body actions.' : a.status === 'talking' ? 'Both residents are taking time to talk.' : a.status === 'speaking' ? 'Each resident may choose a timed speaking act.' : a.status === 'completed' ? 'Both residents finished their outward speaking acts.' : 'The exchange did not finish with both residents speaking.'} ${a.reason ?? ''}`,
+        );
+        for (const p of a.speech) {
+          const name = s.villagers.find((v) => v.id === p.actor)?.name ?? p.actor;
+          if (p.status === 'completed')
+            text(
+              'p',
+              `${name}, ${p.at} seconds into this day: “${p.text}” ${p.attended ? 'The listener attended to the line. This does not establish agreement.' : 'Attention to the line was not recorded.'}`,
+            );
+          if (p.status === 'withheld')
+            text('p', `${name} did not complete an outward reply. ${p.decision?.publicSays ?? ''}`);
+        }
+      }
+    }
+  }
+  if (hasReplies(w.config.edition)) {
     let panel = host.querySelector<HTMLElement>('#personal-replies');
     if (!panel) {
       panel = document.createElement('section');

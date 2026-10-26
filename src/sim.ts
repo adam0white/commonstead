@@ -22,6 +22,13 @@ import {
   stepSettlement,
   validateReply,
 } from './settlement.ts';
+import {
+  activePeer,
+  hasReplies,
+  PEER_EDITION,
+  type PeerCommand,
+  validatePeer,
+} from './settlement-dialogue.ts';
 import { REPLIES, REPLY_EDITION, type ReplyBranch } from './settlement-scenes.ts';
 
 export function taskLabel(target: string): string {
@@ -39,6 +46,7 @@ export function taskLabel(target: string): string {
 export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
   | { kind: 'reply'; ids: string[]; branch: ReplyBranch }
+  | PeerCommand
   | { kind: 'order'; ids: string[]; target: string; x?: number; y?: number }
   | { kind: 'build'; ids: string[]; building: 'house' | 'storehouse'; x: number; y: number }
   | { kind: 'settlement'; ids: string[]; action: string; target?: string }
@@ -317,8 +325,16 @@ function assign(s: State, v: Villager, order: Order) {
   chooseWork(s, v);
 }
 export function apply(s: State, c: Command): void {
-  if (s.settlement?.config.edition === REPLY_EDITION) {
-    validateReplyCommand(s, c);
+  if (c.kind === 'peer') validatePeer(s, c);
+  if (s.settlement && hasReplies(s.settlement.config.edition)) {
+    if (c.kind !== 'peer') validateReplyCommand(s, c);
+    if (
+      'ids' in c &&
+      c.kind !== 'peer' &&
+      !(c.kind === 'settlement' && c.action === 'cancel') &&
+      c.ids.some((id) => activePeer(s, id))
+    )
+      throw new Error('Cancel the route conversation explicitly before giving another task.');
     if (c.kind === 'reply') validateReply(s, c);
     if (
       'ids' in c &&
@@ -337,7 +353,7 @@ export function apply(s: State, c: Command): void {
     applySettlement(s, c);
     return;
   }
-  if (c.kind === 'settlement' || c.kind === 'reply') return;
+  if (c.kind === 'settlement' || c.kind === 'reply' || c.kind === 'peer') return;
   if (c.kind === 'pause-chapter') {
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
@@ -640,12 +656,14 @@ export function replay(
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
-  if (config?.edition !== REPLY_EDITION && inputs.some((i) => i?.command?.kind === 'reply'))
+  if (!hasReplies(config?.edition ?? '') && inputs.some((i) => i?.command?.kind === 'reply'))
     throw new Error('Reply command in legacy edition');
+  if (config?.edition !== PEER_EDITION && inputs.some((i) => i?.command?.kind === 'peer'))
+    throw new Error('Peer command in legacy edition');
   const s = createGame(seed, chapter, config);
   let previous = -1;
   for (const input of inputs) {
-    if (config?.edition === REPLY_EDITION) {
+    if (hasReplies(config?.edition ?? '')) {
       exactKeys(input, ['tick', 'command']);
     }
     if (
@@ -674,7 +692,12 @@ export function replay(
 export function exportRun(s: State, compact = false): unknown {
   if (s.settlement)
     return {
-      schema: s.settlement.config.edition === REPLY_EDITION ? 5 : 4,
+      schema:
+        s.settlement.config.edition === PEER_EDITION
+          ? 6
+          : s.settlement.config.edition === REPLY_EDITION
+            ? 5
+            : 4,
       framework: '3.0.0',
       config: structuredClone(s.settlement.config),
       seed: s.seed,
@@ -684,10 +707,9 @@ export function exportRun(s: State, compact = false): unknown {
       ...(compact
         ? { compact: true }
         : {
-            state:
-              s.settlement.config.edition === REPLY_EDITION
-                ? JSON.parse(JSON.stringify(s))
-                : structuredClone(s),
+            state: hasReplies(s.settlement.config.edition)
+              ? JSON.parse(JSON.stringify(s))
+              : structuredClone(s),
           }),
     };
   return {
@@ -718,15 +740,17 @@ export function importRun(raw: unknown): State {
     };
     if (
       r.framework !== '3.0.0' ||
-      ![3, 4, 5].includes(r.schema) ||
+      ![3, 4, 5, 6].includes(r.schema) ||
       (r.schema === 4 &&
         (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== 'settlement-day/1')) ||
       (r.schema === 5 &&
         (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== REPLY_EDITION)) ||
+      (r.schema === 6 &&
+        (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== PEER_EDITION)) ||
       (r.schema === 3 && r.config)
     )
       throw new Error('version');
-    if (r.schema === 5) {
+    if (r.schema === 5 || r.schema === 6) {
       requireJson(raw);
       exactKeys(raw, [
         'schema',
@@ -749,7 +773,7 @@ export function importRun(raw: unknown): State {
     );
     if (
       (r.compact !== true && stable(s) !== stable(r.state)) ||
-      (r.compact === true && (![4, 5].includes(r.schema) || r.state !== undefined)) ||
+      (r.compact === true && (![4, 5, 6].includes(r.schema) || r.state !== undefined)) ||
       stateHash(s) !== r.hash
     )
       throw new Error('state mismatch');

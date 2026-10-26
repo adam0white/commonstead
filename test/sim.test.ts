@@ -299,3 +299,32 @@ test('reply day preserves existing building orders and pointer coordinates', () 
   }
   for (const job of jobs) expect(job).toEqual(jobs[0]);
 });
+
+test('native6 is closed, rejects stale route bindings and refuses peer commands in schema3/4/5 before installation', () => {
+  const editions = [undefined, 'settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] as const;
+  for (const edition of editions) {
+    const s = createGame(418, undefined, edition ? { edition } : undefined);
+    const raw = JSON.parse(JSON.stringify(exportRun(s)));
+    raw.inputs.push({
+      tick: 0,
+      command: { kind: 'peer', ids: ['v1', 'v2'], map: 'yard', disputeAt: 0, branch: 'route-wait' },
+    });
+    expect(() => importRun(raw)).toThrow(/not loaded/);
+    expect(s.tick).toBe(0);
+    expect(s.inputs).toEqual([]);
+  }
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
+  const before = JSON.stringify(s);
+  for (const field of ['chapter', 'castSources', 'unexpected']) {
+    const raw = { ...(exportRun(s) as object), [field]: field === 'chapter' ? null : [] };
+    expect(() => importRun(raw)).toThrow(/not loaded/);
+    expect(JSON.stringify(s)).toBe(before);
+  }
+  const wrongSchema = { ...(exportRun(s) as object), schema: 5 };
+  expect(() => importRun(wrongSchema)).toThrow(/not loaded/);
+  const wrongInput = {
+    ...(exportRun(s) as object),
+    inputs: [{ tick: 0.5, command: { kind: 'pause-chapter' } }],
+  };
+  expect(() => importRun(wrongInput)).toThrow(/not loaded/);
+});
