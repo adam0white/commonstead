@@ -2,10 +2,10 @@
 
 A ten-minute residential workshop near Alder Quay with eight Human Framework people. Build a storehouse before the storm to keep the shared supplies dry. Direct control gives way to fatigue, recovery and remembered pressure.
 
-- `npm ci`
-- `npm run dev`
-- `npm run ci` — lint, strict typecheck, focused tests, stamped build.
-- `npm run deploy` — clean tree and green exact-commit GitHub ci required.
+- `pnpm install --frozen-lockfile`
+- `pnpm run dev`
+- `pnpm run ci` — lint, strict typecheck, focused tests, stamped build.
+- `pnpm run deploy` — clean tree and green exact-commit GitHub ci required.
 
 Design and owner acceptance boundary: [docs/concept.md](docs/concept.md). Reviews: [docs/reviews](docs/reviews/). Original Canvas art and text; no game assets or code borrowed from commercial or open-source RTS games. Static assets only. HF package 3.0.0 (person engine 2.23.0) owns people; this host owns map and economy. The app version is 0.2.0; the replay rules are `commonstead-3`. Immutable lab-client 0.4.11 and lab-kit 0.5.12 provide the shared lab controls.
 
@@ -28,3 +28,5 @@ The ordinary pause menu offers Resume, Feedback, Full screen, All games, one Rec
 Open the game with `?lab=1` for file loading, Download this run and character-history controls. Current schema-3 exports contain the seed, tick, input log, pinned chapter, full state and hash; downloads also retain captured source archives. Import replays the run and checks exact state and hash before replacing the game. Unsupported or mismatched files are refused. Loading a file does not take ownership of its saved browser histories. Downloading remains available with Recording off. The optional settlement day also offers Download compact run in the lab pause menu. Its full and compact exports replay deterministically. Shared full-day native departure remains refused; only the default finite chapter route is supported.
 
 Current cast, continuity and native sender contract: [docs/cast-adoption.md](docs/cast-adoption.md). Exactly eight canonical residents open together. Browser history storage is optional. File ownership restrictions are separate from the single recording choice. Native exports retain source obligations; unsupported duties are not cleared. The finite Glance 4 / engine 2.23.0 Nerys receiver is shipped. The signed Glance producer/live and final receiving replay receipts are recorded separately in `~/code/.lab-scratch/v3/glance/report.md`. Those technical controls do not establish an ordinary human cross-game or shared-shelf CAS ownership journey. Dynamic release and browser receipts live outside source at `~/code/.lab-scratch/cast/commonstead.md`.
+
+Use shared Node 26.12.0 and the exact pnpm 12.14.0 packageManager pin. No project runtime is downloaded. Existing npm worktrees must preserve dirty source, remove only their own root and workspace node_modules, run `pnpm install --frozen-lockfile`, then delete dist, .types and *.tsbuildinfo before rebuilding. `npm run` remains usable but bypasses pnpm's stale-dependency guard.

@@ -2,6 +2,10 @@
 
 Remaining: owner play/readiness/recording acceptance, actual human accessibility feedback (both due 2026-11-03), and an ordinary human cross-game ownership journey. Semantic owner-storage restore equality from the latest Feedback browser check is UNCONFIRMED. Docs reconciliation does not supply those missing receipts. See docs/concept.md for the acceptance boundary and existing Deferred work. Docsweb runs no playtest rounds.
 
+## Installer migration — 2026-10-26
+
+Use shared Node 26.12.0 and pnpm 12.14.0. Install frozen and run `pnpm run check:lane`. Preserve dirty source before converting old npm trees: remove only their own root and workspace node_modules, install with `pnpm install --frozen-lockfile`, then delete dist, .types and *.tsbuildinfo before rebuilding. No project runtime download or deployment is part of this installer migration. Earlier delivery receipts remain historical.
+
 ## Source and delivery
 
 Current documented baseline: signed `24eaf9bf1d46f90c44466475562c2e575a960e18`, exact green CI `40257883096`. The GD delivery report records clean live release `53bda9f7-07a9-44ec-8cf3-4ff268d38d57`, exact source/HF 3.0.0/`dirty:false` metadata and matching HTML/JS/CSS bytes. Its normal lane passed 63 tests in 6 files, lint, typecheck and build. Chrome/mirror controls loaded full and compact exports at 360×690 and 1280×800. These are recorded technical receipts, not a new docsweb live check, human accessibility feedback or owner acceptance. Earlier Feedback delivery `351ce7ba1b8030eb97ea504760cef9d88ca4efb1` / CI `40247714247` / release `cf4f5a9c-6097-4204-a816-17aac5719b6f` remains recorded in `~/code/.lab-scratch/v3/commonstead-feedback/report.md`; earlier `db10f23` migration receipts remain in `~/code/.lab-scratch/v3/commonstead/report.md`.
@@ -20,7 +24,7 @@ New game starts the default ten-minute chapter. The title also offers “Choose 
 
 ## Workflow and policy
 
-Run the normal `npm run check:lane` (this repo runs full `npm run ci`) before every signed commit. It uses the normal machine suite lock. Fetch/rebase origin/main before push and require exact green CI. App changes require a fresh clean managed deployment and matching live release; source-only documentation does not. Preserve immutable SDK artifacts.
+Run the normal `pnpm run check:lane` (this repo runs full `pnpm run ci`) before every signed commit. It uses the normal machine suite lock. Fetch/rebase origin/main before push and require exact green CI. App changes require a fresh clean managed deployment and matching live release; source-only documentation does not. Preserve immutable SDK artifacts.
 
 Bounded suite-lock waiting was delivered in signed `1e22d9ace5d9c90ab31084c1f71ca51bf551f41b`, exact CI `40242664724`. The helper fails closed after six unreadable-owner observations and does not delete an unidentified lock. It does not claim atomic owner publication or justify bypassing a lock. The existing Miniflare/Undici exception remains in the concept contract.
 

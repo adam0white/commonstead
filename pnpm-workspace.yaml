@@ -1,0 +1,18 @@
+# Match the shared lab runtime; never download a runtime per repository.
+engineStrict: true
+strictPeerDependencies: true
+hoist: false
+packageImportMethod: hardlink
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - "@adam0white/*"
+resolutionMode: highest
+verifyDepsBeforeRun: error
+dedupePeerDependents: true
+allowBuilds:
+  esbuild@0.28.2: true
+  workerd@1.20261019.1: true
+  fsevents: false
+overrides:
+  sharp: 0.35.5
+  miniflare>undici: 7.30.1

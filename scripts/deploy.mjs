@@ -6,6 +6,6 @@ const commit = run('git', ['rev-parse', 'HEAD']);
 const checks = JSON.parse(run('gh', ['api', `repos/adam0white/commonstead/commits/${commit}/check-runs`]));
 if (!checks.check_runs.some((c) => c.name === 'ci' && c.conclusion === 'success'))
   throw Error('Exact commit requires a green ci check.');
-execFileSync('npm', ['ci', '--no-audit', '--no-fund'], { stdio: 'inherit' });
-execFileSync('npm', ['run', 'build'], { stdio: 'inherit' });
-execFileSync('npx', ['wrangler', 'deploy'], { stdio: 'inherit' });
+execFileSync('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' });
+execFileSync('pnpm', ['run', 'build'], { stdio: 'inherit' });
+execFileSync('pnpm', ['exec', 'wrangler', 'deploy'], { stdio: 'inherit' });
