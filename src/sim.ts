@@ -13,6 +13,7 @@ import { canonicalPersona } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
 import { admissionLine, assignmentText, nextTask, residentName } from './display.ts';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
+import { openPlacementGround } from './placement.ts';
 import {
   applySettlement,
   initSettlement,
@@ -371,15 +372,7 @@ export function apply(s: State, c: Command): void {
   if (c.kind === 'build') {
     const wood = c.building === 'house' ? 40 : 180;
     const stone = c.building === 'house' ? 0 : 120;
-    if (
-      !Number.isFinite(c.x) ||
-      !Number.isFinite(c.y) ||
-      c.x < 55 ||
-      c.x > 945 ||
-      c.y < 55 ||
-      c.y > 645 ||
-      [...s.buildings, ...NODES].some((b) => Math.hypot(b.x - c.x, b.y - c.y) < 90)
-    ) {
+    if (!openPlacementGround(c.x, c.y, [...s.buildings, ...NODES])) {
       s.message = 'Choose open ground, away from cabins and delivered materials.';
       return;
     }

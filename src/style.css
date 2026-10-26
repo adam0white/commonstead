@@ -981,3 +981,42 @@ a:focus-visible {
     flex-shrink: 0;
   }
 }
+
+/* Placement alone keeps the map separate from scrolling instructions and Cancel. */
+.game.placing .side {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.game.placing .notice {
+  min-height: 0;
+  height: auto;
+  overflow: auto;
+}
+.game.placing .actions {
+  position: static;
+}
+@media (max-width: 760px) {
+  .game.placing .layout {
+    grid-template-rows: minmax(240px, 1fr) minmax(0, 44%);
+  }
+  .game.placing .notice {
+    font-size: 1rem;
+  }
+}
+/* At enlarged text sizes the placement page scrolls instead of clipping Cancel. */
+.game.placing {
+  overflow: auto;
+}
+.game.placing .objective {
+  min-height: 0;
+  max-height: 5em;
+  overflow: auto;
+}
+@media (max-width: 760px) {
+  .game.placing .layout {
+    min-height: 28rem;
+  }
+  .game.placing .side {
+    grid-template-rows: auto minmax(3em, 1fr) auto;
+  }
+}

@@ -1,5 +1,6 @@
 import { residentName } from './display.ts';
 import { MAPS, type Place } from './paths.ts';
+import { openPlacementGround } from './placement.ts';
 import { NODES, type State } from './sim.ts';
 export interface PointerMark {
   x: number;
@@ -15,6 +16,7 @@ export function draw(
   mark: PointerMark | null,
   placing: string,
   viewedMap: Place = 'yard',
+  candidate: { x: number; y: number } = { x: 650, y: 500 },
 ) {
   const box = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -53,6 +55,19 @@ export function draw(
   c.lineTo(560, 0);
   c.bezierCurveTo(600, 450, 500, 450, 440, 700);
   c.fill();
+  if (placing && !s.settlement) {
+    // Each dot is an exact tested centre, not a promise that an order will succeed.
+    const obstacles = [...s.buildings, ...NODES];
+    c.fillStyle = '#397553';
+    for (let y = 55; y <= 645; y += 20) {
+      for (let x = 55; x <= 945; x += 20) {
+        if (!openPlacementGround(x, y, obstacles)) continue;
+        c.beginPath();
+        c.arc(x, y, 3, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  }
   if (s.settlement) {
     for (const wall of MAPS[viewedMap].walls) {
       c.fillStyle = '#6e665a';
@@ -190,11 +205,28 @@ export function draw(
     }
   }
   if (placing) {
-    c.fillStyle = '#f3ecdd';
-    c.fillRect(12, 12, 650, 46);
-    c.fillStyle = '#c2412d';
-    c.font = `${Math.max(23, 16 / scale)}px Georgia`;
-    c.fillText('Choose a place.', 26, 42);
+    const site = mark ? { x: mark.x2, y: mark.y2 } : candidate;
+    c.save();
+    c.translate(site.x, site.y);
+    c.strokeStyle =
+      !s.settlement && openPlacementGround(site.x, site.y, [...s.buildings, ...NODES])
+        ? '#245c3d'
+        : '#a13727';
+    c.lineWidth = 4;
+    c.setLineDash([8, 5]);
+    // Same footprint as the building drawing above; circle shows centre spacing.
+    c.beginPath();
+    c.arc(0, 0, 90, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+    c.strokeRect(-46, -28, 92, 67);
+    c.beginPath();
+    c.moveTo(-59, -26);
+    c.lineTo(0, -72);
+    c.lineTo(59, -26);
+    c.closePath();
+    c.stroke();
+    c.restore();
   }
   if (mark) {
     c.strokeStyle = '#c2412d';
