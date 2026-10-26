@@ -632,3 +632,128 @@ test.each(['settlement-replies/1', 'settlement-replies/2'] as const)(
     expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
   },
 );
+
+test('short yield retains actual admitted Repair Nora and run metadata and refuses every departure before Shelf access', async () => {
+  // Actual public producer fixture; this harness is not a browser ownership receipt.
+  // No joint admitted Nora/Sevim fixture is available in this repository.
+  const fixture = JSON.parse(
+    readFileSync(new URL('./fixtures/repair-nora-hf-2.21.0.json', import.meta.url), 'utf8'),
+  );
+  const h = harness([fixture.envelope]);
+  const c = new Continuity(h.lab, h.shelf);
+  const s = await c.fresh(42);
+  expect(s.chapter?.inputs[0]?.parent.revision).toBe(fixture.envelope.revision);
+  c.sources = [
+    { revision: fixture.envelope.revision, source: fixture.envelope.source, snapshot: fixture.raw },
+  ];
+  const provenance = structuredClone({
+    runId: c.runId,
+    heads: c.heads,
+    sources: c.sources,
+    fileOrigin: c.fileOrigin,
+    chapter: s.chapter,
+  });
+  const ids = s.villagers.map((v) => v.id);
+  while (s.tick < 30) step(s); // Retain the admitted resident's existing responsibility.
+  apply(s, { kind: 'order', ids, target: 'wood' });
+  while (s.resources.wood < 180 && s.tick < 180) step(s);
+  apply(s, { kind: 'order', ids, target: 'stone' });
+  while (s.resources.stone < 120 && s.tick < 300) step(s);
+  apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
+  while (!s.buildings.some((b) => b.kind === 'storehouse' && b.complete) && s.tick < 599) step(s);
+  const passive = structuredClone(s);
+  const prefix = structuredClone(s.inputs);
+  apply(s, { kind: 'yield-day' });
+  expect(s.inputs.slice(0, -1)).toEqual(prefix);
+  expect({
+    runId: c.runId,
+    heads: c.heads,
+    sources: c.sources,
+    fileOrigin: c.fileOrigin,
+    chapter: s.chapter,
+  }).toEqual(provenance);
+  for (let i = 0; i < 12; i++) {
+    step(s);
+    step(passive);
+  }
+  const { shortYield: _extension, ...ordinary } = s;
+  expect({ ...ordinary, inputs: ordinary.inputs.filter((i) => i.command.kind !== 'yield-day') }).toEqual(
+    passive,
+  );
+  apply(s, { kind: 'pause-chapter' });
+  while (!s.chapterPaused && !s.ended) step(s);
+  const saved = c.localSave(s, true);
+  const restoredOwner = new Continuity(h.lab, h.shelf);
+  const resumed = await restoredOwner.loadLocal(saved);
+  expect(resumed).toEqual(s);
+  expect(restoredOwner.playPaused).toBe(true);
+  expect({
+    runId: restoredOwner.runId,
+    heads: restoredOwner.heads,
+    sources: restoredOwner.sources,
+    fileOrigin: restoredOwner.fileOrigin,
+    chapter: resumed.chapter,
+  }).toEqual(provenance);
+  resumeForPlay(resumed);
+  expect(resumed).toEqual(s); // Loading must not bypass the recorded action boundary.
+  const raw = c.export(s);
+  // Reviewer control: JSON overflow must refuse this admitted-Nora archive before Shelf access.
+  const overflow = structuredClone(raw) as { castSources: { snapshot: unknown }[] };
+  overflow.castSources[0]!.snapshot = { sourceValue: 1 };
+  const overflowText = JSON.stringify(overflow).replace('"sourceValue":1', '"sourceValue":1e400');
+  expect(JSON.parse(overflowText).castSources[0].snapshot.sourceValue).toBe(Infinity);
+  let shelfAccess = 0;
+  const refusingShelf = new Proxy(h.shelf, {
+    get() {
+      shelfAccess++;
+      throw new Error('Unexpected Shelf access');
+    },
+  });
+  const refused = new Continuity(h.lab, refusingShelf);
+  const beforeRefusal = structuredClone({ heads: refused.heads, sources: refused.sources });
+  await expect(refused.importFile(overflowText)).rejects.toThrow(/Invalid source number/);
+  expect(shelfAccess).toBe(0);
+  expect({ heads: refused.heads, sources: refused.sources }).toEqual(beforeRefusal);
+  expect(c.sources).toEqual(provenance.sources);
+  const file = new Continuity(h.lab, h.shelf);
+  expect(await file.importFile(JSON.stringify(raw))).toEqual(s);
+  expect(file.sources).toEqual(c.sources);
+  expect(file.fileOrigin).toBe(true);
+  expect(file.heads).toEqual([]); // Native files never grant browser ownership.
+  const compactFile = new Continuity(h.lab, h.shelf);
+  expect(
+    await compactFile.importFile(
+      JSON.stringify({ ...(exportRun(s, true) as object), castSources: c.sources }),
+    ),
+  ).toEqual(s);
+  const before = structuredClone({ heads: c.heads, sources: c.sources });
+  h.requests.length = 0;
+  let readyReads = 0;
+  Object.defineProperty(h.shelf, 'ready', {
+    get() {
+      readyReads++;
+      return Promise.resolve(true);
+    },
+  });
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/yielded short day/);
+  await expect(c.checkpoint(CAST[0]!.castId, true)).rejects.toThrow(/yielded short day/);
+  await c.checkpointAll();
+  expect(readyReads).toBe(0);
+  expect(h.requests).toEqual([]);
+  expect({ heads: c.heads, sources: c.sources }).toEqual(before);
+  await expect(file.importFile(JSON.stringify({ ...raw, castSources: [{ unknown: true }] }))).rejects.toThrow(
+    /source/,
+  );
+  await expect(file.importFile(JSON.stringify({ ...raw, unknown: true }))).rejects.toThrow(/not loaded/);
+  apply(resumed, { kind: 'resume-chapter' });
+  const full = importRun(exportRun(resumed));
+  const compact = importRun(exportRun(resumed, true));
+  while (!resumed.ended) {
+    step(resumed);
+    step(full);
+    step(compact);
+  }
+  expect(full).toEqual(resumed);
+  expect(compact).toEqual(resumed);
+  expect(resumed.villagers[0]?.person.id).toBe('hf.cast.nora.smallworks');
+});

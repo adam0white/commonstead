@@ -53,7 +53,8 @@ export type Command =
   | { kind: 'train' }
   | { kind: 'pause-chapter' }
   | { kind: 'resume-chapter' };
-export type Input = { tick: number; command: Command };
+export type GameCommand = Command | { kind: 'yield-day' };
+export type Input = { tick: number; command: GameCommand };
 type Order = { target: string; x: number; y: number };
 export type Villager = {
   id: string;
@@ -84,7 +85,10 @@ export type Building = {
   progress: number;
   complete: boolean;
 };
+export type ChronicleEntry = { tick: number; text: string };
+export type ShortYield = { version: 'short-yield/1'; cutover: number; chronicle: ChronicleEntry[] };
 export type State = {
+  shortYield?: ShortYield;
   settlement?: Settlement;
   chapter: Chapter | null;
   pauseRequested: boolean;
@@ -324,7 +328,65 @@ function assign(s: State, v: Villager, order: Order) {
   }
   chooseWork(s, v);
 }
-export function apply(s: State, c: Command): void {
+/** Eligibility is limited to the original short chapter. UI also checks its menu pause. */
+export function canYieldDay(s: State): boolean {
+  return (
+    !s.settlement &&
+    !s.shortYield &&
+    !s.ended &&
+    !s.pauseRequested &&
+    !s.chapterPaused &&
+    s.tick < 600 &&
+    s.buildings.some((b) => b.kind === 'storehouse' && b.complete)
+  );
+}
+
+/** Display rename only: immutable legacy opening messages and native hashes stay exact. */
+export function publicPlaceText(text: string): string {
+  return text.replaceAll('Alder Quay', 'Mill Bridge');
+}
+
+export function apply(s: State, c: GameCommand): void {
+  if (c.kind === 'yield-day') {
+    exactKeys(c, ['kind']);
+    if (!canYieldDay(s) || s.inputs.length >= 10000)
+      throw new Error('Finish the storehouse in an unpaused short chapter before leaving the remaining day.');
+    for (const input of s.inputs) {
+      exactKeys(input, ['tick', 'command']);
+      validateShortInput(input.command);
+    }
+    s.shortYield = {
+      version: 'short-yield/1',
+      cutover: s.tick,
+      chronicle: [
+        ...s.buildings
+          .filter((b) => b.complete)
+          .map((b) => ({
+            tick: s.tick,
+            text: `Earlier in this run: the ${taskLabel(b.kind)} (${b.id}) was complete by this point.`,
+          })),
+        ...s.villagers.flatMap((v) => {
+          const scene = DISCOVERIES[Number(v.id.slice(1)) - 1];
+          return v.discovery && scene
+            ? [
+                {
+                  tick: s.tick,
+                  text: `Earlier in this run, ${residentName(v)} (${v.person.id}) shared: ${scene[v.discovery === 2 ? 1 : 0]}`,
+                },
+              ]
+            : [];
+        }),
+      ],
+    };
+    s.inputs.push({ tick: s.tick, command: { kind: 'yield-day' } });
+    return;
+  }
+  if (s.shortYield) {
+    if (!['pause-chapter', 'resume-chapter'].includes(c.kind))
+      throw new Error('The residents have the remaining day. Further work requests are closed.');
+    exactKeys(c, ['kind']);
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+  }
   if (c.kind === 'peer') validatePeer(s, c);
   if (s.settlement && hasReplies(s.settlement.config.edition)) {
     if (c.kind !== 'peer') validateReplyCommand(s, c);
@@ -598,6 +660,10 @@ export function step(s: State): void {
       b.progress = Math.min(1, b.progress + capacity / (b.kind === 'house' ? 35 : 180));
       if (b.progress === 1) {
         b.complete = true;
+        s.shortYield?.chronicle.push({
+          tick: s.tick,
+          text: `The ${taskLabel(b.kind)} (${b.id}) was completed.`,
+        });
         s.message = `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? 'The shared supplies are ready for the storm.' : 'There is room for two more people.'}`;
       }
     }
@@ -625,8 +691,17 @@ export function step(s: State): void {
     s.message = s.won
       ? 'The storehouse keeps the shared supplies dry. The workshop can open tomorrow.'
       : 'The storm soaks the shared supplies. The unfinished storehouse could not protect them.';
+    s.shortYield?.chronicle.push({ tick: s.tick, text: s.message });
   }
 }
+/** One visible batch. Callers must pass false while the menu or tab is inactive. */
+export function stepYieldBatch(s: State, active: boolean): number {
+  if (!active || !s.shortYield) return 0;
+  const before = s.tick;
+  for (let i = 0; i < 12 && !s.ended && !s.chapterPaused; i++) step(s);
+  return s.tick - before;
+}
+
 function stable(x: unknown): string {
   if (x === null || typeof x !== 'object') return JSON.stringify(x);
   if (Array.isArray(x)) return `[${x.map(stable).join(',')}]`;
@@ -652,10 +727,13 @@ export function replay(
   tick: number,
   chapter?: Chapter,
   config?: SettlementConfig,
+  allowYield = false,
 ): State {
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
+  if (!allowYield && inputs.some((i) => i?.command?.kind === 'yield-day'))
+    throw new Error('Yield command in legacy schema');
   if (!hasReplies(config?.edition ?? '') && inputs.some((i) => i?.command?.kind === 'reply'))
     throw new Error('Reply command in legacy edition');
   if (config?.edition !== PEER_EDITION && inputs.some((i) => i?.command?.kind === 'peer'))
@@ -663,6 +741,10 @@ export function replay(
   const s = createGame(seed, chapter, config);
   let previous = -1;
   for (const input of inputs) {
+    if (allowYield) {
+      exactKeys(input, ['tick', 'command']);
+      validateShortInput(input.command);
+    }
     if (hasReplies(config?.edition ?? '')) {
       exactKeys(input, ['tick', 'command']);
     }
@@ -690,6 +772,18 @@ export function replay(
   return s;
 }
 export function exportRun(s: State, compact = false): unknown {
+  if (s.shortYield)
+    return {
+      schema: 7,
+      framework: '3.0.0',
+      chapter: structuredClone(s.chapter),
+      seed: s.seed,
+      tick: s.tick,
+      inputs: structuredClone(s.inputs),
+      hash: stateHash(s),
+      extension: { version: s.shortYield.version, cutover: s.shortYield.cutover },
+      ...(compact ? { compact: true } : { state: structuredClone(s) }),
+    };
   if (s.settlement)
     return {
       schema:
@@ -726,6 +820,7 @@ export function exportRun(s: State, compact = false): unknown {
 export function importRun(raw: unknown): State {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
+    if ((raw as { schema?: unknown }).schema === 7) return importShortYield(raw);
     const r = raw as {
       chapter: Chapter | null;
       schema: number;
@@ -856,4 +951,107 @@ function requireJson(value: unknown): void {
     return;
   }
   throw new Error('Only complete JSON data is accepted in reply notebooks');
+}
+
+function requireShortJson(value: unknown, depth = 0): void {
+  if (depth > 100) throw new Error('JSON nesting limit');
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    (!Number.isInteger(value) || Number.isSafeInteger(value))
+  )
+    return;
+  if (Array.isArray(value)) {
+    for (const v of value) requireShortJson(v, depth + 1);
+    return;
+  }
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    for (const [key, v] of Object.entries(value)) {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new Error('Unsafe JSON key');
+      requireShortJson(v, depth + 1);
+    }
+    return;
+  }
+  throw new Error('Only complete JSON data is accepted in reply notebooks');
+}
+
+/** Closed native schema; archive ownership metadata is validated by Continuity separately. */
+function importShortYield(raw: unknown): State {
+  requireShortJson(raw);
+  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized short run');
+  const r = raw as Record<string, unknown>;
+  exactKeys(r, [
+    'schema',
+    'framework',
+    'chapter',
+    'seed',
+    'tick',
+    'inputs',
+    'hash',
+    'extension',
+    r.compact === true ? 'compact' : 'state',
+  ]);
+  if (r.framework !== '3.0.0' || (r.compact !== undefined && r.compact !== true)) throw new Error('version');
+  exactKeys(r.extension, ['version', 'cutover']);
+  if (
+    r.extension.version !== 'short-yield/1' ||
+    !Number.isSafeInteger(r.extension.cutover) ||
+    (r.extension.cutover as number) < 0 ||
+    (r.extension.cutover as number) >= 600
+  )
+    throw new Error('cutover');
+  if (r.chapter !== null) checkChapter(r.chapter as Chapter);
+  const inputs = r.inputs as Input[];
+  if (!Array.isArray(inputs) || inputs.length > 10000) throw new Error('inputs');
+  const yields = inputs.filter((i) => i?.command?.kind === 'yield-day');
+  if (yields.length !== 1 || yields[0]?.tick !== r.extension.cutover) throw new Error('cutover');
+  const s = replay(
+    r.seed as number,
+    inputs,
+    r.tick as number,
+    (r.chapter as Chapter | null) ?? undefined,
+    undefined,
+    true,
+  );
+  if (
+    !s.shortYield ||
+    stable(s.inputs) !== stable(inputs) ||
+    stable({ version: s.shortYield.version, cutover: s.shortYield.cutover }) !== stable(r.extension) ||
+    stateHash(s) !== r.hash ||
+    (r.compact !== true && stable(s) !== stable(r.state))
+  )
+    throw new Error('state mismatch');
+  return s;
+}
+
+function validateShortInput(raw: unknown): void {
+  exactKeys(raw, ['kind'], ['ids', 'target', 'x', 'y', 'building']);
+  const c = raw as unknown as Command;
+  if (['yield-day', 'train', 'pause-chapter', 'resume-chapter'].includes(c.kind)) {
+    exactKeys(c, ['kind']);
+    return;
+  }
+  if (
+    !('ids' in c) ||
+    !Array.isArray(c.ids) ||
+    c.ids.length > 20 ||
+    new Set(c.ids).size !== c.ids.length ||
+    c.ids.some((id) => typeof id !== 'string' || !/^v[1-9][0-9]?$/.test(id))
+  )
+    throw new Error('ids');
+  if (c.kind === 'order') {
+    exactKeys(c, ['kind', 'ids', 'target'], ['x', 'y']);
+    if (
+      typeof c.target !== 'string' ||
+      c.target.length > 100 ||
+      ('x' in c && !Number.isFinite(c.x)) ||
+      ('y' in c && !Number.isFinite(c.y))
+    )
+      throw new Error('order');
+  } else if (c.kind === 'build') {
+    exactKeys(c, ['kind', 'ids', 'building', 'x', 'y']);
+    if (!['house', 'storehouse'].includes(c.building) || !Number.isFinite(c.x) || !Number.isFinite(c.y))
+      throw new Error('build');
+  } else throw new Error('Unknown short command');
 }

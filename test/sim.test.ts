@@ -1,5 +1,16 @@
 import { describe, expect, test } from 'vitest';
-import { apply, createGame, exportRun, importRun, NODES, replay, stateHash, step } from '../src/sim';
+import {
+  apply,
+  createGame,
+  exportRun,
+  importRun,
+  NODES,
+  publicPlaceText,
+  replay,
+  stateHash,
+  step,
+  stepYieldBatch,
+} from '../src/sim';
 
 function advance(s: ReturnType<typeof createGame>, n: number) {
   for (let i = 0; i < n; i++) step(s);
@@ -327,4 +338,134 @@ test('native6 is closed, rejects stale route bindings and refuses peer commands 
     inputs: [{ tick: 0.5, command: { kind: 'pause-chapter' } }],
   };
   expect(() => importRun(wrongInput)).toThrow(/not loaded/);
+});
+
+function completedShort(seed = 42) {
+  const s = createGame(seed);
+  const ids = s.villagers.map((v) => v.id);
+  apply(s, { kind: 'order', ids, target: 'wood' });
+  while (s.resources.wood < 180 && s.tick < 180) step(s);
+  apply(s, { kind: 'order', ids, target: 'stone' });
+  while (s.resources.stone < 120 && s.tick < 300) step(s);
+  apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
+  while (!s.buildings.some((b) => b.kind === 'storehouse' && b.complete) && s.tick < 599) step(s);
+  expect(s.buildings.some((b) => b.kind === 'storehouse' && b.complete)).toBe(true);
+  expect(s.tick).toBeLessThan(600);
+  return s;
+}
+
+test('short yield preserves every passive field and closed native replay through the storm', () => {
+  const passive = completedShort();
+  const yielded = structuredClone(passive);
+  const prefix = structuredClone(passive.inputs);
+  apply(yielded, { kind: 'yield-day' } as Parameters<typeof apply>[1]);
+  expect((exportRun(yielded) as { schema: number }).schema).toBe(7);
+  const original = (s: typeof passive) => {
+    const { shortYield: _receipt, ...rest } = s as typeof passive & { shortYield?: unknown };
+    return { ...rest, inputs: rest.inputs.filter((i) => i.command.kind !== ('yield-day' as string)) };
+  };
+  expect(yielded.inputs.slice(0, -1)).toEqual(prefix);
+  for (let i = yielded.tick; i <= 600; i++) {
+    expect(original(yielded)).toEqual(passive);
+    if (i === yielded.shortYield?.cutover || i === 480 || i === 600) {
+      for (const compact of [false, true]) expect(importRun(exportRun(yielded, compact))).toEqual(yielded);
+    }
+    step(passive);
+    step(yielded);
+  }
+  expect(yielded.ended).toBe(true);
+  expect(yielded.won).toBe(true);
+});
+
+test('short yield rejects malformed cutovers and preserves pause and legacy boundaries', () => {
+  const checkpoint = completedShort();
+  for (const state of [
+    createGame(42),
+    createGame(42, undefined, { edition: 'settlement-day/1' }),
+    createGame(42, undefined, { edition: 'settlement-replies/1' }),
+    createGame(42, undefined, { edition: 'settlement-replies/2' }),
+  ]) {
+    const before = structuredClone(state);
+    expect(() => apply(state, { kind: 'yield-day' })).toThrow();
+    expect(state).toEqual(before);
+  }
+  const paused = structuredClone(checkpoint);
+  apply(paused, { kind: 'pause-chapter' });
+  const beforePaused = structuredClone(paused);
+  expect(() => apply(paused, { kind: 'yield-day' })).toThrow();
+  expect(paused).toEqual(beforePaused);
+  apply(checkpoint, { kind: 'yield-day' });
+  for (const command of [
+    { kind: 'yield-day' },
+    { kind: 'yield-day', surplus: true },
+    { kind: 'train' },
+    { kind: 'order', ids: ['v1'], target: 'wood' },
+  ]) {
+    const before = structuredClone(checkpoint);
+    expect(() => apply(checkpoint, command as Parameters<typeof apply>[1])).toThrow();
+    expect(checkpoint).toEqual(before);
+  }
+  apply(checkpoint, { kind: 'pause-chapter' });
+  for (let i = 0; i < 100 && !checkpoint.chapterPaused; i++) step(checkpoint);
+  expect(checkpoint.chapterPaused).toBe(true);
+  const held = structuredClone(checkpoint);
+  step(checkpoint);
+  expect(checkpoint).toEqual(held);
+  expect(importRun(exportRun(checkpoint, true))).toEqual(held);
+  apply(checkpoint, { kind: 'resume-chapter' });
+  const raw = exportRun(checkpoint) as Record<string, unknown>;
+  const compact = exportRun(checkpoint, true) as Record<string, unknown>;
+  const inputs = checkpoint.inputs;
+  for (const bad of [
+    { ...raw, schema: 3 },
+    { ...raw, unknown: true },
+    { ...raw, config: { edition: 'settlement-day/1' } },
+    { ...raw, extension: { version: 'short-yield/2', cutover: held.shortYield?.cutover } },
+    { ...raw, extension: { version: 'short-yield/1', cutover: 0 } },
+    { ...raw, state: { ...checkpoint, won: true } },
+    { ...compact, compact: false },
+    { ...compact, state: checkpoint },
+    { ...compact, inputs: [...inputs, { tick: checkpoint.tick, command: { kind: 'yield-day' } }] },
+    { ...compact, inputs: [...inputs, { tick: checkpoint.tick, command: { kind: 'train' } }] },
+    { ...compact, inputs: inputs.map((i, n) => (n === 0 ? { ...i, unknown: true } : i)) },
+    { ...compact, inputs: inputs.map((i, n) => (n === 0 ? { ...i, command: { kind: 'unknown' } } : i)) },
+    {
+      ...compact,
+      inputs: inputs.map((i, n) => (n === 0 ? { ...i, command: { ...i.command, ids: ['v1', 'v1'] } } : i)),
+    },
+    { ...compact, tick: Number.MAX_SAFE_INTEGER + 1 },
+    { ...compact, hash: 'x'.repeat(20_000_001) },
+    JSON.parse(JSON.stringify(compact).replace('"hash":', '"__proto__":{},"hash":')),
+  ]) {
+    const before = JSON.stringify(bad);
+    expect(() => importRun(bad)).toThrow(/not loaded/);
+    expect(JSON.stringify(bad)).toBe(before);
+  }
+  while (!checkpoint.ended) step(checkpoint);
+  const ended = structuredClone(checkpoint);
+  expect(() => apply(checkpoint, { kind: 'yield-day' })).toThrow();
+  expect(checkpoint).toEqual(ended);
+});
+
+test('short yield batches honor inactive and recorded pause boundaries and display rename preserves raw bytes', () => {
+  const s = completedShort();
+  const originalMessage = createGame(42).message;
+  expect(originalMessage).toContain('Alder Quay');
+  expect(publicPlaceText(originalMessage)).toContain('Mill Bridge');
+  apply(s, { kind: 'yield-day' });
+  const held = structuredClone(s);
+  expect(stepYieldBatch(s, false)).toBe(0);
+  expect(s).toEqual(held);
+  expect(stepYieldBatch(s, true)).toBe(12);
+  expect(s.tick).toBe(held.tick + 12);
+  apply(s, { kind: 'pause-chapter' });
+  while (!s.chapterPaused) stepYieldBatch(s, true);
+  const paused = structuredClone(s);
+  expect(stepYieldBatch(s, true)).toBe(0);
+  expect(s).toEqual(paused);
+  apply(s, { kind: 'resume-chapter' });
+  while (!s.ended) expect(stepYieldBatch(s, true)).toBeLessThanOrEqual(12);
+  expect(s.tick).toBe(600);
+  expect(stepYieldBatch(s, true)).toBe(0);
+  expect(s.shortYield?.chronicle.at(-1)).toEqual({ tick: 600, text: s.message });
 });

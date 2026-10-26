@@ -25,6 +25,7 @@ export class Continuity {
   generation = 0;
   heads: PersonaEnvelope[] = [];
   fileOrigin = false;
+  playPaused = false;
   busy = false;
   status =
     'You can choose separately whether this browser saves people between games and whether the lab records your play.';
@@ -136,6 +137,7 @@ export class Continuity {
     const generation = this.generation;
     const saved = JSON.parse(text);
     const state = importRun(saved.run);
+    if (state.shortYield) validateYieldSources(saved.sources);
     await this.validateRunEnvelopes(state);
     if (
       typeof saved.runId !== 'string' ||
@@ -166,11 +168,14 @@ export class Continuity {
       );
     if (generation !== this.generation)
       throw new Error('The game changed while the save was loading. Try loading it again.');
+    if (state.shortYield && typeof saved.playPaused !== 'boolean')
+      throw new Error('Missing saved pause boundary');
     this.state = state;
     this.runId = saved.runId;
     this.heads = heads;
     this.fileOrigin = saved.fileOrigin;
     this.sources = saved.sources;
+    this.playPaused = state.shortYield ? saved.playPaused : false;
     this.status =
       'The local chapter has loaded with the residents and saved resident records it used before. It has not loaded newer browser histories.';
     return state;
@@ -179,7 +184,9 @@ export class Continuity {
     this.invalidate();
     const generation = this.generation;
     const raw = JSON.parse(text);
-    const state = importRun(raw);
+    const { castSources: archiveSources, ...native } = raw;
+    const state = importRun(raw.schema === 7 ? native : raw);
+    if (raw.schema === 7) validateYieldSources(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];
     if (!Array.isArray(sources) || JSON.stringify(sources).length > maxArchive)
@@ -192,14 +199,16 @@ export class Continuity {
     this.heads = [];
     this.runId = crypto.randomUUID();
     this.sources = sources;
+    this.playPaused = false;
     this.fileOrigin = true;
     this.status =
       'This game was loaded from a file. It does not take control of any saved resident histories in the file. Your menu choice controls recording and automatic links between games.';
     return state;
   }
-  localSave(state: State) {
+  localSave(state: State, playPaused = false) {
     return JSON.stringify({
       run: exportRun(state),
+      ...(state.shortYield ? { playPaused } : {}),
       runId: this.runId,
       fileOrigin: this.fileOrigin,
       heads: this.heads,
@@ -242,7 +251,12 @@ export class Continuity {
       state = this.state,
       runId = this.runId;
     const task = this.operation.then(async () => {
-      const current = () => generation === this.generation && state === this.state && runId === this.runId;
+      if (state?.shortYield)
+        throw new Error(
+          'People from this yielded short day cannot move to another game yet. Download the run to keep this day.',
+        );
+      const current = () =>
+        !state?.shortYield && generation === this.generation && state === this.state && runId === this.runId;
       if (
         !state ||
         !current() ||
@@ -361,5 +375,41 @@ export function watchShelfPreference(invalidate: () => void, events: EventTarget
 
 /** Resume historical departure pauses through a replayed command, never by changing flags. */
 export function resumeForPlay(state: State) {
-  if (!state.ended && (state.chapterPaused || state.pauseRequested)) apply(state, { kind: 'resume-chapter' });
+  if (!state.shortYield && !state.ended && (state.chapterPaused || state.pauseRequested))
+    apply(state, { kind: 'resume-chapter' });
+}
+
+function validateYieldSources(raw: unknown): void {
+  const keys = (value: unknown, required: string[]) => {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      Object.keys(value).length !== required.length ||
+      required.some((k) => !Object.hasOwn(value, k))
+    )
+      throw new Error('Invalid source archive');
+  };
+  if (!Array.isArray(raw) || raw.length > 100 || JSON.stringify(raw).length > maxArchive)
+    throw new Error('Invalid source archive bounds');
+  for (const source of raw) {
+    keys(source, ['revision', 'source', 'snapshot']);
+    keys(source.source, ['game', 'build', 'engine', 'rules']);
+    if (
+      typeof source.revision !== 'string' ||
+      source.revision.length > 200 ||
+      Object.values(source.source).some((v) => typeof v !== 'string' || v.length > 500)
+    )
+      throw new Error('Invalid source provenance');
+    const safe = (value: unknown, depth = 0): void => {
+      if (depth > 100) throw new Error('Source nesting limit');
+      if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Invalid source number');
+      if (value && typeof value === 'object')
+        for (const [key, child] of Object.entries(value)) {
+          if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe source key');
+          safe(child, depth + 1);
+        }
+    };
+    safe(source.snapshot);
+  }
 }
