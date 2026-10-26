@@ -2,6 +2,7 @@ import { MAPS, type Place } from './paths.ts';
 import { dayClock } from './settlement.ts';
 import { SCENES } from './settlement-scenes.ts';
 import type { Command, State } from './sim.ts';
+import { observedEvents } from './work-observation.ts';
 
 /** Named keyboard/touch routes to every new host action; stable DOM survives simulation ticks.
  * Text includes outward speech, locations and dated reports only, never hidden Person scores.
@@ -12,7 +13,7 @@ export function mountSettlementControls(
   issue: (c: Command) => void,
   view: (p: Place) => void,
 ): void {
-  host.innerHTML = `<details><summary>Travel, conversations and the day</summary><p>Requests wait for the current act. A resident may choose a need or responsibility instead. Cancel task stops unfinished work. The storm comes at 20:00; the day ends tomorrow at 08:00.</p><p>Eight fresh local residents live this day. This edition does not load saved browser lives. Download the full day to keep it; the current finite departure route supports the ten-minute chapter.</p><p>Choose names for the people who will take part. View changes only the map you see. Travel asks people to walk there.</p><div class="day-controls">${Object.entries(
+  host.innerHTML = `<details><summary>Travel, conversations and the day</summary><p>Requests wait for the current act. A resident may choose a need or responsibility instead. Cancel task stops unfinished work. The storm comes at 20:00; the day ends tomorrow at 08:00.</p><p>Eight fresh local residents live this day. This edition does not load saved browser lives. Download the full day to keep it. Saving character histories for another game is supported only by the ten-minute chapter.</p><p>Choose names for the people who will take part. View changes only the map you see. Travel asks people to walk there.</p><div class="day-controls">${Object.entries(
     MAPS,
   )
     .map(
@@ -21,13 +22,13 @@ export function mountSettlementControls(
     )
     .join(
       '',
-    )}<button data-day="inspect">Inspect this map’s supplies</button><button data-day="story">Invite a private story</button><button data-day="talk">Invite two people to talk</button><button data-day="yield">Offer to yield the trolley route</button><button data-day="spar">Offer a voluntary practice bout</button><button data-day="cancel">Cancel selected tasks</button></div><details><summary>Fictional collaborations</summary><p>First invite a private story. A completed preparation is not a finished event. Nora and Sam must both agree to the grip trial. These are fictional scenes, not real messages or real user tests.</p><div class="day-controls">${Object.entries(
+    )}<button data-day="inspect">Ask selected people to inspect supplies</button><button data-day="story">Invite a private story</button><button data-day="talk">Invite two people to talk</button><button data-day="yield">Offer to yield the trolley route</button><button data-day="spar">Offer a voluntary practice bout</button><button data-day="cancel">Cancel selected tasks</button></div><details><summary>Fictional collaborations</summary><p>First invite a private story. A completed preparation is not a finished event. Nora and Sam must both agree to the grip trial. These are fictional scenes, not real messages or real user tests.</p><div class="day-controls">${Object.entries(
     SCENES,
   )
     .map(([id, s]) => `<button data-scene="${id}">${s.label}</button>`)
     .join(
       '',
-    )}</div></details><details><summary>Named destinations and building sites</summary><div class="day-controls"><button data-destination="hub">Walk to the workshop hub</button><button data-destination="passage">Walk to the passage</button><button data-destination="cache">Walk to this map’s cache</button><button data-site="storehouse">Place the storehouse at the east site</button><button data-site="house">Prepare the cabin at the south site</button></div></details><p>Prayer uses the framework’s fictional timetable. It is a quiet part of the day and is never scored here. People eat from the shared food and sleep through actual body time.</p><p id="day-location"></p><p id="day-dispute" role="status"></p><h3>Heard accounts</h3><p>These are dated accounts. They do not update the counted shared store. A resident may withhold a report.</p><ol id="day-accounts"></ol><h3>Observed events</h3><ol id="day-events"></ol></details>`;
+    )}</div></details><details><summary>Named destinations and building sites</summary><div class="day-controls"><button data-destination="hub">Walk to the workshop hub</button><button data-destination="passage">Walk to the passage</button><button data-destination="cache">Walk to this map’s cache</button><button data-site="storehouse">Place the storehouse at the east site</button><button data-site="house">Prepare the cabin at the south site</button></div></details><p>Prayer follows a fictional timetable. It is a quiet part of the day and is never scored here. People eat from the shared food and sleep through actual body time.</p><p id="day-location"></p><p id="day-dispute" role="status"></p><h3>Heard accounts</h3><p>These are dated accounts. An inspection asks a resident to check supplies; it does not instantly show the shared store. Supplies carried by a resident join the shared store only after delivery. An account does not update that store. A resident may withhold a report.</p><ol id="day-accounts"></ol><h3>Observed events</h3><ol id="day-events"></ol></details>`;
   for (const b of host.querySelectorAll<HTMLButtonElement>('[data-view]'))
     b.onclick = () => view(b.dataset.view as Place);
   for (const b of host.querySelectorAll<HTMLButtonElement>('[data-travel]'))
@@ -66,7 +67,7 @@ export function updateSettlementControls(host: HTMLElement, s: State): void {
   };
   text(
     'day-location',
-    `${dayClock(s)}. ${s.villagers.map((v) => `${v.name}: ${MAPS[w.actors[v.id]?.map ?? 'yard'].name}`).join('. ')}.`,
+    `${dayClock(s)}. Open Everyone now above to see locations, current work, carried supplies and retained requests.`,
   );
   text(
     'day-dispute',
@@ -97,8 +98,5 @@ export function updateSettlementControls(host: HTMLElement, s: State): void {
           `${Math.floor(a.at / 60)}:${String(a.at % 60).padStart(2, '0')} into this game, ${a.speaker} to ${a.listener}: ${a.text}`,
       ),
   );
-  list(
-    'day-events',
-    w.events.slice(-6).map((e) => e.text),
-  );
+  list('day-events', observedEvents(w.events));
 }

@@ -1,4 +1,8 @@
+import { DISCOVERIES } from './cast.ts';
 import { nextTask, personStatus, residentName } from './display.ts';
+import { MAPS } from './paths.ts';
+import type { Job } from './settlement.ts';
+import type { State, Villager } from './sim.ts';
 
 /** Presentation only. Observe host break clocks and visible task transitions.
  * No Person fields, recovery estimates, simulation writes or saved state.
@@ -14,6 +18,7 @@ type Worker = {
 };
 type Site = { id: string; kind: string };
 export class WorkObservation {
+  private dayBreaks = new Map<string, { id: string; until: number; task: string }>();
   private breaks = new Map<string, { until: number; task: string }>();
   private outcomes = new Map<string, string>();
 
@@ -36,6 +41,27 @@ export class WorkObservation {
     }
   }
 
+  observeState(s: State): void {
+    if (!s.settlement) {
+      this.observe(s.tick, s.villagers, s.buildings);
+      return;
+    }
+    for (const v of s.villagers) {
+      const run = s.settlement.actors[v.id]?.running;
+      const prior = this.dayBreaks.get(v.id);
+      if (prior && (!run || run.id !== prior.id || run.until !== prior.until || s.tick >= prior.until)) {
+        this.outcomes.set(
+          v.id,
+          `${residentName(v)}'s observed ${prior.task} ${s.tick >= prior.until ? 'ended at its planned time' : 'ended before its planned time'}. Current activity is shown above.`,
+        );
+        this.dayBreaks.delete(v.id);
+      }
+      if (run?.purpose === 'body' && ['rest', 'eat', 'drink', 'sleep'].includes(run.action)) {
+        this.dayBreaks.set(v.id, { id: run.id, until: run.until, task: v.task });
+      }
+    }
+  }
+
   private current(v: Worker, buildings: readonly Site[]): string {
     if (v.order && ['working', 'working under protest', 'moving'].includes(v.status)) {
       const task = nextTask(v.order.target, buildings);
@@ -46,9 +72,132 @@ export class WorkObservation {
     return personStatus(v.status, buildings, residentName(v));
   }
 
+  summary(s: State, v: Villager, details = true): string {
+    const aw = s.settlement?.actors[v.id];
+    const recovery = this.outcomes.get(v.id)
+      ? `${this.outcomes.get(v.id)} This does not establish how rested the person feels.`
+      : 'Recovery before this view was opened was not observed.';
+    if (!aw) {
+      const request = v.order
+        ? `Retained request: ${nextTask(v.order.target, s.buildings)}.`
+        : 'No work request is retained.';
+      const now =
+        v.recoveryUntil > s.tick
+          ? `Now: ${residentName(v)} is ${v.task.replace(' / ', ' and ')}. This break has ${v.recoveryUntil - s.tick} game seconds left.`
+          : `Now: ${residentName(v)} ${this.current(v, s.buildings)}`;
+      return `${now} ${request}${details ? ` ${recovery} Last words: “${v.says || 'No words recorded.'}”` : ''}`;
+    }
+    const running = aw.running;
+    const now = running
+      ? `Now: ${residentName(v)} is ${v.task}. This act is planned for ${Math.max(0, running.until - s.tick)} more game seconds.`
+      : `Now: ${residentName(v)} ${personStatus(v.status, s.buildings, residentName(v))}`;
+    const request = aw.job
+      ? `${aw.pendingRequest ? 'Request waiting for the next action choice' : 'Retained request'}: ${jobText(aw.job)}. ${running?.purpose === 'body' ? 'The current personal activity is separate from this request.' : ''}`
+      : 'No work request is retained.';
+    const carrying = aw.carried
+      ? `Carrying: about ${Math.floor(aw.carried.amount * 10) / 10} ${material(aw.carried.resource)}, not yet in the shared store.`
+      : 'No supplies are being carried.';
+    const route =
+      aw.job?.kind === 'gather' && s.settlement?.dispute
+        ? 'The shared trolley route is disputed; gathering waits for an accepted yield.'
+        : '';
+    return `${now} Location: ${MAPS[aw.map].name}. ${request} ${carrying} ${route}${details ? ` Last words: “${v.says || 'No words recorded.'}” ${recovery}` : ''}`;
+  }
+
   line(v: Worker, tick: number, buildings: readonly Site[]): string {
     const remaining =
       v.recoveryUntil > tick ? ` ${v.recoveryUntil - tick} seconds remain in this break.` : '';
     return `Now: ${residentName(v)} ${this.current(v, buildings)}${remaining}${this.outcomes.has(v.id) ? ` ${this.outcomes.get(v.id)}` : ''}`;
   }
+}
+
+function material(resource: string): string {
+  return resource === 'wood' ? 'prepared boards' : resource === 'stone' ? 'ballast bags' : 'meals';
+}
+function jobText(j: Job): string {
+  if (j.kind === 'gather') return `collect and return ${material(j.target)}`;
+  if (j.kind === 'build') return 'work at the building site';
+  if (j.kind === 'map' || j.kind === 'move') return `walk to ${MAPS[j.map].name}`;
+  return {
+    inspect: 'inspect the supplies',
+    story: 'consider sharing a private story',
+    talk: 'consider a conversation with another resident',
+    yield: 'consider yielding the trolley route',
+    spar: 'consider a voluntary practice bout',
+    scene: 'consider the offered collaboration',
+  }[j.kind];
+}
+
+/** Authored host prerequisites only. Eligibility never promises a willing response. */
+export function invitationReadiness(
+  s: State,
+  ids: readonly string[],
+  action: 'listen' | 'collaborate',
+): string {
+  const people = s.villagers.filter((v) => ids.includes(v.id));
+  if (people.length !== 1) return 'Select one person to see the conversation requirements.';
+  const v = people[0];
+  if (!v) return '';
+  if (!s.settlement && !DISCOVERIES[Number(v.id.slice(1)) - 1])
+    return 'This helper has no authored private conversation in this chapter.';
+  if (s.ended) return 'This day has ended.';
+  if (s.pauseRequested || s.chapterPaused) return 'Resume this game before making a request.';
+  if (!s.settlement && s.tick < v.availableAt)
+    return `This resident has a usual responsibility for ${v.availableAt - s.tick} more game seconds.`;
+  if (s.tick < 60)
+    return `Wait ${60 - s.tick} game seconds until the clock reaches 1:00. No shared location is required.`;
+  if (s.settlement)
+    return 'A private story can be requested now. It waits for the current act; the resident may still decline. Later collaborations have their own time, place and material requirements.';
+  if (v.discovery === 2)
+    return 'The small collaboration has already been shown. This chapter has no further conversation step.';
+  if (action === 'collaborate' && v.discovery === 0)
+    return 'Invite a conversation first. The small collaboration follows that conversation.';
+  if (!v.invitedBreak && v.recoveryUntil > s.tick)
+    return 'This break was not offered by you. Offer this person a break before inviting the conversation or collaboration.';
+  if (!v.invitedBreak || v.recoveryUntil <= s.tick)
+    return 'Offer this person a break, then invite the conversation or collaboration during that break.';
+  if (s.tick - v.breakStarted < 5)
+    return `Wait ${5 - (s.tick - v.breakStarted)} game seconds during this break before asking.`;
+  return `The time and break requirements are met; ${v.recoveryUntil - s.tick} game seconds remain in this break. The resident may still decline.${action === 'listen' && v.discovery === 1 ? ' The private conversation has already been heard; you can offer the small collaboration.' : ''}`;
+}
+
+/** Current world goal; stored warning/event bytes remain untouched. */
+export function milestone(s: State): string {
+  const store = s.buildings.find((b) => b.kind === 'storehouse');
+  const storm = s.settlement ? '20:00' : '10:00';
+  if (s.ended || s.settlement?.storm)
+    return s.won
+      ? 'The storm arrived. The supplies stayed dry.'
+      : 'The storm arrived. The supplies got soaked.';
+  if (store?.complete)
+    return `The storehouse is ready. The storm still arrives at ${storm}. Preparation is complete; the storm outcome is still ahead. Continue to watch it, or open the pause menu to save this place and stop here.`;
+  return `Finish the storehouse before the storm at ${storm}.${store ? ` It is ${Math.floor(store.progress * 100)}% complete.` : ' It needs 180 boards and 120 ballast bags.'}`;
+}
+
+export function currentNotice(s: State): string {
+  if (
+    s.buildings.some((b) => b.kind === 'storehouse' && b.complete) &&
+    /Finish the storehouse/.test(s.message)
+  )
+    return milestone(s);
+  return s.message;
+}
+
+/** Adjacent repetition is grouped only in the view; the source log is never edited. */
+export function observedEvents(events: readonly { at: number; text: string }[]): string[] {
+  const groups: { first: number; last: number; text: string; count: number }[] = [];
+  for (const event of events) {
+    const prior = groups.at(-1);
+    if (prior?.text === event.text) {
+      prior.last = event.at;
+      prior.count++;
+    } else groups.push({ first: event.at, last: event.at, text: event.text, count: 1 });
+  }
+  const clock = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  return groups
+    .slice(-6)
+    .map(
+      (g) =>
+        `${clock(g.first)}${g.count > 1 ? `–${clock(g.last)} (${g.count} times)` : ''} into this game: ${g.text}`,
+    );
 }

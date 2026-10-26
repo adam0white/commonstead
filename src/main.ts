@@ -17,7 +17,7 @@ import { eventText, residentName } from './display.ts';
 import { draw } from './draw.ts';
 import { prefillFeedbackChoice } from './feedback.ts';
 import { apply, type Command, exportRun, NODES, type State, step } from './sim.ts';
-import { WorkObservation } from './work-observation.ts';
+import { currentNotice, invitationReadiness, milestone, WorkObservation } from './work-observation.ts';
 
 const isLab = new URLSearchParams(location.search).get('lab') === '1';
 const root = document.getElementById('app') as HTMLElement;
@@ -87,9 +87,9 @@ function download() {
 }
 function issue(cmd: Command) {
   if (!state || state.ended || paused) return;
-  workObservation.observe(state.tick, state.villagers, state.buildings);
+  workObservation.observeState(state);
   apply(state, cmd);
-  workObservation.observe(state.tick, state.villagers, state.buildings);
+  workObservation.observeState(state);
   save();
   update();
 }
@@ -208,7 +208,7 @@ function title() {
 function start(s: State) {
   resumeForPlay(s);
   workObservation = new WorkObservation();
-  workObservation.observe(s.tick, s.villagers, s.buildings);
+  workObservation.observeState(s);
   unitKey = '';
   residentKey = '';
   actionKey = '';
@@ -220,7 +220,7 @@ function start(s: State) {
   carry = 0;
   last = performance.now();
   lab.screen('play');
-  root.innerHTML = `<main class="game ${s.settlement ? 'settlement-day' : ''}">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="The map shows the workshop yard. You can use the person and resource buttons below to give orders."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry.</strong><p id="deadline" class="deadline"></p><p class="details">Finish a storehouse by 10:00. Without it, the supplies get soaked. Choose a cabin site and prepare it with 40 boards to make room for two more people.</p></section><section class="sheet"><h2 id="selection">Select a person or the workshop hub.</h2><p class="small selection-help">Names add or remove people. Map taps replace the selection. Drag a box to select a group.</p><div id="units" class="unit-list" aria-label="Add or remove selected people"></div><p id="task" class="task"></p><p id="said" class="speech"></p><details class="work-help"><summary>Dividing work and adding builders</summary><p class="small">Different groups can collect boards and ballast at the same time. Travel takes time. A person collecting supplies cannot assemble the storehouse at the same time. Residents may choose their own breaks.</p><p class="small">Select people, choose Move / add builders, then tap the unfinished storehouse to add them to assembly.</p></details><div id="resident"></div><div id="settlement-controls"></div></section><div class="notice" id="notice" role="status"></div><section class="actions" id="actions"></section></aside></div></main>`;
+  root.innerHTML = `<main class="game ${s.settlement ? 'settlement-day' : ''}">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="The map shows the workshop yard. You can use the person and resource buttons below to give orders."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry.</strong><p id="deadline" class="deadline"></p><p class="details">A cabin prepared with 40 boards makes room for two more people. Invite helpers at the workshop hub.</p></section><section class="sheet"><h2 id="selection">Select a person or the workshop hub.</h2><p class="small selection-help">Names add or remove people. Map taps replace the selection. Drag a box to select a group.</p><div id="units" class="unit-list" aria-label="Add or remove selected people"></div><details class="work-overview"><summary>Everyone now</summary><p class="small">Current activity and retained requests are separate. Last words may describe an earlier event. A finished break does not guarantee enough rest. A reason for an earlier choice may not have been recorded.</p><ol id="everyone-now"></ol></details><p id="task" class="task"></p><p id="said" class="speech"></p><details class="work-help"><summary>Dividing work and adding builders</summary><p class="small">Different groups can collect boards and ballast at the same time. Travel takes time. A person collecting supplies cannot assemble the storehouse at the same time. Residents may choose their own breaks.</p><p class="small">Select people, choose Move / add builders, then tap the unfinished storehouse to add them to assembly.</p></details><div id="resident"></div><div id="settlement-controls"></div></section><div class="notice" id="notice" role="status"></div><section class="actions" id="actions"></section></aside></div></main>`;
   canvas = document.getElementById('map') as HTMLCanvasElement;
   shellBindings();
   const dayHost = document.getElementById('settlement-controls');
@@ -242,7 +242,7 @@ function start(s: State) {
     const objective = document.querySelector('.objective .details');
     if (objective)
       objective.textContent =
-        'Finish the storehouse before the storm at 20:00. Remote supplies must be carried back. The day continues until tomorrow at 08:00.';
+        'Remote supplies must be carried back. The day continues until tomorrow at 08:00.';
   }
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-speed]'))
     b.onclick = () => {
@@ -270,8 +270,8 @@ function update() {
   put(
     'deadline',
     s.settlement
-      ? `${dayClock(s)}. The storm ${s.settlement.storm ? 'arrived' : 'arrives'} at 20:00. ${store?.complete ? 'The storehouse is finished.' : store ? `The storehouse is ${Math.floor(store.progress * 100)}% complete.` : 'The storehouse needs 180 boards and 120 ballast bags.'} View: ${MAPS[viewedMap].name}.`
-      : `The time is ${t}. The storm arrives at 10:00. ${store?.complete ? 'The storehouse is ready.' : store ? `The storehouse is ${Math.floor(store.progress * 100)}% complete.` : 'The storehouse costs 180 boards and 120 ballast bags.'}`,
+      ? `${dayClock(s)}. ${milestone(s)} View: ${MAPS[viewedMap].name}.`
+      : `The time is ${t}. ${milestone(s)}`,
   );
   const dayHost = document.getElementById('settlement-controls');
   if (s.settlement && dayHost) updateSettlementControls(dayHost, s);
@@ -292,7 +292,20 @@ function update() {
         ? `Selected: ${people.map((v) => residentName(v)).join(', ')}`
         : 'Select people, then choose work.',
   );
-  put('task', people.map((v) => workObservation.line(v, s.tick, s.buildings)).join(' '));
+  put('task', people.map((v) => workObservation.summary(s, v, people.length === 1)).join(' '));
+  const overview = document.getElementById('everyone-now');
+  if (overview) {
+    for (const v of s.villagers) {
+      let row = document.getElementById(`worker-now-${v.id}`);
+      if (!row) {
+        row = document.createElement('li');
+        row.id = `worker-now-${v.id}`;
+        overview.append(row);
+      }
+      const line = workObservation.summary(s, v, false);
+      if (row.textContent !== line) row.textContent = line;
+    }
+  }
   const speaker = people.find((v) => v.says);
   put(
     'said',
@@ -306,7 +319,7 @@ function update() {
       ? `Selected: ${people.map((v) => residentName(v)).join(', ') || 'no people'}. ${placementFeedback ? `${placementFeedback} ` : ''}Choose open ground for the ${placing === 'house' ? 'guest cabin (40 boards)' : 'storehouse (180 boards and 120 ballast bags)'}. ${s.settlement ? 'The game checks the site and available residents when you tap.' : 'Dots mark open centres. The outline shows the candidate site and spacing. The game also checks selected people, busy residents, materials and an existing storehouse.'} No materials are spent on a refused order.`
       : moveMode
         ? 'Tap the unfinished storehouse to add builders, or tap ground to move.'
-        : `Last order or event: ${eventText(s.message)}`,
+        : `Last order or event: ${eventText(currentNotice(s).startsWith('Spend a minute together.') ? invitationReadiness(s, selected, 'listen') : currentNotice(s))}`,
   );
   document.querySelector('.game')?.classList.toggle('placing', !!placing);
   const resident = document.getElementById('resident');
@@ -319,7 +332,7 @@ function update() {
     resident.dataset.person = person?.id ?? '';
     residentKey = nextResidentKey;
     resident.innerHTML = person
-      ? `<p class="small">${esc(residentName(person))}${entry ? ` is ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)} years old.` : ' is helping at the workshop today.'} ${esc(person.role)} ${esc(person.assignment)}</p>${person.lifeLine ? `<p class="small">${esc(person.lifeLine)}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Use a trolley and choose a comfortable load of prepared materials. Do not do electrical work, change the building structure or use powered tools.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">${s.settlement ? 'After one minute of play at Steady, you may invite a private story. Pauses do not count. No shared location or earlier conversation is required. The resident may choose to keep it private. Use Fictional collaborations below for later events.' : 'After the game clock reaches 1:00, offer this person a break. Wait five game seconds during that break, then choose Invite conversation. You do not need to stand together or finish a conversation first. Talking is optional.'}</p><button id="listen">${s.settlement ? 'Invite a private story' : 'Invite conversation'}</button>${s.settlement ? '' : `<button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button>`}</details>`
+      ? `<p class="small">${esc(residentName(person))}${entry ? ` is ${Math.floor((person.person.now - person.person.life.bornAt) / 525600)} years old.` : ' is helping at the workshop today.'} ${esc(person.role)} ${esc(person.assignment)}</p>${person.lifeLine ? `<p class="small">${esc(person.lifeLine)}</p>` : ''}<details ${open ? 'open' : ''}><summary>About this resident</summary><p class="small">${esc(person.family)}</p><p class="small">Use a trolley and choose a comfortable load of prepared materials. Do not do electrical work, change the building structure or use powered tools.</p>${person.discovery && scene ? `<p>${esc(scene[person.discovery === 2 ? 1 : 0])}</p>` : ''}<p class="small">${s.settlement ? 'After one minute of play at Steady, you may invite a private story. Pauses do not count. No shared location or earlier conversation is required. The resident may choose to keep it private. Use Fictional collaborations below for later events.' : 'Conversation is optional. The current requirements are below.'}</p><p class="small" id="conversation-readiness"></p><p class="small" id="collaboration-readiness"></p><button id="listen">${s.settlement ? 'Invite a private story' : 'Invite conversation'}</button>${s.settlement ? '' : `<button id="collaborate" ${person.discovery !== 1 ? 'disabled' : ''}>Offer a small collaboration</button>`}</details>`
       : '';
     bind('listen', () =>
       issue(
@@ -330,6 +343,8 @@ function update() {
     );
     bind('collaborate', () => issue({ kind: 'order', ids: selected, target: 'collaborate' }));
   }
+  put('conversation-readiness', invitationReadiness(s, selected, 'listen'));
+  put('collaboration-readiness', s.settlement ? '' : invitationReadiness(s, selected, 'collaborate'));
   const units = document.getElementById('units');
   const nextUnitKey = JSON.stringify([s.villagers.map((v) => v.id), selected]);
   if (units && nextUnitKey !== unitKey) {
@@ -810,7 +825,7 @@ function frame(now: number) {
     carry += elapsed * speed;
     while (carry >= 1 && !state.ended && !state.chapterPaused) {
       step(state);
-      workObservation.observe(state.tick, state.villagers, state.buildings);
+      workObservation.observeState(state);
       advanced = true;
       carry--;
       if (state.tick % 10 === 0 || state.chapterPaused) save();
