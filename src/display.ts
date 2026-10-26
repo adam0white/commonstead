@@ -142,3 +142,16 @@ export function residentName(person: { id: string; name: string }): string {
     ? (names[helperIndex] ?? 'A local helper')
     : person.name;
 }
+
+/** Explain elapsed-time gates at display time; recorded messages stay byte-exact. */
+export function eventText(message: string): string {
+  return message
+    .replace(
+      'Spend a minute together. Then offer a break and wait five seconds.',
+      'After the game clock reaches 1:00, offer a break and wait five game seconds during that break. No shared location or earlier conversation is required.',
+    )
+    .replace(
+      'Spend a minute together before inviting a private story.',
+      'After one minute of play at Steady, you may invite a private story. Pauses do not count. No shared location or earlier conversation is required.',
+    );
+}

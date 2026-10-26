@@ -685,7 +685,7 @@ small,
 .verdicts button,
 .feedback-actions button,
 .map-caption {
-  font-size: clamp(15px, 1.1vw + 9px, 21px);
+  font-size: 1.235rem;
   line-height: 1.4;
 }
 .layout {
@@ -740,7 +740,7 @@ small,
     display: none;
   }
   .objective strong {
-    font-size: 16px;
+    font-size: 0.94rem;
   }
   .objective .speed {
     position: static;
@@ -777,7 +777,7 @@ small,
 
 /* Keep the deadline outside the scrolling resident sheet at every width. */
 .game {
-  grid-template-rows: 44px auto minmax(0, 1fr);
+  grid-template-rows: minmax(44px, auto) auto minmax(0, 1fr);
 }
 .side {
   display: grid;
@@ -870,5 +870,114 @@ a:focus-visible {
   }
   button {
     border-width: 2px;
+  }
+}
+
+/* R1: selection stays explicit; placement keeps ground and counted costs together. */
+/* Scale the whole font with the root; keep the enlarged side content scrollable. */
+.side {
+  grid-template-rows: auto minmax(150px, 1fr) auto auto;
+  overflow: auto;
+}
+.notice {
+  min-height: 1.6em;
+}
+.map-wrap .speed {
+  width: min(540px, calc(100% - 16px));
+}
+.actions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+}
+.actions .wide {
+  grid-column: 1 / -1;
+}
+.selection-help,
+.work-help {
+  margin-block: 8px;
+}
+.unit-list button[aria-pressed="true"] {
+  font-weight: bold;
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.sheet h2 {
+  display: block;
+}
+.game.placing .sheet,
+.game.placing .map-caption,
+.game.placing .speed,
+.game.placing .objective strong,
+.game.placing .objective .details {
+  display: none;
+}
+.game.placing .side {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.game.placing .notice {
+  max-height: none;
+  height: max-content;
+  overflow: visible;
+}
+@media (max-width: 760px) {
+  .small,
+  small,
+  .panel p,
+  .panel label,
+  .status,
+  .task,
+  .notice,
+  .objective p,
+  .speed button,
+  .unit-list button,
+  .actions button,
+  .verdicts button,
+  .feedback-actions button,
+  .map-caption {
+    font-size: 1.021rem;
+  }
+  .layout {
+    grid-template-rows: 190px minmax(0, 1fr);
+  }
+  .game.placing .layout {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 42%);
+  }
+  .game.placing .side {
+    grid-template-rows: auto auto auto;
+    overflow: auto;
+  }
+  .game.placing .actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--paper, #f3ecdd);
+  }
+  .game.placing .notice {
+    font-size: 0.88rem;
+  }
+  .map-caption {
+    max-width: calc(100% - 12px);
+  }
+  .actions button {
+    overflow-wrap: anywhere;
+  }
+  .sheet h2 {
+    font-size: 1rem;
+  }
+}
+@media (max-width: 760px) {
+  /* Names stay on the map; the scrolling sheet starts with the current task. */
+  .sheet {
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet #task {
+    order: -3;
+  }
+  .sheet #said {
+    order: -2;
+  }
+  .sheet #selection {
+    display: none;
+  }
+  .sheet > * {
+    flex-shrink: 0;
   }
 }
