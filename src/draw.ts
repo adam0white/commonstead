@@ -1,4 +1,5 @@
 import { residentName } from './display.ts';
+import { MAPS, type Place } from './paths.ts';
 import { NODES, type State } from './sim.ts';
 export interface PointerMark {
   x: number;
@@ -13,6 +14,7 @@ export function draw(
   selected: string[],
   mark: PointerMark | null,
   placing: string,
+  viewedMap: Place = 'yard',
 ) {
   const box = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -51,7 +53,19 @@ export function draw(
   c.lineTo(560, 0);
   c.bezierCurveTo(600, 450, 500, 450, 440, 700);
   c.fill();
-  for (const node of NODES) {
+  if (s.settlement) {
+    for (const wall of MAPS[viewedMap].walls) {
+      c.fillStyle = '#6e665a';
+      c.fillRect(wall.x, wall.y, wall.w, wall.h);
+      c.strokeStyle = '#23201b';
+      c.strokeRect(wall.x, wall.y, wall.w, wall.h);
+    }
+    c.fillStyle = '#23201b';
+    c.font = '24px Georgia';
+    c.fillText(MAPS[viewedMap].name, 30, 40);
+    c.fillText('Passage', 35, 625);
+  }
+  for (const node of s.settlement ? [{ id: 'cache', kind: 'wood' as const, x: 775, y: 475 }] : NODES) {
     c.save();
     c.translate(node.x, node.y);
     c.strokeStyle = '#4f5b3b';
@@ -70,13 +84,19 @@ export function draw(
     c.textAlign = 'center';
     if (scale >= 0.4)
       c.fillText(
-        node.kind === 'food' ? 'Meal crates' : node.kind === 'wood' ? 'Prepared boards' : 'Ballast bags',
+        s.settlement
+          ? 'Supply cache'
+          : node.kind === 'food'
+            ? 'Meal crates'
+            : node.kind === 'wood'
+              ? 'Prepared boards'
+              : 'Ballast bags',
         0,
         87,
       );
     c.restore();
   }
-  for (const b of s.buildings) {
+  for (const b of s.settlement && viewedMap !== 'yard' ? [] : s.buildings) {
     c.save();
     c.translate(b.x, b.y);
     if (selected.includes(b.id)) {
@@ -117,6 +137,7 @@ export function draw(
   }
   const colors = ['#3d5a73', '#865c46', '#4f6b3a', '#8a7152', '#6b617f'];
   for (const [i, v] of s.villagers.entries()) {
+    if (s.settlement && s.settlement.actors[v.id]?.map !== viewedMap) continue;
     c.save();
     c.translate(v.x, v.y);
     if (selected.includes(v.id)) {

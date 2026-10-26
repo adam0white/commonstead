@@ -12,8 +12,8 @@ Owner Decision desk 2026-10-21 F-418 lifts direct control, real time and numeric
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0–10 seconds   | Workshop hub, eight canonical residents, meal crates, prepared boards and small ballast bags. Meals 100, boards 80, ballast 0; population 8/10. Goal: finish a storehouse before the storm at 10:00. Tap or click a person; selection rings and a named order panel appear. |
 | 10–25          | Box-select several villagers; right-click prepared boards, or long-press them on touch. A visible order marker and label confirm the destination. Villagers move and gather; stock increases.                                                                               |
-| 25–40          | Choose House (40 boards), then place it on open ground. Selected villagers walk there and construct it. Choose who stays on food.                                                                                                                                           |
-| 40–60          | Select the town centre and invite an episode helper (35 meal units), subject to housing. Put workers on stone for the storehouse (180 boards, 120 ballast bags). All healthy workers obey promptly. No compulsory tutorial dialog.                                          |
+| 25–40          | Choose Prepare cabin (40 boards), then place it on open ground. Selected villagers walk there and prepare it. Choose who stays on Meals.                                                                                                                                    |
+| 40–60          | Select the workshop hub and invite a local helper (35 meal units), subject to housing. Assign workers to Ballast bags for the storehouse (180 boards, 120 ballast bags). All healthy workers obey promptly. No compulsory tutorial dialog.                                  |
 
 Steady is one simulation second per wall second. Slow is half speed, Fast is four times. No hidden first-minute time compression. Bodies start rested; construction and gather work accumulate HF exertion. Movement stays immediate, and pathfinding is deliberately simple on an unobstructed map.
 
@@ -46,9 +46,9 @@ Grammar exception: an RTS needs a larger map than the 120–260px scene guidance
 - 2026-10-25, SDK adoption: immutable client 0.4.11 / kit 0.5.12 from signed SDK source 569bfeed8042607e3b0357277e280e8bc1af01f5 adds quiet “I'm stopping” and “I'm confused” choices to Feedback. Selection fills ordinary note text; Submit retains the existing recording and optional-run controls. The npm-publication request is EXCLUDED by human-framework/AGENTS.md: “The lab client and kit stay release artifacts.” This closes only the SDK adoption slice; the larger proposals below remain deferred.
 
 - 2026-10-30, owner review: evaluate the first minute against genre-player reports; owner decides acceptance or revision.
-- 2026-11-06, proposal only: 30-minute settlement, witnessed reports and information loss. Not part of this vertical slice.
-- 2026-11-06, proposal only: richer conflict, prayer-time cadence across a full day, explicit conversations, saves migrated across versions and accessibility beyond named unit controls.
-- 2026-11-13, proposal only: obstacles and pathfinding, combat, additional maps. No server infrastructure planned.
+- 2026-10-26, Widened engineering candidate: the explicit `settlement-day/1` option implements the thirty-minute settlement, witnessed reports, information loss, shared-route conflict, full-day quiet prayer cadence, actual conversations, named accessible travel/building controls, obstacles/pathfinding, voluntary nonlethal practice combat, and two additional maps. Review and technical delivery are pending. [The bounded design and clock](settlement-plan.md) describe the authored scale. Default ten-minute raw simulation and full exports retain exact continuation; the optional day has deterministic full and compact exports. This supersedes the former “proposal only” dates for these engineering requests.
+- 2026-10-26, cross-version migration is excluded by human-framework/AGENTS.md Engineering: “Old game-save compatibility is waived for now; current-version game exports replay deterministically.” Existing loaders remain; this is not permission to break current replay. No server infrastructure is added.
+- 2026-11-03, input remains: actual owner acceptance and actual human accessibility feedback. Fictional residents do not supply these verdicts.
 
 ## Review resolutions (2026-10-23)
 
@@ -72,7 +72,7 @@ This changes done for the bounded cast increment: all eight allocated residents 
 Nora is a fictional repair designer and Sam a fictional resident game playtester. Neither supplies actual lab review or owner acceptance evidence. Fresh fiction explicitly arranges Dai’s dam cover and Nerys’s inn cover before their visits. Continuing branches must validate travel and obligations; biography alone cannot clear a source obligation.
 
 - 2026-11-03, owner review: assess the canonical edition after technical delivery.
-- 2026-11-06, deferred fiction: actual prior-publication corrections, family visits, telescope evenings, correspondence and a completed accessibility trial. Current workshop scenes make narrower preparations; they do not claim these outcomes.
+- 2026-10-26, Widened fiction candidate: `settlement-day/1` adds actual timed correction of Sam’s old fictional report and Oskar’s old fictional caption, paid family outings that complete only after return, Nerys’s evening telescope use with weather, Sevim’s posted fictional correspondence, and Nora/Sam’s independently assented grip trial with consumed materials and a stored physical result. The ten-minute edition still makes only its original narrower preparations. Review and technical delivery are pending; these scenes are not real outreach, real user trials, forgiveness, or lab review.
 
 ## Simplify owner direction — 2026-10-24
 

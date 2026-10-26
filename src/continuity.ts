@@ -12,6 +12,7 @@ import {
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
 import { admitResident, type Chapter, DIALECT, RULES, residentTransfer } from './passport.ts';
+import type { SettlementConfig } from './settlement.ts';
 import { apply, createGame, exportRun, importRun, type State } from './sim.ts';
 
 type Shelf = ReturnType<typeof personaChannel>;
@@ -59,7 +60,8 @@ export class Continuity {
     this.heads = [];
     this.sources = [];
   }
-  async fresh(seed: number, localOnly = false) {
+  async fresh(seed: number, localOnly = false, config?: SettlementConfig) {
+    if (config) localOnly = true;
     if (this.busy)
       throw new Error('A chapter is already being prepared. Wait for it to finish before starting another.');
     this.busy = true;
@@ -104,7 +106,7 @@ export class Continuity {
         throw new Error(
           'The game changed while the chapter was being prepared. No new chapter started. Try starting it again.',
         );
-      const state = createGame(seed, chapter);
+      const state = createGame(seed, chapter, config);
       this.state = state;
       this.runId = crypto.randomUUID();
       this.sources = [];
@@ -248,6 +250,10 @@ export class Continuity {
       )
         throw new Error(
           'Play the chapter first. Then pause it and wait for current actions to finish before saving a person.',
+        );
+      if (state.settlement)
+        throw new Error(
+          'This settlement day has its own full-day calendar. The current finite people-between-games adapter does not support it. Download the run to keep these residents; legacy chapters retain their existing departure route.',
         );
       await this.shelf.ready;
       if (!current() || !this.shelf.enabled)

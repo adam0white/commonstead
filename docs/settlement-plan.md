@@ -1,0 +1,40 @@
+# Settlement day implementation plan
+
+Goal: complete current Commonstead Deferred engineering in one opt-in host edition. Default Commonstead remains the exact ten-minute simulation. Owner accepts after playing.
+
+Architecture: `settlement.ts` owns the authored day's places, finite caches, expeditions, scenes and cast encounters. `paths.ts` owns bounded grid geometry only. HF3.0.0 owns each person's body, beliefs, decisions, relationships and calendar. `sim.ts` selects the edition without adding fields to legacy state. `main.ts` supplies ordinary controls and accessible destination choices. Immutable SDK11/12 stays unchanged.
+
+## Clock and physical scale
+
+Settlement day runs1800 simulation seconds at Steady. It starts at08:00 and ends at08:00 the next day. Each tick advances actual HF time by0.8minutes: exactly1440minutes, including night. Movement is authored compressed geography: one map unit represents about0.4metres, movement at30map units/tick is12metres per48authored seconds. Route changes require actual walking to a marked passage. Remote outings spend at least24ticks each way; no instant travel, gifts or completed visit before return. The storm arrives at settlement tick900 (20:00). The storehouse must actually be finished then; the game continues through the night. Caches deplete and central stocks are exact physical deposits. No stock is awarded from merely hearing a report. The shared store also starts with four sheets of paper; corrections and correspondence consume one sheet each, not a prepared board.
+
+People choose from actual offered work, rest, eating, drinking, sleeping and current calendar actions. Idle people still decide and advance. Meals reserve central food at begin. Sleep uses HF mode:sleep; no hand-written fatigue repair. Quiet prayer uses released prayerWindows with the framework's explicitly fictional DEFAULT_PRAYER_TIMES, not a claimed Alder Quay timetable. Research source: human-framework/research/decisions.md and prayer-times-sources.md. No spiritual score. Each actual ordinary new-edition request is resolved once through HF at strength0.35 without insist. Only the labelled Insist action queues strength1 at the next action boundary. Autonomous continuation supplies no further commander advice. Actual voluntary assent can establish a bounded HF appointment for the activity; interrupted travel does not complete that appointment. Physical delivery and other world outcomes remain required. The edition enables HF’s existing2.8 fullness API so full people do not continually consume free drinks. The approved fresh native cast is pinned before this edition begins; this edition does not silently replace an imported chapter or consult newer shelf heads. Unsupported finite departure is refused rather than relabelled legacy.
+
+## Scope choices
+
+Two additional maps are a quay and courtyard within the same day, with blocked geometry, finite material caches, a route through each map and named destinations. They share the eight-person roster; absent family and fictional publication recipients get no HF person or invented private responses. No helpers are added to this edition.
+
+Witnesses perceive only events at their own location. Reports come from real HF `converse`, delivered through `perceive`, including withholding and information loss. Public report text records who said what and when, not belief/confidence/deceit numbers. A player may inspect a cache through a real trip. Differing accounts never rewrite cache stock.
+
+Cast scenes build on discoveries earned through conversations: Sam/Oskar correct actual fictional old records; Sevim posts correspondence; family outings return after paid travel; Nerys brings the telescope to an evening courtyard gathering; Nora and Sam physically perform a grip trial with independent assent. A finished preparation is never shown as a completed scene. Materials and time are consumed before outcomes. As an authored scenario assumption, offscreen family visiting is arranged between12:00 and18:00; the resident must fit the actual visit in that window and return before completion. Background relatives have no local cognition, invented dialogue or claimed consent/forgiveness. The trial is fictional and supplies no actual accessibility acceptance or lab review.
+
+Conflict is a cast-only shared-route disagreement with talk, yield and optional sparring alternatives. Only an actual completed HF-chosen Yield opens the disputed route. Conversation or a practice bout never supplies assent to a sharing agreement. Combat is a bounded voluntary nonlethal practice encounter: each participant can refuse, withdraw or choose a competing bodily/duty action. No forced violence, new attackers, invented injury model or action graphics. HF public social events and completed acts determine the described outcome. Real difficulty remains: finite stock, divided time, refusal, sleep, missed duties and storm loss are possible.
+
+## Tasks and focused controls
+
+- [x] Preserve a frozen baseline at seeds7/42/418 before edits; compare full raw states and exports after integration.
+- [x] Add `paths.ts`: bounded deterministic BFS across visible obstacles. RED control: direct line crosses wall/unreachable destination spends stock. GREEN after host routing. No generic planning.
+- [x] Add opt-in config and full/compact replay validation. RED: requested1800ticks cannot replay. GREEN: exact full/compact state and input replay; edited config/tamper refuses; default keys unchanged.
+- [x] Add actual HF day loop with default prayer commitments, sleep mode, food reservations, current duties. RED: body now stops before full day and idle people never eat/sleep. GREEN headless full-day control prints actual time, completed body acts and duty statuses, without private values in UI.
+- [x] Add finite trips and witnessed reports. RED: no trip/report exists. GREEN control: stock moves only at completion, no remote perceptions, bilateral conversations can withhold/refuse, cache depletion invalidates old accounts without revising them.
+- [x] Add scenes/conflict. RED: preparations cannot reach actual correction/visit/telescope/post/trial/encounter outcome. GREEN timed controls with HF traces, material expenditure and actual co-location; cancellation has no reward.
+- [ ] Add ordinary edition selection, named maps/destinations/build sites, text observations and accessible styling. Keep focus across ticks; no hidden Person values. Builder checks at360×690/1280×800, maximum4screenshots. No production player/Feedback submission.
+- [ ] Update concept Deferred to engineering status, keeping genuine input rows dated. Scratch handoff for docsweb; no README/HANDOFF/AGENTS/about changes.
+- [ ] Run normal check:lane through shared lock. Freeze REVIEW_READY-commonstead with source manifest/diff/report. Wait for ONE director review/clearance; no self-launched reviewer and no commit before clearance.
+- [ ] Fix confirmed findings, final normal lane before signed commit, fetch/rebase/push main, exact green CI, remove source tree/branch, clean managed deployment, exact live clean stamp/assets and both viewports, remove own tabs/servers/deployment tree. Report owner acceptance separately.
+
+## Review focus
+
+Unknown/malformed edition cannot opt into world behavior. Cancelled or refused scene never completes. A listener receives no private belief/deceit fields. Current finite parent/CAS/recording/file-origin guards remain intact. Full day advances actual bodies and duties rather than simply printing later clock labels. Geometric routes never cut an obstacle corner or spend a trip's reward before return.
+
+No additional cross-version migration is built: HF AGENTS explicitly waives old game-save compatibility. Current legacy and opted-in replay remain deterministic. Owner review/actual human accessibility trial remain input2026-11-03. Generic demonstrated HF defects route director/all; no local physiology or cognition fork. Brain decision index is absent at~/code/brain/promoted/index.md; no decision-log claim is made.

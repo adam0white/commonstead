@@ -825,3 +825,50 @@ small,
   font-size: max(14px, 0.8rem) !important;
   padding: 4px 8px !important;
 }
+
+/* Settlement controls retain focus and provide complete named alternatives to map gestures. */
+.day-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-block: 10px;
+}
+.day-controls button {
+  min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#settlement-controls p,
+#settlement-controls li {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+#settlement-controls summary {
+  padding-block: 8px;
+  cursor: pointer;
+}
+button:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid #9c301e;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
+  }
+}
+@media (prefers-contrast: more) {
+  .speech,
+  .details,
+  .small,
+  .notice {
+    color: #17130e;
+  }
+  button {
+    border-width: 2px;
+  }
+}

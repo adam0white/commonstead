@@ -13,6 +13,13 @@ import { canonicalPersona } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
 import { admissionLine, assignmentText, nextTask, residentName } from './display.ts';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
+import {
+  applySettlement,
+  initSettlement,
+  type Settlement,
+  type SettlementConfig,
+  stepSettlement,
+} from './settlement.ts';
 
 export function taskLabel(target: string): string {
   return (
@@ -30,6 +37,7 @@ export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
   | { kind: 'order'; ids: string[]; target: string; x?: number; y?: number }
   | { kind: 'build'; ids: string[]; building: 'house' | 'storehouse'; x: number; y: number }
+  | { kind: 'settlement'; ids: string[]; action: string; target?: string }
   | { kind: 'train' }
   | { kind: 'pause-chapter' }
   | { kind: 'resume-chapter' };
@@ -65,6 +73,7 @@ export type Building = {
   complete: boolean;
 };
 export type State = {
+  settlement?: Settlement;
   chapter: Chapter | null;
   pauseRequested: boolean;
   chapterPaused: boolean;
@@ -126,7 +135,7 @@ function makeVillager(seed: number, n: number): Villager {
     status: 'waiting',
   };
 }
-export function createGame(seed: number, chapter?: Chapter): State {
+export function createGame(seed: number, chapter?: Chapter, config?: SettlementConfig): State {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error('Invalid seed');
   const villagers = Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1));
   if (chapter) {
@@ -151,7 +160,7 @@ export function createGame(seed: number, chapter?: Chapter): State {
       }
     }
   }
-  return {
+  const state: State = {
     seed,
     chapter: chapter ? structuredClone(chapter) : null,
     pauseRequested: false,
@@ -167,6 +176,8 @@ export function createGame(seed: number, chapter?: Chapter): State {
     ended: false,
     won: false,
   };
+  if (config) initSettlement(state, config);
+  return state;
 }
 function interrupt(v: Villager) {
   if (v.person.activity)
@@ -305,6 +316,11 @@ export function apply(s: State, c: Command): void {
   if (s.ended && c.kind !== 'pause-chapter') return;
   if (s.chapterPaused && c.kind !== 'resume-chapter') return;
   s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+  if (s.settlement) {
+    applySettlement(s, c);
+    return;
+  }
+  if (c.kind === 'settlement') return;
   if (c.kind === 'pause-chapter') {
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
@@ -478,6 +494,10 @@ export function apply(s: State, c: Command): void {
   s.message = `${selected.map((v) => residentName(v)).join(', ')} will ${c.target === 'move' ? 'move to the selected place' : `start ${nextTask(c.target, s.buildings)}`}.`;
 }
 export function step(s: State): void {
+  if (s.settlement) {
+    stepSettlement(s);
+    return;
+  }
   if (s.ended || s.chapterPaused) return;
   s.tick++;
   if (s.trainingUntil !== null && s.tick >= s.trainingUntil) {
@@ -601,10 +621,17 @@ export function stateHash(s: State): string {
   }
   return (h >>> 0).toString(16).padStart(8, '0');
 }
-export function replay(seed: number, inputs: Input[], tick: number, chapter?: Chapter): State {
-  if (!Number.isInteger(tick) || tick < 0 || tick > 600 || !Array.isArray(inputs) || inputs.length > 10000)
+export function replay(
+  seed: number,
+  inputs: Input[],
+  tick: number,
+  chapter?: Chapter,
+  config?: SettlementConfig,
+): State {
+  const limit = config ? 1800 : 600;
+  if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
-  const s = createGame(seed, chapter);
+  const s = createGame(seed, chapter, config);
   let previous = -1;
   for (const input of inputs) {
     if (
@@ -612,7 +639,7 @@ export function replay(seed: number, inputs: Input[], tick: number, chapter?: Ch
       input.tick < previous ||
       input.tick > tick ||
       input.tick < 0 ||
-      (input.tick >= 600 && input.command.kind !== 'pause-chapter')
+      (input.tick >= limit && input.command.kind !== 'pause-chapter')
     )
       throw new Error('Invalid replay input tick');
     while (s.tick < input.tick) {
@@ -630,7 +657,18 @@ export function replay(seed: number, inputs: Input[], tick: number, chapter?: Ch
   }
   return s;
 }
-export function exportRun(s: State): unknown {
+export function exportRun(s: State, compact = false): unknown {
+  if (s.settlement)
+    return {
+      schema: 4,
+      framework: '3.0.0',
+      config: structuredClone(s.settlement.config),
+      seed: s.seed,
+      tick: s.tick,
+      inputs: structuredClone(s.inputs),
+      hash: stateHash(s),
+      ...(compact ? { compact: true } : { state: structuredClone(s) }),
+    };
   return {
     schema: 3,
     framework: '3.0.0',
@@ -648,6 +686,8 @@ export function importRun(raw: unknown): State {
     const r = raw as {
       chapter: Chapter | null;
       schema: number;
+      config?: SettlementConfig;
+      compact?: boolean;
       framework: string;
       seed: number;
       tick: number;
@@ -655,9 +695,27 @@ export function importRun(raw: unknown): State {
       state: State;
       hash: string;
     };
-    if (r.schema !== 3 || r.framework !== '3.0.0') throw new Error('version');
-    const s = replay(r.seed, r.inputs, r.tick, r.chapter ?? undefined);
-    if (stable(s) !== stable(r.state) || stateHash(s) !== r.hash) throw new Error('state mismatch');
+    if (
+      r.framework !== '3.0.0' ||
+      ![3, 4].includes(r.schema) ||
+      (r.schema === 4 &&
+        (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== 'settlement-day/1')) ||
+      (r.schema === 3 && r.config)
+    )
+      throw new Error('version');
+    const s = replay(
+      r.seed,
+      r.inputs,
+      r.tick,
+      r.schema === 3 ? (r.chapter ?? undefined) : undefined,
+      r.schema === 4 ? r.config : undefined,
+    );
+    if (
+      (r.compact !== true && stable(s) !== stable(r.state)) ||
+      (r.compact === true && (r.schema !== 4 || r.state !== undefined)) ||
+      stateHash(s) !== r.hash
+    )
+      throw new Error('state mismatch');
     return s;
   } catch {
     throw new Error(

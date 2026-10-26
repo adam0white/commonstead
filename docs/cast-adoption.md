@@ -1,6 +1,6 @@
 # Canonical adoption — content phase
 
-The current canonical edition pins HF 3.0.0 / engine 2.23.0, immutable lab-client 0.4.10 and lab-kit 0.5.11. Technical release and browser journey receipts are kept in `~/code/.lab-scratch/cast/commonstead.md`. Owner acceptance follows playing; agent controls are not human acceptance.
+The current canonical edition pins HF 3.0.0 / engine 2.23.0, immutable lab-client 0.4.11 and lab-kit 0.5.12. Technical release and browser journey receipts are kept in `~/code/.lab-scratch/cast/commonstead.md`. Owner acceptance follows playing; agent controls are not human acceptance.
 
 ## Exhaustive foreground census
 
@@ -38,7 +38,7 @@ Ordinary path: spend one simulation minute together; select one person; offer Re
 | Sevim  | Misjudged a pupil who cared for a sick parent                  | Asks a learner before revising an equipment card; drafts a private acknowledgement |
 | Oskar  | His photo story implied labour the volunteer did not perform   | Drafts an accurate workshop caption, respecting refusals and unfinished work       |
 
-These short authored workshop scenes do not simulate a full accessibility trial, dam succession, corrected past publication, sent correspondence, family visit, telescope evening, romance or forgiveness. Those remain deferred to 2026-11-06 in concept.md. The flags establish only the words and narrow actions above. Nora and Sam are fictional residents, never lab reviewers or actual playtest evidence.
+These short authored workshop scenes do not simulate a full accessibility trial, dam succession, corrected past publication, sent correspondence, family visit, telescope evening, romance or forgiveness. The opt-in settlement day implements the later fictional events as a separate engineering candidate described in concept.md and settlement-plan.md; review and delivery are pending. The default ten-minute scenes retain these narrower meanings. The flags establish only the words and narrow actions above. Nora and Sam are fictional residents, never lab reviewers or actual playtest evidence.
 
 ## Current evidence
 
