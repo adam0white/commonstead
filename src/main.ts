@@ -2,7 +2,7 @@ import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
 import { CAST as ALLOCATION, CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY, resumeForPlay, watchShelfPreference } from './continuity.ts';
 import './style.css';
-import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
+import { createLab, FEEDBACK_LABELS, PRIVACY_URL } from '@adam0white/lab-client';
 import {
   downloadJson,
   feedbackPersonaControl,
@@ -12,6 +12,7 @@ import {
 } from '@adam0white/lab-kit';
 import { personStatus, residentName } from './display.ts';
 import { draw } from './draw.ts';
+import { prefillFeedbackChoice } from './feedback.ts';
 import { apply, type Command, exportRun, NODES, type State, step } from './sim.ts';
 
 const isLab = new URLSearchParams(location.search).get('lab') === '1';
@@ -540,9 +541,25 @@ function menu() {
 }
 function feedback() {
   sheet(
-    `<h2>Feedback</h2><div class="feedback-body"><p>Tell us what happened.</p><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened? What did you want to do?</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Your name appears with this feedback and any play history you share. Play history is shared when Recording is on or you select the optional sharing checkbox.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions">${isLab ? '<button id="copy">Keep a copy of this run</button>' : ''}<button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
+    `<h2>Feedback</h2><div class="feedback-body"><p>Tell us what happened.</p><div class="verdicts" aria-label="What is happening?">${Object.entries(
+      FEEDBACK_LABELS,
+    )
+      .map(([label, text]) => `<button data-feedback-choice="${label}" aria-pressed="false">${text}</button>`)
+      .join(
+        '',
+      )}</div><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened? What did you want to do?</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Your name appears with this feedback and any play history you share. Play history is shared when Recording is on or you select the optional sharing checkbox.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions">${isLab ? '<button id="copy">Keep a copy of this run</button>' : ''}<button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
   );
   let verdict = '';
+  let choiceText = '';
+  const noteInput = document.getElementById('note') as HTMLTextAreaElement;
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-feedback-choice]'))
+    button.onclick = () => {
+      const previous = choiceText;
+      choiceText = button.getAttribute('aria-pressed') === 'true' ? '' : (button.textContent ?? '');
+      noteInput.value = prefillFeedbackChoice(noteInput.value, previous, choiceText);
+      for (const other of document.querySelectorAll('[data-feedback-choice]'))
+        other.setAttribute('aria-pressed', String(other === button && Boolean(choiceText)));
+    };
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-verdict]'))
     b.onclick = () => {
       verdict = b.dataset.verdict ?? '';
