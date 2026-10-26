@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { blocked, route } from '../src/paths.ts';
 import { EDITION } from '../src/settlement.ts';
+import { REPLIES } from '../src/settlement-scenes.ts';
 import { apply, createGame, exportRun, importRun, stateHash, step } from '../src/sim.ts';
 
 const day = (seed = 42) => createGame(seed, undefined, { edition: EDITION });
@@ -276,4 +277,113 @@ describe('opt-in settlement day focused headless controls', () => {
     expect(s.settlement?.records.grip).toBe('tried');
     expect(s.settlement?.events.some((e) => e.text.includes('not a test with real users'))).toBe(true);
   });
+});
+
+describe('fresh local personal replies with real HF choices', () => {
+  for (const [id, branch, other] of [
+    ['v1', 'nora-restore-drawing', 'nora-record-question'],
+    ['v7', 'sevim-name-wrong', 'sevim-no-answer'],
+  ] as const)
+    test(`${id}: disclosure, attended offer, paid completion and interrupted replay fork`, () => {
+      const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+      const v = resident(s, id);
+      const offer = { kind: 'reply', ids: [id], branch } as const;
+      const command = { ...offer, ids: [id] };
+      const untouched = JSON.stringify(s);
+      expect(() => apply(s, command)).toThrow(/disclosure/);
+      expect(JSON.stringify(s)).toBe(untouched);
+      apply(s, { kind: 'order', ids: [id], target: 'move', x: 525, y: 475 });
+      story(s, id);
+      const w = s.settlement;
+      if (!w) throw new Error('day');
+      const scene = w.replyScenes?.[id];
+      if (!scene) throw new Error('No actual disclosure');
+      expect(scene.disclosure.at).toBe(78);
+      expect(v.invitedBreak).toBe(false);
+      expect(v.says).not.toBe('');
+      const disclosed = JSON.stringify(s);
+      const pre = exportRun(s);
+      expect(() => apply(s, { ...command, ids: [id === 'v1' ? 'v7' : 'v1'] })).toThrow();
+      expect(() => apply(s, { ...command, extra: true } as unknown as Parameters<typeof apply>[1])).toThrow();
+      expect(JSON.stringify(s)).toBe(disclosed);
+      apply(s, command);
+      const attempt = scene.attempts[0];
+      if (!attempt) throw new Error('attempt');
+      expect(w.paper).toBe(4);
+      until(s, () => attempt.status === 'running', 50);
+      expect(attempt.deliveredAt).toBe(s.tick);
+      expect(attempt.attended).toBe(true);
+      expect(attempt.decision?.chosenAffordanceId).toBe(`reply:${branch}`);
+      expect(attempt.decision?.verdict).not.toBe('refused');
+      expect(attempt.paperSpent).toBe(1);
+      expect(w.paper).toBe(3);
+      expect(w.replyResults).toEqual([]);
+      const beforeDuplicate = JSON.stringify(s);
+      expect(() => apply(s, command)).toThrow();
+      expect(() => apply(s, { ...command, branch: other })).toThrow();
+      expect(() => apply(s, { kind: 'order', ids: [id], target: 'wood' })).toThrow(/Cancel/);
+      expect(JSON.stringify(s)).toBe(beforeDuplicate);
+      const running = [exportRun(s), exportRun(s, true)];
+      const started = attempt.startedAt;
+      if (started === undefined) throw new Error('no begin');
+      const fork = importRun(pre);
+      apply(fork, command);
+      until(fork, () => fork.settlement?.replyScenes?.[id]?.attempts[0]?.status === 'running', 50);
+      advance(fork, 3);
+      expect(fork.tick).toBe(started + 3);
+      request(fork, [id], 'cancel');
+      advance(fork, 20);
+      expect(fork.settlement?.paper).toBe(3);
+      expect(fork.settlement?.replyResults).toEqual([]);
+      expect(fork.settlement?.replyScenes?.[id]?.attempts[0]?.status).toBe('interrupted');
+      expect(fork.settlement?.replyScenes?.[id]?.completedBranch).toBeUndefined();
+      expect(fork.settlement?.events.some((e) => e.text.includes(REPLIES[branch].says))).toBe(false);
+      until(s, () => attempt.status === 'completed', 30);
+      expect(attempt.endedAt).toBe(attempt.until);
+      expect(s.tick - started).toBe(13); // HF rounds 9.6 minutes to ten; never finish early.
+      expect(w.replyResults).toEqual([
+        expect.objectContaining({
+          actor: id,
+          branch,
+          attemptId: attempt.id,
+          text: REPLIES[branch].text,
+          says: REPLIES[branch].says,
+          at: s.tick,
+        }),
+      ]);
+      expect(scene.completedBranch).toBe(branch);
+      expect(
+        w.events.filter((e) => e.text === `You said to ${v.name}: ${REPLIES[branch].line}`),
+      ).toHaveLength(1);
+      const completed = [exportRun(s), exportRun(s, true)];
+      for (const raw of running) {
+        const r = importRun(raw);
+        while (r.tick < s.tick) step(r);
+        expect(JSON.stringify(r)).toBe(JSON.stringify(s));
+      }
+      const copies = [...running, ...completed].map(importRun);
+      for (const r of copies) while (r.tick < s.tick) step(r);
+      advance(s, 15);
+      for (const r of copies) {
+        advance(r, 15);
+        expect(JSON.stringify(r)).toBe(JSON.stringify(s));
+      }
+      // Closed envelopes and every supplied state field are replay checked, never trusted.
+      const raw = JSON.parse(JSON.stringify(completed[0]));
+      raw.state.settlement.replyScenes[id].attempts[0].attended = false;
+      expect(() => importRun(raw)).toThrow(/replay/);
+      const unknown = JSON.parse(JSON.stringify(completed[1]));
+      unknown.inputs.at(-1).command.branch = 'peer-answer';
+      expect(() => importRun(unknown)).toThrow(/replay/);
+      const badConfig = JSON.parse(JSON.stringify(completed[1]));
+      badConfig.config.shelf = true;
+      expect(() => importRun(badConfig)).toThrow(/replay/);
+      const final = JSON.stringify(s);
+      expect(() => apply(s, command)).toThrow();
+      expect(JSON.stringify(s)).toBe(final);
+      expect(REPLIES[other].actor).toBe(id);
+      expect(REPLIES[other].ticks).toBe(8);
+      expect(w.records.grip).toBe('drawing');
+      expect(w.records.letter).toBe('draft');
+    });
 });

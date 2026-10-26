@@ -234,3 +234,68 @@ describe('published HF plain narration', () => {
     expect(raw).toEqual(before);
   });
 });
+
+test('reply edition is explicit, closed and cannot enter legacy notebooks', () => {
+  const config = { edition: 'settlement-replies/1' } as const;
+  const s = createGame(42, undefined, config);
+  const full = exportRun(s) as Record<string, unknown>;
+  expect(full.schema).toBe(5);
+  expect(importRun(full)).toEqual(s);
+  expect(importRun(exportRun(s, true))).toEqual(s);
+  for (const extra of [{ chapter: null }, { surplus: true }, { compact: false }])
+    expect(() => importRun({ ...full, ...extra })).toThrow(/replay/);
+  for (const legacy of [createGame(42), createGame(42, undefined, { edition: 'settlement-day/1' })]) {
+    const before = JSON.stringify(legacy);
+    expect(() => apply(legacy, { kind: 'reply', ids: ['v1'], branch: 'nora-restore-drawing' })).toThrow();
+    expect(JSON.stringify(legacy)).toBe(before);
+    const raw = exportRun(legacy) as Record<string, unknown>;
+    expect(() =>
+      importRun({
+        ...raw,
+        inputs: [{ tick: 0, command: { kind: 'reply', ids: ['v1'], branch: 'nora-restore-drawing' } }],
+      }),
+    ).toThrow(/replay/);
+  }
+  const before = JSON.stringify(s);
+  expect(() => apply(s, { kind: 'reply', ids: ['v1'], branch: 'nora-restore-drawing' })).toThrow(
+    /disclosure/,
+  );
+  expect(JSON.stringify(s)).toBe(before);
+});
+
+test('reply day preserves existing building orders and pointer coordinates', () => {
+  const jobs = [];
+  for (const edition of ['settlement-day/1', 'settlement-replies/1'] as const) {
+    for (const coordinates of [{}, { x: 650, y: 500 }]) {
+      const s = createGame(42, undefined, { edition });
+      apply(s, { kind: 'build', ids: ['v1'], building: 'house', x: 650, y: 500 });
+      const site = s.buildings.find((b) => !b.complete);
+      expect(site).toBeDefined();
+      if (!site) throw new Error('Build must create a site');
+      apply(s, { kind: 'order', ids: ['v2'], target: site.id, ...coordinates });
+      const job = s.settlement?.actors.v2?.job;
+      expect(job).toMatchObject({ kind: 'build', target: site.id, map: 'yard', point: site });
+      jobs.push(job);
+      expect(importRun(exportRun(s))).toEqual(s);
+      expect(importRun(exportRun(s, true))).toEqual(s);
+      if (edition !== 'settlement-replies/1') continue;
+      for (const invalid of [
+        { target: 'b999' },
+        { target: undefined },
+        { target: site.id, surplus: true },
+        { target: site.id, x: 650 },
+        { target: site.id, y: 500 },
+        { target: site.id, x: NaN, y: 500 },
+        { target: site.id, x: 650, y: Infinity },
+        { target: 'wood', x: 650, y: 500 },
+      ]) {
+        const before = JSON.stringify(s);
+        expect(() =>
+          apply(s, { kind: 'order', ids: ['v2'], ...invalid } as Parameters<typeof apply>[1]),
+        ).toThrow();
+        expect(JSON.stringify(s)).toBe(before);
+      }
+    }
+  }
+  for (const job of jobs) expect(job).toEqual(jobs[0]);
+});

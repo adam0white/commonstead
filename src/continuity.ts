@@ -207,6 +207,7 @@ export class Continuity {
     });
   }
   export(state: State) {
+    if (state.settlement?.config.edition === 'settlement-replies/1') return exportRun(state) as object;
     return { ...(exportRun(state) as object), castSources: structuredClone(this.sources) };
   }
   pinnedHistories() {

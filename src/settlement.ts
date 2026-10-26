@@ -10,12 +10,23 @@ import {
   promise,
   readPerson,
   releaseCommitment,
+  reviewed,
   socialEvent,
   tick as tickPerson,
 } from '@adam0white/human-framework';
 import { DISCOVERIES } from './cast.ts';
 import { blocked, MAPS, type Place, type Point, route } from './paths.ts';
-import { SCENES, type SceneId, sceneAllowed, sceneOutcome } from './settlement-scenes.ts';
+import {
+  REPLIES,
+  REPLY_EDITION,
+  type ReplyAttempt,
+  type ReplyResult,
+  type ReplyScene,
+  SCENES,
+  type SceneId,
+  sceneAllowed,
+  sceneOutcome,
+} from './settlement-scenes.ts';
 import type { Command, Resource, State, Villager } from './sim.ts';
 
 /** Authored settlement-day/1 world only: finite stores, trips, geometry and timed scenes.
@@ -23,7 +34,7 @@ import type { Command, Resource, State, Villager } from './sim.ts';
  * private-knowledge renderer, physiology, real outreach or real accessibility acceptance lives here.
  */
 export const EDITION = 'settlement-day/1';
-export type SettlementConfig = { edition: typeof EDITION };
+export type SettlementConfig = { edition: typeof EDITION | typeof REPLY_EDITION };
 export const DAY_MINUTES = 0.8;
 export type Job = {
   kind: 'gather' | 'build' | 'move' | 'map' | 'inspect' | 'scene' | 'talk' | 'spar' | 'yield' | 'story';
@@ -54,6 +65,8 @@ export type ActorWorld = {
 export type Account = { at: number; speaker: string; listener: string; text: string };
 export type Settlement = {
   config: SettlementConfig;
+  replyScenes?: Record<string, ReplyScene>;
+  replyResults?: ReplyResult[];
   actors: Record<string, ActorWorld>;
   caches: Record<Place, Record<Resource, number>>;
   accounts: Account[];
@@ -74,13 +87,15 @@ export type Settlement = {
   };
 };
 export function initSettlement(s: State, config: SettlementConfig): void {
-  if (config.edition !== EDITION) throw new Error('Unknown settlement edition.');
+  if (Object.keys(config).length !== 1 || (config.edition !== EDITION && config.edition !== REPLY_EDITION))
+    throw new Error('Unknown settlement edition.');
   if (s.chapter)
     throw new Error(
       'Start the settlement day with its fresh local residents. Your imported chapter is unchanged.',
     );
   s.settlement = {
-    config: { edition: EDITION },
+    config: { edition: config.edition },
+    ...(config.edition === REPLY_EDITION ? { replyScenes: {}, replyResults: [] } : {}),
     actors: Object.fromEntries(
       s.villagers.map((v) => [
         v.id,
@@ -350,6 +365,7 @@ function go(s: State, v: Villager, point: Point): boolean {
   return true;
 }
 function cancel(s: State, v: Villager) {
+  interruptReply(s, v, 'The conversation stopped before it finished.');
   const aw = actor(s, v);
   if (v.person.activity)
     finish(v.person, {
@@ -411,6 +427,10 @@ function spend(s: State, boards: number, meals: number, paper = 0): boolean {
 }
 export function applySettlement(s: State, c: Command): void {
   const w = world(s);
+  if (c.kind === 'reply') {
+    requestReply(s, c);
+    return;
+  }
   if (c.kind === 'train') {
     s.message = 'This day follows the eight residents. No additional helpers join.';
     return;
@@ -565,6 +585,11 @@ export function applySettlement(s: State, c: Command): void {
   for (const v of selected) {
     const aw = actor(s, v);
     if (c.action === 'story') {
+      const retained = w.replyScenes?.[v.id];
+      if (retained) {
+        s.message = `${v.name} already shared this story at ${retained.disclosure.at} seconds. Read it in About this resident.`;
+        continue;
+      }
       if (s.tick < 60) {
         s.message = 'Spend a minute together before inviting a private story.';
         continue;
@@ -773,6 +798,11 @@ function finishJob(s: State, v: Villager, run: Running) {
     v.discovery = Math.max(1, v.discovery);
     v.says = DISCOVERIES[Number(v.id.slice(1)) - 1]?.[0] ?? 'I have nothing private to share.';
     event(s, `${v.name} chooses to tell you: ${v.says}`);
+    if (world(s).replyScenes && ['v1', 'v7'].includes(v.id))
+      world(s).replyScenes![v.id] ??= {
+        disclosure: { id: `disclosure:${v.id}:${s.tick}`, at: s.tick, textId: `${v.id}:private-story` },
+        attempts: [],
+      };
   }
   if (j.kind === 'yield') {
     const dispute = world(s).dispute;
@@ -897,6 +927,7 @@ export function stepSettlement(s: State): void {
       v.status = 'has died.';
       continue;
     }
+    if (stepReply(s, v)) continue;
     const run = aw.running;
     if (run && s.tick >= run.until) {
       if (run.purpose === 'job' && run.job?.partner) {
@@ -981,6 +1012,7 @@ export function stepSettlement(s: State): void {
       }
       continue;
     }
+    if (startReply(s, v)) continue;
     const j = aw.job;
     if (aw.path.length) {
       choose(s, v, primaryOffer(s, v, 8), 'travel');
@@ -1117,6 +1149,8 @@ export function stepSettlement(s: State): void {
     }
     choose(s, v);
   }
+  if (s.tick >= 1800)
+    for (const v of s.villagers) interruptReply(s, v, 'The day ended before the conversation finished.');
   if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
     s.chapterPaused = true;
     event(s, 'Everyone has finished. The chapter is paused at actual action boundaries.');
@@ -1146,4 +1180,254 @@ export function stepSettlement(s: State): void {
         : 'It is tomorrow morning. The storm damaged the supplies. People have lived through the day and night.',
     );
   }
+}
+
+// The host commander waits at the workshop hub. A reply is an in-person act within
+// 45 map units there, using the existing pair-distance scale; no commander Person is made.
+export function replyPresent(s: State, v: Villager): boolean {
+  const a = actor(s, v);
+  return a.map === 'yard' && Math.hypot(v.x - HOME.x, v.y - HOME.y) <= 45;
+}
+function latestReply(s: State, v: Villager): ReplyAttempt | undefined {
+  return world(s).replyScenes?.[v.id]?.attempts.at(-1);
+}
+export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>): void {
+  const w = world(s),
+    branch = REPLIES[c.branch];
+  const v = s.villagers.find((v) => v.id === c.ids[0]);
+  if (w.config.edition !== REPLY_EDITION || !branch || c.ids.length !== 1 || branch.actor !== c.ids[0] || !v)
+    throw new Error('Choose one matching resident and reply line in the fresh reply day.');
+  const scene = w.replyScenes?.[v.id];
+  if (!scene) throw new Error('Wait for the actual completed private disclosure.');
+  if (s.ended || s.pauseRequested || s.chapterPaused || !v.person.body.alive || v.availableAt > s.tick)
+    throw new Error('This resident is unavailable. Resume an active day before asking.');
+  if (!replyPresent(s, v)) throw new Error('Walk to the workshop hub to talk with the commander.');
+  const aw = actor(s, v),
+    last = latestReply(s, v);
+  if (aw.job || aw.carried || aw.path.length || (aw.running && aw.running.purpose !== 'body'))
+    throw new Error('Finish the current task or explicitly cancel it before offering this reply.');
+  if (
+    scene.completedBranch ||
+    (scene.selectedBranch && scene.selectedBranch !== c.branch) ||
+    last?.status === 'requested' ||
+    last?.status === 'running'
+  )
+    throw new Error(
+      'This reply already has a request or result. An unfinished attempt may retry the same line.',
+    );
+  if (w.paper < 1) throw new Error('This needs one sheet of paper.');
+  if (s.tick + branch.ticks + 1 >= 1800) throw new Error('There is not enough time left in this day.');
+}
+function requestReply(s: State, c: Extract<Command, { kind: 'reply' }>) {
+  const v = s.villagers.find((v) => v.id === c.ids[0]);
+  if (!v) return;
+  const scene = world(s).replyScenes?.[v.id];
+  if (!scene) return;
+  scene.selectedBranch = c.branch;
+  scene.attempts.push({
+    id: `reply:${v.id}:${scene.attempts.length + 1}`,
+    branch: c.branch,
+    disclosureId: scene.disclosure.id,
+    requestedAt: s.tick,
+    map: actor(s, v).map,
+    point: { x: v.x, y: v.y },
+    paperSpent: 0,
+    status: 'requested',
+  });
+  event(
+    s,
+    `You offered a reply to ${v.name}. The current body action will finish first. No words have been delivered yet.`,
+  );
+}
+function replyOffer(a: ReplyAttempt): Affordance {
+  return {
+    ...affordance(`reply:${a.branch}`, 'talk', REPLIES[a.branch].ticks, { belonging: 0.45 }),
+    targetId: a.id,
+    placeId: a.map,
+    with: [],
+    tags: ['social'],
+  };
+}
+function replyOptions(s: State, v: Villager, a: ReplyAttempt): Affordance[] {
+  return [replyOffer(a), ...bodyChoices(s, v), affordance('reply-wait', 'wait', 1, {})];
+}
+function interruptReply(s: State, v: Villager, reason: string) {
+  const a = latestReply(s, v);
+  if (!a || !['requested', 'running'].includes(a.status)) return;
+  const activity = v.person.activity;
+  if (
+    a.status === 'running' &&
+    activity &&
+    activity.affordanceId === a.activityId &&
+    activity.targetId === a.id &&
+    activity.startedAt === a.activityStartedAt
+  )
+    finish(v.person, {
+      affordanceId: activity.affordanceId,
+      action: activity.action,
+      targetId: activity.targetId,
+      at: v.person.now,
+      status: 'interrupted',
+      needs: {},
+      summary: reason,
+    });
+  a.status = 'interrupted';
+  a.endedAt = s.tick;
+  a.reason = reason;
+  v.task = 'waiting';
+  v.status = 'waiting';
+  event(s, `${v.name}: ${reason} No finished paper record was made.`);
+}
+function startReply(s: State, v: Villager): boolean {
+  const w = world(s),
+    a = latestReply(s, v),
+    aw = actor(s, v);
+  if (!a || a.status !== 'requested' || aw.running || v.person.activity || s.pauseRequested) return false;
+  const scene = w.replyScenes?.[v.id];
+  if (
+    !replyPresent(s, v) ||
+    aw.map !== a.map ||
+    Math.hypot(v.x - a.point.x, v.y - a.point.y) > 1 ||
+    aw.job ||
+    aw.carried ||
+    w.paper < 1 ||
+    s.tick + REPLIES[a.branch].ticks >= 1800 ||
+    scene?.disclosure.id !== a.disclosureId
+  ) {
+    a.status = 'unavailable';
+    a.endedAt = s.tick;
+    a.reason = 'The place, task, paper or remaining time changed before the offer.';
+    event(s, a.reason);
+    return false;
+  }
+  a.deliveredAt = s.tick;
+  const heard = perceive(v.person, [
+    {
+      at: v.person.now,
+      channel: 'heard',
+      kind: 'workshop-reply',
+      actorId: 'commander',
+      targetId: v.person.id,
+      placeId: a.map,
+      salience: 0.7,
+      near: true,
+      summary: REPLIES[a.branch].line,
+    },
+  ]);
+  a.attended = heard.some(
+    (p) =>
+      p.kind === 'workshop-reply' &&
+      p.at === v.person.now &&
+      p.actorId === 'commander' &&
+      p.summary === REPLIES[a.branch].line,
+  );
+  event(s, `You said to ${v.name}: ${REPLIES[a.branch].line}`);
+  const options = replyOptions(s, v, a),
+    offer = options[0];
+  if (!offer) return false;
+  const d = decide(v.person, options, {
+    suggestion: { voiceId: 'commander', action: 'talk', strength: 0.35 },
+  });
+  a.decision = {
+    chosenAffordanceId: d.chosenAffordanceId,
+    ...(d.suggestion ? { verdict: d.suggestion.verdict } : {}),
+    publicSays: d.suggestion?.says || d.narration,
+  };
+  const selected = options.find((o) => o.id === d.chosenAffordanceId);
+  if (!selected || selected.id !== offer.id || d.suggestion?.verdict === 'refused') {
+    a.status = 'withheld';
+    a.endedAt = s.tick;
+    v.says = a.decision.publicSays;
+    event(s, `${v.name} did not start the offered paper conversation. ${v.says}`);
+    if (selected && selected.id !== offer.id) startChoice(s, v, selected, d, 'body');
+    return true;
+  }
+  const activity = begin(v.person, selected, d);
+  if (!activity) {
+    a.status = 'start-failed';
+    a.endedAt = s.tick;
+    event(s, `${v.name} could not start the conversation. No paper was spent.`);
+    return true;
+  }
+  w.paper--;
+  a.paperSpent = 1;
+  a.status = 'running';
+  a.startedAt = s.tick;
+  a.until =
+    s.tick +
+    Math.max(REPLIES[a.branch].ticks, Math.ceil((activity.endsAt - activity.startedAt) / DAY_MINUTES));
+  a.activityId = activity.affordanceId;
+  a.activityStartedAt = activity.startedAt;
+  v.task = 'talking and writing on paper';
+  v.status = 'is talking and writing on paper.';
+  v.says = a.decision.publicSays;
+  return true;
+}
+function stepReply(s: State, v: Villager): boolean {
+  const a = latestReply(s, v);
+  if (!a || a.status !== 'running') return false;
+  const activity = v.person.activity,
+    aw = actor(s, v);
+  if (
+    !activity ||
+    activity.affordanceId !== a.activityId ||
+    activity.targetId !== a.id ||
+    activity.startedAt !== a.activityStartedAt ||
+    activity.action !== 'talk' ||
+    !replyPresent(s, v) ||
+    aw.map !== a.map ||
+    Math.hypot(v.x - a.point.x, v.y - a.point.y) > 1 ||
+    aw.job
+  ) {
+    interruptReply(s, v, 'The conversation lost its matching activity or shared place.');
+    return true;
+  }
+  if (a.until !== undefined && s.tick >= a.until && v.person.now >= activity.endsAt) {
+    const report = finish(v.person, {
+      affordanceId: activity.affordanceId,
+      action: 'talk',
+      targetId: a.id,
+      at: v.person.now,
+      status: 'completed',
+      needs: {},
+      summary: REPLIES[a.branch].says,
+    });
+    if (report?.status !== 'completed') {
+      interruptReply(s, v, 'The conversation did not record a completed finish.');
+      return true;
+    }
+    const branch = REPLIES[a.branch],
+      scene = world(s).replyScenes?.[v.id];
+    if (!scene) throw new Error('Missing replayed disclosure');
+    a.status = 'completed';
+    a.endedAt = s.tick;
+    a.resultId = `${a.id}:paper`;
+    scene.completedBranch = a.branch;
+    world(s).replyResults?.push({
+      id: a.resultId,
+      actor: v.id,
+      branch: a.branch,
+      attemptId: a.id,
+      at: s.tick,
+      object: branch.object,
+      text: branch.text,
+      says: branch.says,
+    });
+    v.says = branch.says;
+    v.task = 'waiting';
+    v.status = 'waiting';
+    event(s, `${v.name}: ${branch.says}`);
+    return true;
+  }
+  if (v.person.now >= activity.reviewAt) {
+    const options = replyOptions(s, v, a),
+      d = decide(v.person, options),
+      selected = options.find((o) => o.id === d.chosenAffordanceId);
+    if (selected?.id === activity.affordanceId) reviewed(v.person);
+    else {
+      interruptReply(s, v, 'The resident chose another action before the paper conversation finished.');
+      if (selected) startChoice(s, v, selected, d, 'body');
+    }
+  }
+  return true;
 }

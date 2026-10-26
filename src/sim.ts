@@ -20,7 +20,9 @@ import {
   type Settlement,
   type SettlementConfig,
   stepSettlement,
+  validateReply,
 } from './settlement.ts';
+import { REPLIES, REPLY_EDITION, type ReplyBranch } from './settlement-scenes.ts';
 
 export function taskLabel(target: string): string {
   return (
@@ -36,6 +38,7 @@ export function taskLabel(target: string): string {
 
 export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
+  | { kind: 'reply'; ids: string[]; branch: ReplyBranch }
   | { kind: 'order'; ids: string[]; target: string; x?: number; y?: number }
   | { kind: 'build'; ids: string[]; building: 'house' | 'storehouse'; x: number; y: number }
   | { kind: 'settlement'; ids: string[]; action: string; target?: string }
@@ -314,6 +317,19 @@ function assign(s: State, v: Villager, order: Order) {
   chooseWork(s, v);
 }
 export function apply(s: State, c: Command): void {
+  if (s.settlement?.config.edition === REPLY_EDITION) {
+    validateReplyCommand(s, c);
+    if (c.kind === 'reply') validateReply(s, c);
+    if (
+      'ids' in c &&
+      c.kind !== 'reply' &&
+      !(c.kind === 'settlement' && c.action === 'cancel') &&
+      c.ids.some((id) =>
+        ['requested', 'running'].includes(s.settlement?.replyScenes?.[id]?.attempts.at(-1)?.status ?? ''),
+      )
+    )
+      throw new Error('Cancel the pending paper conversation explicitly before giving another task.');
+  } else if (c.kind === 'reply') throw new Error('Replies require the fresh reply edition.');
   if (s.ended && c.kind !== 'pause-chapter') return;
   if (s.chapterPaused && c.kind !== 'resume-chapter') return;
   s.inputs.push({ tick: s.tick, command: structuredClone(c) });
@@ -321,7 +337,7 @@ export function apply(s: State, c: Command): void {
     applySettlement(s, c);
     return;
   }
-  if (c.kind === 'settlement') return;
+  if (c.kind === 'settlement' || c.kind === 'reply') return;
   if (c.kind === 'pause-chapter') {
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
@@ -624,9 +640,14 @@ export function replay(
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
+  if (config?.edition !== REPLY_EDITION && inputs.some((i) => i?.command?.kind === 'reply'))
+    throw new Error('Reply command in legacy edition');
   const s = createGame(seed, chapter, config);
   let previous = -1;
   for (const input of inputs) {
+    if (config?.edition === REPLY_EDITION) {
+      exactKeys(input, ['tick', 'command']);
+    }
     if (
       !Number.isInteger(input.tick) ||
       input.tick < previous ||
@@ -653,14 +674,21 @@ export function replay(
 export function exportRun(s: State, compact = false): unknown {
   if (s.settlement)
     return {
-      schema: 4,
+      schema: s.settlement.config.edition === REPLY_EDITION ? 5 : 4,
       framework: '3.0.0',
       config: structuredClone(s.settlement.config),
       seed: s.seed,
       tick: s.tick,
       inputs: structuredClone(s.inputs),
       hash: stateHash(s),
-      ...(compact ? { compact: true } : { state: structuredClone(s) }),
+      ...(compact
+        ? { compact: true }
+        : {
+            state:
+              s.settlement.config.edition === REPLY_EDITION
+                ? JSON.parse(JSON.stringify(s))
+                : structuredClone(s),
+          }),
     };
   return {
     schema: 3,
@@ -690,22 +718,38 @@ export function importRun(raw: unknown): State {
     };
     if (
       r.framework !== '3.0.0' ||
-      ![3, 4].includes(r.schema) ||
+      ![3, 4, 5].includes(r.schema) ||
       (r.schema === 4 &&
         (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== 'settlement-day/1')) ||
+      (r.schema === 5 &&
+        (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== REPLY_EDITION)) ||
       (r.schema === 3 && r.config)
     )
       throw new Error('version');
+    if (r.schema === 5) {
+      requireJson(raw);
+      exactKeys(raw, [
+        'schema',
+        'framework',
+        'config',
+        'seed',
+        'tick',
+        'inputs',
+        'hash',
+        r.compact === true ? 'compact' : 'state',
+      ]);
+      if (r.compact !== undefined && r.compact !== true) throw new Error('compact');
+    }
     const s = replay(
       r.seed,
       r.inputs,
       r.tick,
       r.schema === 3 ? (r.chapter ?? undefined) : undefined,
-      r.schema === 4 ? r.config : undefined,
+      r.schema >= 4 ? r.config : undefined,
     );
     if (
       (r.compact !== true && stable(s) !== stable(r.state)) ||
-      (r.compact === true && (r.schema !== 4 || r.state !== undefined)) ||
+      (r.compact === true && (![4, 5].includes(r.schema) || r.state !== undefined)) ||
       stateHash(s) !== r.hash
     )
       throw new Error('state mismatch');
@@ -715,4 +759,77 @@ export function importRun(raw: unknown): State {
       'This file does not replay the same way in this version of Commonstead. It may come from an older version. The file was not loaded. Start a new game instead.',
     );
   }
+}
+
+function exactKeys(
+  raw: unknown,
+  required: string[],
+  optional: string[] = [],
+): asserts raw is Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid command shape');
+  const keys = Object.keys(raw);
+  if (
+    required.some((k) => !Object.hasOwn(raw, k)) ||
+    keys.some((k) => !required.includes(k) && !optional.includes(k))
+  )
+    throw new Error('Invalid command fields');
+}
+function validateReplyCommand(s: State, raw: unknown): void {
+  exactKeys(raw, ['kind'], ['ids', 'target', 'x', 'y', 'action', 'building', 'branch']);
+  const c = raw as unknown as Command;
+  if (['train', 'pause-chapter', 'resume-chapter'].includes(c.kind)) {
+    exactKeys(c, ['kind']);
+    return;
+  }
+  if (
+    !('ids' in c) ||
+    !Array.isArray(c.ids) ||
+    !c.ids.length ||
+    new Set(c.ids).size !== c.ids.length ||
+    c.ids.some((id) => !/^v[1-8]$/.test(id))
+  )
+    throw new Error('Choose existing residents');
+  if (c.kind === 'reply') {
+    exactKeys(c, ['kind', 'ids', 'branch']);
+    if (!Object.hasOwn(REPLIES, c.branch) || c.ids.length !== 1 || REPLIES[c.branch].actor !== c.ids[0])
+      throw new Error('Invalid reply branch or resident');
+  } else if (c.kind === 'order') {
+    const moving = c.target === 'move';
+    const building = s.buildings.some((b) => b.id === c.target && !b.complete);
+    const coordinates = moving || (building && (Object.hasOwn(c, 'x') || Object.hasOwn(c, 'y')));
+    exactKeys(c, ['kind', 'ids', 'target', ...(coordinates ? ['x', 'y'] : [])]);
+    if (
+      (!building && !['food', 'wood', 'stone', 'move', 'rest', 'meal', 'push'].includes(c.target)) ||
+      (coordinates && (!Number.isFinite(c.x) || !Number.isFinite(c.y)))
+    )
+      throw new Error('Invalid order');
+  } else if (c.kind === 'build') {
+    exactKeys(c, ['kind', 'ids', 'building', 'x', 'y']);
+    if (!['house', 'storehouse'].includes(c.building) || !Number.isFinite(c.x) || !Number.isFinite(c.y))
+      throw new Error('Invalid building');
+  } else if (c.kind === 'settlement') {
+    const targeted = ['map', 'scene'].includes(c.action);
+    exactKeys(c, ['kind', 'ids', 'action', ...(targeted ? ['target'] : [])]);
+    if (
+      !['cancel', 'talk', 'spar', 'story', 'yield', 'map', 'inspect', 'scene'].includes(c.action) ||
+      (c.action === 'map' && !['yard', 'quay', 'courtyard'].includes(c.target ?? '')) ||
+      (c.action === 'scene' &&
+        !['correction', 'visit', 'telescope', 'letter', 'trial'].includes(c.target ?? ''))
+    )
+      throw new Error('Invalid day action');
+  } else throw new Error('Unknown reply-day command');
+}
+
+function requireJson(value: unknown): void {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (typeof value === 'number' && Number.isFinite(value)) return;
+  if (Array.isArray(value)) {
+    for (const v of value) requireJson(v);
+    return;
+  }
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    for (const v of Object.values(value)) requireJson(v);
+    return;
+  }
+  throw new Error('Only complete JSON data is accepted in reply notebooks');
 }

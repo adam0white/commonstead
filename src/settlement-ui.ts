@@ -1,6 +1,6 @@
 import { MAPS, type Place } from './paths.ts';
-import { dayClock } from './settlement.ts';
-import { SCENES } from './settlement-scenes.ts';
+import { dayClock, validateReply } from './settlement.ts';
+import { REPLIES, REPLY_EDITION, SCENES } from './settlement-scenes.ts';
 import type { Command, State } from './sim.ts';
 import { observedEvents } from './work-observation.ts';
 
@@ -58,7 +58,12 @@ export function mountSettlementControls(
         y: 575,
       });
 }
-export function updateSettlementControls(host: HTMLElement, s: State): void {
+export function updateSettlementControls(
+  host: HTMLElement,
+  s: State,
+  selected: string[] = [],
+  issue: (c: Command) => void = () => {},
+): void {
   const w = s.settlement;
   if (!w) return;
   const text = (id: string, value: string) => {
@@ -99,4 +104,99 @@ export function updateSettlementControls(host: HTMLElement, s: State): void {
       ),
   );
   list('day-events', observedEvents(w.events));
+  if (w.config.edition === REPLY_EDITION) {
+    let panel = host.querySelector<HTMLElement>('#personal-replies');
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = 'personal-replies';
+      host.prepend(panel);
+    }
+    const v = selected.length === 1 ? s.villagers.find((v) => v.id === selected[0]) : undefined;
+    const scene = v ? w.replyScenes?.[v.id] : undefined;
+    const key = JSON.stringify([
+      selected,
+      scene,
+      w.paper,
+      s.pauseRequested,
+      s.tick >= 1786,
+      v?.x,
+      v?.y,
+      v ? w.actors[v.id] : null,
+    ]);
+    if (panel.dataset.replyKey === key) return;
+    panel.dataset.replyKey = key;
+    panel.replaceChildren();
+    const text = (tag: string, value: string) => {
+      const el = document.createElement(tag);
+      el.textContent = value;
+      panel.append(el);
+    };
+    text('h3', 'Personal replies · fresh local day');
+    if (!v || !['v1', 'v7'].includes(v.id)) {
+      text('p', 'Select Nora or Sevim to read a personal reply.');
+      return;
+    }
+    if (!scene) {
+      text(
+        'p',
+        `First invite ${v.name} to share a private story. Wait for the conversation to finish. No earlier break is required.`,
+      );
+      return;
+    }
+    text(
+      'p',
+      `${v.name} shared this story at ${scene.disclosure.at} seconds into this day. The commander waits at the workshop hub. Walk there before offering a reply.`,
+    );
+    const last = scene.attempts.at(-1);
+    if (last) {
+      text(
+        'p',
+        last.deliveredAt === undefined
+          ? 'Your reply has not been spoken.'
+          : `At ${last.deliveredAt} seconds, you said: ${REPLIES[last.branch].line}`,
+      );
+      if (last.deliveredAt !== undefined)
+        text(
+          'p',
+          last.attended
+            ? 'The resident attended the line. This does not establish agreement or understanding.'
+            : 'The line was delivered. Attention was not recorded.',
+        );
+      if (last.status === 'completed') {
+        text('p', REPLIES[last.branch].says);
+        text('p', REPLIES[last.branch].later);
+      } else
+        text(
+          'p',
+          last.status === 'requested'
+            ? `The request waits for the current body action to finish. Paper has not been spent.`
+            : last.status === 'running'
+              ? `The resident is talking and writing. One sheet has been spent. The paper record is unfinished.`
+              : `The conversation did not finish. ${last.reason ?? last.decision?.publicSays ?? 'No paper record was completed.'}`,
+        );
+    }
+    for (const [branch, details] of Object.entries(REPLIES)) {
+      if (details.actor !== v.id) continue;
+      const command = { kind: 'reply', ids: [v.id], branch } as Extract<Command, { kind: 'reply' }>;
+      let reason = '';
+      try {
+        validateReply(s, command);
+      } catch (error) {
+        reason = error instanceof Error ? error.message : 'This reply is unavailable.';
+      }
+      text('p', `${details.line} (at least ${details.ticks} game seconds; one sheet of paper.)`);
+      const b = document.createElement('button');
+      b.textContent = `Say this to ${v.name}`;
+      b.disabled = !!reason;
+      b.onclick = () => issue(command);
+      panel.append(b);
+      if (reason) text('p', reason);
+    }
+    if (last && ['requested', 'running'].includes(last.status)) {
+      const b = document.createElement('button');
+      b.textContent = 'Cancel this paper conversation';
+      b.onclick = () => issue({ kind: 'settlement', ids: [v.id], action: 'cancel' });
+      panel.append(b);
+    }
+  }
 }
