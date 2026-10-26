@@ -316,6 +316,7 @@ function update() {
   if (stock)
     stock.innerHTML = `<span><b>Meals</b> ${Math.floor(s.resources.food)}</span><span><b>Boards</b> ${Math.floor(s.resources.wood)}</span><span><b>Ballast bags</b> ${Math.floor(s.resources.stone)}</span><span><b>People</b> ${s.villagers.length} / ${capacity} housing spaces</span>${s.settlement ? `<span><b>Paper</b> ${s.settlement.paper}</span>` : ''}`;
   const store = s.buildings.find((b) => b.kind === 'storehouse');
+  put('goal', store?.complete ? 'The storehouse is ready.' : 'Keep the shared supplies dry.');
   put(
     'deadline',
     s.settlement
@@ -781,12 +782,12 @@ function end() {
     void continuity.checkpointAll();
   }
   save();
-  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">${state.settlement ? 'It is tomorrow at 08:00. The storm arrived at 20:00.' : 'The storm arrived at 10:00.'}</p><h1>${state.won ? 'The supplies stayed dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p><div>${state.villagers
-    .slice(0, 2)
-    .map(
-      (v) =>
-        `<p class="speech">${esc(residentName(v))}: ${esc(v.says || 'We made it through the work together.')}</p>`,
-    )
+  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">${state.settlement ? 'It is tomorrow at 08:00. The storm arrived at 20:00.' : 'The storm arrived at 10:00.'}</p><h1>${state.won ? 'The supplies stayed dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p><h2>Residents at the end of this run</h2><p class="small">Last words may describe an earlier event. These are not new closing replies.</p><div>${state.villagers
+    .map((v) => {
+      const scene = DISCOVERIES[Number(v.id.slice(1)) - 1];
+      const shared = v.discovery && scene ? scene[v.discovery === 2 ? 1 : 0] : '';
+      return `<section><h2>${esc(residentName(v))}</h2>${shared ? `<p><strong>Previously shared with you:</strong> ${esc(shared)}</p>` : ''}<p class="speech">${v.says ? `Last words: ${esc(v.says)}` : 'No last words recorded.'}</p></section>`;
+    })
     .join(
       '',
     )}</div><details><summary>See the tally</summary><p>${state.villagers.length} people · ${state.buildings.filter((b) => b.complete).length} completed buildings</p></details><div class="row"><button id="end-feedback">Feedback</button>${isLab ? '<button id="end-download">Download this run</button>' : ''}<button class="primary" id="end-title">To the title page</button></div></section></main>`;

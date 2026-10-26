@@ -100,3 +100,10 @@ Keep the setting, places and personal names. Every sentence must be understandab
 The owner authorizes HF 2.21.0 with unchanged immutable lab-client 0.4.7 and lab-kit 0.5.8 artifacts. Every fresh resident, including canonical residents and episode helpers, persists `lexicon.plainEnglish: true`. Loading never rewrites a saved narration choice; incompatible exports receive the existing start-new-game message. The host keeps its domain wording and semantic display mappings. Mechanics and the owner acceptance boundary are unchanged. The finite incoming calendars accept exact historical 2.17.0 and current 2.21.0 engines.
 
 Lesson: narration is persisted person state. Seeded upgrade proofs must retain semantic history, decision identities, RNG and protocol fields. Exclude only named display prose and explicit release/narration metadata. Never erase a whole history to obtain equal hashes.
+
+
+## B4 public reading candidate — 2026-10-26
+
+Remaining: parent independent review, actual Chrome normal/enlarged 360×690 and1280×800 QA and integration. This candidate changes title heading fit, the plain longer-day departure refusal, the completion-aware pinned goal and an ending view of all residents' existing last words and previously exposed discovery text. Earlier speech is labelled; no new closing reply or fallback quote is invented. Simulation, native3/4/5/6, storage and logs are unchanged. Existing milestone/currentNotice already handle stale completion warnings.
+
+Engineering due2026-10-27: F-709 early finish with lawful storm/continuation semantics; F-712/F-718/F-728 genuine story/work-specific closing events, storm presentation, day identity/same-run continuity and challenge decisions. Only presentation facets of F-711 and ending asks are candidates here. No whole B4/83 closure or current player retest. Open engineering is not an owner blocker; Adam's feel/readiness and real accessibility input remain due2026-11-03. External plan/report/manifest: ~/code/.lab-scratch/games-deferred/commonstead-public-reading-*.

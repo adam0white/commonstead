@@ -619,13 +619,13 @@ test.each(['settlement-replies/1', 'settlement-replies/2'] as const)(
     const restored = await loaded.loadLocal(c.localSave(s));
     expect(JSON.stringify(restored)).toBe(JSON.stringify(s));
     expect(restored.settlement?.config.edition).toBe(edition);
-    await expect(loaded.checkpoint(CAST[0]!.castId)).rejects.toThrow(/does not support/);
+    await expect(loaded.checkpoint(CAST[0]!.castId)).rejects.toThrow(/cannot move to another game yet/);
     const file = new Continuity(h.lab, h.shelf);
     expect(JSON.stringify(await file.importFile(JSON.stringify(raw)))).toBe(JSON.stringify(s));
     expect(Object.hasOwn(raw, 'castSources')).toBe(false);
     expect(file.fileOrigin).toBe(true);
     expect(file.heads).toEqual([]);
-    await expect(file.checkpoint(CAST[0]!.castId)).rejects.toThrow(/does not support/);
+    await expect(file.checkpoint(CAST[0]!.castId)).rejects.toThrow(/cannot move to another game yet/);
     const old = file.runId;
     await expect(file.importFile(JSON.stringify({ ...raw, castSources: [] }))).rejects.toThrow(/replay/);
     expect(file.runId).toBe(old);

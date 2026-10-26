@@ -258,7 +258,7 @@ export class Continuity {
         );
       if (state.settlement)
         throw new Error(
-          'This settlement day has its own full-day calendar. The current finite people-between-games adapter does not support it. Download the run to keep these residents; legacy chapters retain their existing departure route.',
+          'People from this longer day cannot move to another game yet. Download the run to keep this day.',
         );
       await this.shelf.ready;
       if (!current() || !this.shelf.enabled)

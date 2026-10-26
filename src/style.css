@@ -95,6 +95,9 @@ small {
   width: 100%;
   padding: 20px 0;
 }
+.title-body h1 {
+  overflow-wrap: anywhere;
+}
 .title-art {
   height: 130px;
   width: 100%;
@@ -461,6 +464,9 @@ input[type="file"] {
   }
   h1 {
     font-size: 3.4rem;
+  }
+  .title-body h1 {
+    font-size: clamp(2.4rem, 11vw, 3.4rem);
   }
   .title footer {
     font-size: 0.73rem;
