@@ -194,3 +194,15 @@ Deferred (target 2026-11-10; needs the second retest or design work):
 - Nia's asks: an answer she can respond to after a reply, and the story invite beside the person.
 - Tessa's ask: say on the map why a placement spot is refused.
 - Closing reactions for the longer days.
+
+## 2026-10-27 — current orders and placement reasons
+
+This bounded projection batch addresses local F781 and parts of F765/F778/F776/F775 from `docs/games/commonstead-playtest-2026-10-27b.md`. It changes no simulation input, rule, edition, codec, geometry, cost or Person. See [the exact plan and traced causes](work-orders-plan.md).
+
+The work controls disclose that rest stops work temporarily and retains only the current request. Shelter replaces work with a walk to the hub and then waits; automatic return is not implemented. The view no longer promises work will resume when no request remains. Current break end time, retained work and unknown roof travel time are explicit. The fixed seed control rests all eight, restores all eight existing board requests, then reproduces shelter removing those requests and rest afterward having none to restore. Alina's one-person claim remains unverified.
+
+The long-day view exposes the recorded pair and dispute time, pair-specific non-expiring yield agreements, current requests, carried loads, counted stores and actual storm time. A new pair can dispute the route after an accepted yield; yielding also replaces the yielding resident's old job. No cooldown, body, assent or difficulty was changed. Completion time stays unknown. These facts explain current behavior; they do not establish that the reported long-day goal is reachable.
+
+Refused pointer placements identify the actual edge, nearby building/material, wall, unavailable resident or missing-route predicate. The production admission check remains authoritative. Dots sample legal points; a point between dots can also be legal. Refusals spend no materials.
+
+Open engineering with concrete contracts and dates remains in the plan: recorded roof/rest/return and yield/work actions by2026-10-30; measured production estimates and tally by2026-10-30; second replies, standard-day Dai reply and cross-person witnessed consequences by2026-11-03; longer ending, per-resident voice, next-scene work/night choices and public ownership/cast routes by2026-11-03. None is deferred solely to owner input. Adam's acceptance and human accessibility input remain separate, due2026-11-03. This is no whole Commonstead or Small Works completion claim.

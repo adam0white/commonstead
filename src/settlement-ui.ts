@@ -4,6 +4,7 @@ import { hasReplies, PEER_EDITION, validatePeer } from './settlement-dialogue.ts
 import { REPLIES, SCENES } from './settlement-scenes.ts';
 import type { Command, State } from './sim.ts';
 import { observedEvents } from './work-observation.ts';
+import { routeCause } from './work-orders.ts';
 
 /** Named keyboard/touch routes to every new host action; stable DOM survives simulation ticks.
  * Text includes outward speech, locations and dated reports only, never hidden Person scores.
@@ -14,7 +15,7 @@ export function mountSettlementControls(
   issue: (c: Command) => void,
   view: (p: Place) => void,
 ): void {
-  host.innerHTML = `<details><summary>Travel, conversations and the day</summary><p>Requests wait for the current act. A resident may choose a need or responsibility instead. Cancel task stops unfinished work. The storm comes at 20:00; the day ends tomorrow at 08:00.</p><p>Eight fresh local residents live this day. This edition does not load saved browser lives. Download the full day to keep it. Saving character histories for another game is supported only by the ten-minute chapter.</p><p>Choose names for the people who will take part. View changes only the map you see. Travel asks people to walk there.</p><div class="day-controls">${Object.entries(
+  host.innerHTML = `<details><summary>Travel, conversations and the day</summary><p>A new request during a work or travel act is rejected, not queued. Wait for that act to finish, then ask again, or cancel it first. An accepted request can wait through a personal activity such as rest. A resident may choose a need or responsibility instead. Cancel task stops unfinished work. The storm comes at 20:00; the day ends tomorrow at 08:00.</p><p>Eight fresh local residents live this day. This edition does not load saved browser lives. Download the full day to keep it. Saving character histories for another game is supported only by the ten-minute chapter.</p><p>Choose names for the people who will take part. View changes only the map you see. Travel asks people to walk there.</p><div class="day-controls">${Object.entries(
     MAPS,
   )
     .map(
@@ -78,12 +79,7 @@ export function updateSettlementControls(
     'day-location',
     `${dayClock(s)}. Open Everyone now above to see locations, current work, carried supplies and retained requests.`,
   );
-  text(
-    'day-dispute',
-    w.dispute
-      ? `The shared trolley route is disputed. ${w.dispute.map((id) => s.villagers.find((v) => v.id === id)?.name).join(' and ')} can talk. Only a completed, accepted Yield opens the route. A practice bout is optional.`
-      : 'The shared trolley route is available.',
-  );
+  text('day-dispute', routeCause(s));
   const list = (id: string, lines: string[]) => {
     const e = host.querySelector(`#${id}`);
     if (!e) return;
