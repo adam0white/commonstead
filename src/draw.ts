@@ -147,7 +147,7 @@ export function draw(
     c.fillStyle = '#23201b';
     c.font = `${Math.max(21, 16 / scale)}px Georgia`;
     c.textAlign = 'center';
-    c.fillText(b.kind === 'town' ? 'Workshop hub' : b.kind === 'house' ? 'Guest cabin' : 'Storehouse', 0, 76);
+    if (b.kind !== 'town') c.fillText(b.kind === 'house' ? 'Guest cabin' : 'Storehouse', 0, 76);
     c.restore();
   }
   const colors = ['#3d5a73', '#865c46', '#4f6b3a', '#8a7152', '#6b617f'];
@@ -185,6 +185,19 @@ export function draw(
     c.font = `${Math.max(20, 16 / scale)}px Georgia`;
     c.textAlign = 'center';
     if (scale >= 0.4 && selected.includes(v.id)) c.fillText(residentName(v), 0, 47);
+    c.restore();
+  }
+  // Label the hub above its roof and after people, so the arrival group cannot paint over it.
+  const hub = s.buildings.find((b) => b.kind === 'town');
+  if (hub && (!s.settlement || viewedMap === 'yard')) {
+    c.save();
+    c.font = `${Math.max(21, 16 / scale)}px Georgia`;
+    c.textAlign = 'center';
+    const width = c.measureText('Workshop hub').width + 16;
+    c.fillStyle = '#f3ecdd';
+    c.fillRect(hub.x - width / 2, hub.y - 122, width, 32);
+    c.fillStyle = '#23201b';
+    c.fillText('Workshop hub', hub.x, hub.y - 98);
     c.restore();
   }
   const command = s.inputs.at(-1)?.command;

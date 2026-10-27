@@ -5,6 +5,7 @@ import {
   invitationReadiness,
   milestone,
   observedEvents,
+  supplyReadiness,
   WorkObservation,
 } from '../src/work-observation.ts';
 
@@ -114,4 +115,41 @@ test('display groups repeated dated observations without discarding the original
     '0:09 into this game: Nora returns.',
   ]);
   expect(JSON.stringify(events)).toBe(before);
+});
+
+// Causal control: real collection and clock steps change public facts, reading never advances a run.
+test('counted supply and story projections follow real inputs and preserve exact continuation', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
+  const first = invitationReadiness(s, ['v1'], 'listen');
+  expect(first).toContain('60 game seconds');
+  expect(first).toContain('every speed');
+  for (let i = 0; i < 17; i++) step(s);
+  expect(invitationReadiness(s, ['v1'], 'listen')).toContain('43 game seconds');
+  const short = createGame(418);
+  const ids = short.villagers.map((v) => v.id);
+  expect(supplyReadiness(short)).toContain('100 more boards');
+  apply(short, { kind: 'order', ids, target: 'wood' });
+  while (short.resources.wood < 180 && short.tick < 200) step(short);
+  expect(supplyReadiness(short)).toContain('Boards are enough');
+  expect(supplyReadiness(short)).toContain('120 more ballast bags');
+  apply(short, { kind: 'order', ids, target: 'stone' });
+  while (short.resources.stone < 120 && short.tick < 400) step(short);
+  expect(supplyReadiness(short)).toContain('Ballast bags are enough');
+  for (const current of [s, short]) {
+    const before = JSON.stringify(current);
+    for (let i = 0; i < 20; i++) {
+      supplyReadiness(current);
+      invitationReadiness(current, ['v1'], 'listen');
+    }
+    expect(JSON.stringify(current)).toBe(before);
+    const full = importRun(exportRun(current)),
+      compact = importRun(exportRun(current, true));
+    for (let i = 0; i < 9; i++) {
+      step(current);
+      step(full);
+      step(compact);
+    }
+    expect(full).toEqual(current);
+    expect(compact).toEqual(current);
+  }
 });

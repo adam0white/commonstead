@@ -23,7 +23,7 @@ export function mountSettlementControls(
     )
     .join(
       '',
-    )}<button data-day="inspect">Ask selected people to inspect supplies</button><button data-day="story">Invite a private story</button><button data-day="talk">Invite two people to talk</button><button data-day="yield">Offer to yield the trolley route</button><button data-day="spar">Offer a voluntary practice bout</button><button data-day="cancel">Cancel selected tasks</button><button data-travel-load="yard">Bring carried materials to the hub</button></div><details><summary>Fictional collaborations</summary><p>First invite a private story. A completed preparation is not a finished event. Nora and Sam must both agree to the grip trial. These are fictional scenes, not real messages or real user tests.</p><div class="day-controls">${Object.entries(
+    )}<button data-day="inspect">Ask selected people to inspect supplies</button><button data-day="story">Invite selected people to share private stories</button><button data-day="talk">Invite two people to talk</button><button data-day="yield">Offer to yield the trolley route</button><button data-day="spar">Offer a voluntary practice bout</button><button data-day="cancel">Cancel selected tasks</button><button data-travel-load="yard">Bring carried materials to the hub</button></div><details><summary>Fictional collaborations</summary><p>First invite a private story. A completed preparation is not a finished event. Nora and Sam must both agree to the grip trial. These are fictional scenes, not real messages or real user tests.</p><div class="day-controls">${Object.entries(
     SCENES,
   )
     .map(([id, s]) => `<button data-scene="${id}">${s.label}</button>`)
@@ -205,6 +205,7 @@ export function updateSettlementControls(
     ]);
     if (panel.dataset.replyKey === key) return;
     panel.dataset.replyKey = key;
+    const focusedBranch = (document.activeElement as HTMLElement | null)?.dataset.reply;
     panel.replaceChildren();
     const text = (tag: string, value: string) => {
       const el = document.createElement(tag);
@@ -272,10 +273,12 @@ export function updateSettlementControls(
       }
       text('p', `${details.line} (at least ${details.ticks} game seconds; one sheet of paper.)`);
       const b = document.createElement('button');
-      b.textContent = `Say this to ${v.name}`;
+      b.textContent = `Say to ${v.name}: “${details.line}”`;
+      b.dataset.reply = branch;
       b.disabled = !!reason;
       b.onclick = () => issue(command);
       panel.append(b);
+      if (focusedBranch === branch) b.focus({ preventScroll: true });
       if (reason) text('p', reason);
     }
     const aw = w.actors[v.id];

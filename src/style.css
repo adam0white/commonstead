@@ -1109,3 +1109,124 @@ a:focus-visible {
 .debug input {
   max-width: 100%;
 }
+
+/* Current reading unit: the map has its own rows; all resident words and controls share one
+ * side scroll. Selecting or reading a resident never resizes the working map. */
+.game {
+  grid-template-rows: minmax(44px, auto) auto minmax(0, 1fr);
+}
+.stock-plan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  background: #e9dfcb;
+}
+.stock-plan:empty {
+  display: none;
+}
+#storm-meals {
+  color: #92301f;
+}
+.map-wrap {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.map-wrap .speed {
+  position: static;
+  width: 100%;
+  margin: 0;
+  background: #f3ecdd;
+}
+.map-caption {
+  position: static;
+  margin: 0;
+  min-height: 2.6em;
+  max-height: 2.6em;
+  overflow: auto;
+  pointer-events: auto;
+}
+.game:not(.placing) .side {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.game:not(.placing) .sheet {
+  display: contents;
+  overflow: visible;
+}
+.game:not(.placing) .side > *,
+.game:not(.placing) .sheet > * {
+  flex: none;
+  order: 9;
+}
+.game:not(.placing) .sheet > * {
+  margin-inline: 12px;
+}
+.game:not(.placing) .objective {
+  order: 1;
+}
+.game:not(.placing) #selection,
+.game:not(.placing) #units {
+  order: 2;
+}
+.game:not(.placing) #selection {
+  display: block;
+  margin-top: 12px;
+}
+.game:not(.placing) #task {
+  order: 3;
+}
+.game:not(.placing) #said {
+  order: 4;
+}
+.game:not(.placing) #resident {
+  order: 5;
+}
+.game:not(.placing) #settlement-controls {
+  order: 6;
+}
+.game:not(.placing) #notice {
+  order: 7;
+  max-height: none;
+}
+.game:not(.placing) #actions {
+  order: 8;
+}
+.game:not(.placing) .selection-help {
+  order: 9;
+}
+.unit-list {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.unit-list button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.resident-conversation > button,
+#personal-replies > button {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+.disclosed-story {
+  margin-top: 12px;
+  line-height: 1.45;
+}
+@media (max-width: 760px) {
+  .game:not(.placing) .layout {
+    grid-template-rows: 320px minmax(0, 1fr);
+  }
+  .map-caption {
+    font-size: 0.85rem;
+  }
+  .stock {
+    padding: 6px 12px;
+    gap: 4px 12px;
+  }
+}
