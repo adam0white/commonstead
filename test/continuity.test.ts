@@ -34,6 +34,7 @@ import {
   type PersonaRequest,
   type PersonaShelfState,
   preparePersonaLife,
+  validatePortablePerson,
 } from '@adam0white/lab-client';
 import { CAST } from '../src/cast.ts';
 import { Continuity, resumeForPlay, watchShelfPreference } from '../src/continuity.ts';
@@ -923,4 +924,60 @@ test('a changed callback cancelling source staging prevents public put', async (
   expect(h.requests.some((r) => r.action === 'put')).toBe(false);
   expect(c.sources).toEqual([]);
   expect(c.heads).toEqual([]);
+});
+
+test('a played Burak checkpoint publishes portable state and survives admission and replay', async () => {
+  const h = harness();
+  const first = new Continuity(h.lab, h.shelf);
+  const played = await first.fresh(418);
+  playedPause(played);
+  expect(played.chapterPaused).toBe(true);
+  const burak = CAST.find((c) => c.name === 'Burak')!;
+  await first.checkpoint(burak.castId);
+  const saved = h.data.revisions.find((p) => p.revision === h.data.heads[burak.castId])!;
+  expect(saved.transfer.castPassport).toBe('hf-portable-person/1');
+  const second = await new Continuity(h.lab, h.shelf).fresh(418);
+  const claim = second.chapter?.claims[0];
+  if (!claim || !second.chapter) throw new Error('Missing Burak claim');
+  expect(claim.transfer.castPassport).toBe('hf-portable-person/1');
+  expect(validatePortablePerson(claim.transfer.portable).source.game).toBe('commonstead');
+  expect(validatePortablePerson(claim.transfer.portable).history).toEqual(
+    validatePortablePerson(saved.transfer.portable).history,
+  );
+  expect(importRun(exportRun(second))).toEqual(second);
+  const damaged = structuredClone(second.chapter);
+  const portable = validatePortablePerson(damaged.claims[0]!.transfer.portable);
+  portable.state.traits.honesty = portable.state.traits.honesty === 0 ? 1 : 0;
+  damaged.claims[0]!.transfer.portable = portable;
+  expect(() => createGame(418, damaged)).toThrow();
+});
+
+// Actual Days play and quiet checkpoint, including paid bill and confirmed visit.
+test('admits played Days Burak and claims the admitted Commonstead actor with prior history', async () => {
+  const ancestry = JSON.parse(
+    readFileSync(new URL('./fixtures/days-burak-hf-4.3.0.json', import.meta.url), 'utf8'),
+  ) as PersonaEnvelope[];
+  const envelope = ancestry[ancestry.length - 1];
+  if (!envelope) throw new Error('Missing Days checkpoint');
+  const life = envelope.transfer.life as { clock: { watermark: number } };
+  const h = harness(ancestry, life.clock.watermark * 3_600_000);
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418);
+  const claim = game.chapter?.claims[0];
+  if (!claim) throw new Error('Missing Burak claim');
+  const prior = validatePortablePerson(envelope.transfer.portable);
+  const current = validatePortablePerson(claim.transfer.portable);
+  expect(current.source.game).toBe('commonstead');
+  expect(current.source.engine).toBe('2.23.0');
+  expect(current.history).toEqual(prior.history);
+  expect(current.state).toEqual(prior.state);
+  expect(importRun(exportRun(game))).toEqual(game);
+  playedPause(game);
+  await c.checkpoint(envelope.castId);
+  const checkpoint = h.data.revisions.find((p) => p.revision === h.data.heads[envelope.castId]);
+  if (!checkpoint) throw new Error('Missing Burak checkpoint');
+  expect(validatePortablePerson(checkpoint.transfer.portable).history.slice(0, prior.history.length)).toEqual(
+    prior.history,
+  );
+  expect(importRun(exportRun(game))).toEqual(game);
 });

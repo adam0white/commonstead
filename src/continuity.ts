@@ -9,10 +9,11 @@ import {
   initialPersonaLife,
   PERSONA_ORIGINS,
   type personaChannel,
+  projectPortablePerson,
   validatePersona,
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
-import { admitResident, type Chapter, DIALECT, RULES, residentTransfer } from './passport.ts';
+import { admitResident, type Chapter, claimTransfer, DIALECT, RULES, residentTransfer } from './passport.ts';
 import { PRESSURE } from './pressure.ts';
 import type { SettlementConfig } from './settlement.ts';
 import { apply, createGame, exportRun, importRun, type State } from './sim.ts';
@@ -122,7 +123,7 @@ export class Continuity {
             }
             return initial;
           },
-          { isCurrent: () => generation === this.generation },
+          { isCurrent: () => generation === this.generation, claimTransfer },
         );
         if (result)
           chapter = {
@@ -334,7 +335,22 @@ export class Continuity {
           throw new Error(
             'This resident still has shared building work to finish. Finish it before the resident leaves.',
           );
-        const captured = await residentTransfer(villager.person);
+        const captured =
+          castId === 'hf.cast.burak.stairwell'
+            ? {
+                raw: snapshot(villager.person),
+                transfer: projectPortablePerson({
+                  castId,
+                  game: 'commonstead',
+                  engine: '2.23.0',
+                  person: villager.person,
+                  history: [`Played a Commonstead chapter to tick ${state.tick}.`],
+                  previous: parent,
+                  hostObligations: [],
+                }),
+                limitations: ['The complete Commonstead chapter remains in the local source archive.'],
+              }
+            : await residentTransfer(villager.person);
         raw = captured.raw;
         const branchId = fork ? crypto.randomUUID() : (parent?.branchId ?? crypto.randomUUID());
         const life =
