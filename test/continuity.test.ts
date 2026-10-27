@@ -796,3 +796,131 @@ test('short yield retains actual admitted Repair Nora and run metadata and refus
   expect(compact).toEqual(resumed);
   expect(resumed.villagers[0]?.person.id).toBe('hf.cast.nora.smallworks');
 });
+
+// Synthetic native sources and SDK reducer only; these are not browser transfer receipts.
+test('refuses complete next source capacity before public put and preserves the whole save', async () => {
+  const h = harness();
+  const changed = vi.fn();
+  const c = new Continuity(h.lab, h.shelf, changed);
+  let state = await c.fresh(42);
+  playedPause(state);
+  await c.checkpoint(CAST[0]!.castId);
+  const prior = c.sources[0]!;
+  const extended = Object.assign(prior, { raw: '' });
+  extended.raw = '界'.repeat(1_000_000 - JSON.stringify(c.sources).length);
+  expect(JSON.stringify(c.sources).length).toBe(1_000_000);
+  state = await c.loadLocal(c.localSave(state));
+  const before = c.localSave(state);
+  const world = JSON.stringify(state);
+  const shelf = structuredClone(h.data);
+  const puts = h.requests.filter((r) => r.action === 'put').length;
+  changed.mockClear();
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/archive|capacity/i);
+  expect(c.localSave(state)).toBe(before);
+  expect(JSON.stringify(state)).toBe(world);
+  expect(h.data).toEqual(shelf);
+  expect(h.requests.filter((r) => r.action === 'put')).toHaveLength(puts);
+  expect(changed).not.toHaveBeenCalled();
+});
+test('refuses the 101st complete source even when serialized size fits', async () => {
+  const h = harness();
+  const c = new Continuity(h.lab, h.shelf);
+  const state = await c.fresh(42);
+  playedPause(state);
+  await c.checkpoint(CAST[0]!.castId);
+  c.sources = Array.from({ length: 99 }, () => structuredClone(c.sources[0]!));
+  await c.checkpoint(CAST[0]!.castId);
+  expect(c.sources).toHaveLength(100);
+  expect(JSON.stringify(c.sources).length).toBeLessThan(1_000_000);
+  const before = c.localSave(state);
+  const puts = h.requests.filter((r) => r.action === 'put').length;
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/archive|capacity/i);
+  expect(c.localSave(state)).toBe(before);
+  expect(h.requests.filter((r) => r.action === 'put')).toHaveLength(puts);
+});
+test('retains complete failed CAS source while archive fits without changing heads or world', async () => {
+  const h = harness();
+  const c = new Continuity(h.lab, h.shelf);
+  const state = await c.fresh(42);
+  playedPause(state);
+  await c.checkpoint(CAST[0]!.castId);
+  const before = structuredClone(c.sources);
+  const heads = structuredClone(c.heads);
+  const world = JSON.stringify(state);
+  const request = h.shelf.request;
+  h.shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    if (r.action === 'put') throw new Error('synthetic CAS conflict');
+    return request<T>(r);
+  };
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow('CAS conflict');
+  expect(c.sources.slice(0, -1)).toEqual(before);
+  expect(c.sources.at(-1)?.snapshot).toEqual(JSON.parse(JSON.stringify(state.villagers[0]!.person)));
+  expect(c.heads).toEqual(heads);
+  expect(JSON.stringify(state)).toBe(world);
+});
+test('cancelled batch rejection cannot publish remaining residents or change successor save or callbacks', async () => {
+  const h = harness();
+  const changed = vi.fn();
+  const c = new Continuity(h.lab, h.shelf, changed);
+  const state = await c.fresh(42);
+  playedPause(state);
+  const started = Promise.withResolvers<void>();
+  let rejectPut: (error: Error) => void = () => {};
+  const request = h.shelf.request;
+  h.shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    if (r.action !== 'put') return request<T>(r);
+    h.requests.push(r);
+    started.resolve();
+    return new Promise<T>((_resolve, reject) => {
+      rejectPut = reject;
+    });
+  };
+  const pending = c.checkpointAll();
+  await started.promise;
+  c.clear();
+  const successor = await c.fresh(43, true);
+  c.status = 'successor status';
+  const before = c.localSave(successor);
+  const world = JSON.stringify(successor);
+  const recording = vi.spyOn(h.lab, 'setPersonaRecording');
+  changed.mockClear();
+  rejectPut(new Error('old put failed'));
+  await pending;
+  expect(c.status).toBe('successor status');
+  expect(c.localSave(successor)).toBe(before);
+  expect(JSON.stringify(successor)).toBe(world);
+  expect(h.requests.filter((r) => r.action === 'put')).toHaveLength(1);
+  expect(recording).not.toHaveBeenCalled();
+  expect(changed).not.toHaveBeenCalled();
+});
+test('file-origin chapters cannot publish even after played pause', async () => {
+  const h = harness();
+  const c = new Continuity(h.lab, h.shelf);
+  const state = createGame(42);
+  playedPause(state);
+  const file = await c.importFile(JSON.stringify(exportRun(state)));
+  const before = c.localSave(file);
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/file/i);
+  expect(c.localSave(file)).toBe(before);
+  expect(h.requests).toHaveLength(0);
+});
+
+test('a changed callback cancelling source staging prevents public put', async () => {
+  const h = harness();
+  const c = new Continuity(h.lab, h.shelf);
+  const state = await c.fresh(42);
+  playedPause(state);
+  let armed = true;
+  Object.assign(c, {
+    changed: () => {
+      if (armed) {
+        armed = false;
+        c.clear();
+      }
+    },
+  });
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/changed/);
+  expect(h.requests.some((r) => r.action === 'put')).toBe(false);
+  expect(c.sources).toEqual([]);
+  expect(c.heads).toEqual([]);
+});

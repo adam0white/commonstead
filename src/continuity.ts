@@ -303,6 +303,7 @@ export class Continuity {
         throw new Error(
           'People from this longer day cannot move to another game yet. Download the run to keep this day.',
         );
+      if (this.fileOrigin) throw new Error('File play cannot publish people.');
       await this.shelf.ready;
       if (!current() || !this.shelf.enabled)
         throw new Error(
@@ -351,8 +352,16 @@ export class Continuity {
         throw new Error('The game changed before the person could be saved. Try saving the person again.');
       // Preserve full actual source before publication, including failed CAS attempts, local only.
       if (raw) {
-        this.sources.push({ revision: envelope.revision, source: envelope.source, snapshot: raw });
-        while (JSON.stringify(this.sources).length > maxArchive) this.sources.shift();
+        const retained = [
+          ...this.sources,
+          { revision: envelope.revision, source: envelope.source, snapshot: raw },
+        ];
+        // Capacity is serialized JSON UTF16 code units, as in the native loader.
+        if (retained.length > 100 || JSON.stringify(retained).length > maxArchive)
+          throw new Error(
+            'Complete source archive exceeds capacity. Download this run. This history was not published.',
+          );
+        this.sources = retained;
         this.changed();
       }
       if (!current())
@@ -371,20 +380,27 @@ export class Continuity {
       this.lab.setPersonaRecording(this.key);
       this.status = `${villager.name}: ${envelope.terminal ? 'The end of this person’s history has been saved.' : 'This person’s current history has been saved.'} Details that cannot carry over remain in the local game data and are included when you download the game file.`;
       this.changed();
-      await this.recording();
+      if (current()) await this.recording();
     });
     this.operation = task.catch(() => {});
     return task;
   }
   async checkpointAll() {
+    if (this.fileOrigin) return;
+    const generation = this.generation,
+      state = this.state,
+      runId = this.runId;
+    const current = () => generation === this.generation && state === this.state && runId === this.runId;
     for (const c of CAST) {
+      if (!current()) return;
       try {
         await this.checkpoint(c.castId);
       } catch (error) {
+        if (!current()) return;
         this.status = String(error);
       }
     }
-    this.changed();
+    if (current()) this.changed();
   }
 }
 
