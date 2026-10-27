@@ -1,3 +1,15 @@
+# Public entry candidate — 2026-10-27
+
+Remaining: independent review, exact CI, clean deployment and two viewport engineering checks for the public-entry batch. Origin baseline is 05179553e237755bce41dda28c110d1dc32f0e7e, exact ci 40477742410, live matched dirty:false before edits. B3 peer and B2 current-work candidates in older prose are already integrated in that baseline. Do not rebuild them from old candidate descriptions.
+
+Independent review reproduced a stale file-read native overwrite. The correction starts entry epochs before file reads and invalidates them on rejected/oversized/cancelled selections, New/Resume/title and pagehide. Controller validation, recording, UI install and save share that epoch. The occupied-native Chromium reproduction and focused controller regression pass; renewed independent CLEAR remains required.
+
+This batch removes the game query gate and game-local cast controls, links the central shelf, automatically enables the public SDK shelf contract for ordinary new short chapters, and adds retests-1027b local F-786 Back to the title page. Existing longer days remain public, fresh-local editions; their ownership adapter and preserving file lifecycle remain engineering. Current pins are HF3.0.0, immutable client0.4.15/kit0.5.17. No retest or owner acceptance is claimed. Exact source identity of F781-794 is docs/games/commonstead-playtest-2026-10-27b.md; these local labels must not be silently remapped to older central numbers.
+
+The private gd-resume-commonstead report holds exact historical row mappings and delivery receipts for the director. The rest of this file is historical.
+
+---
+
 # B3 peer candidate — 2026-10-26
 
 Remaining: review/integration and local phone/wide/native chooser proof for this candidate; other personal dialogue, same-run short-chapter replies and B4 story/identity/closing/challenge engineering (2026-10-27). Adam's play/readiness/feel acceptance and real human accessibility input remain due 2026-11-03. No whole 83-row or compound-ask closure is claimed. The artifact ending this batch is a reviewed native replaying peer scene; Adam accepts feel. This author does not supply review approval or owner acceptance.

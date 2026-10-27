@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { apply, createGame, exportRun, importRun, stateHash, step } from '../src/sim.ts';
 
 describe('pinned whole-cast chapters', () => {
@@ -173,6 +173,45 @@ function playedPause(s: ReturnType<typeof createGame>) {
   for (let i = 0; i < 40 && !s.chapterPaused; i++) step(s);
 }
 describe('finite source, batch ownership and recording controls', () => {
+  test('a rejected later selection invalidates an earlier file read without replacing native ownership', async () => {
+    const h = harness();
+    const continuity = new Continuity(h.lab, h.shelf);
+    const native = await continuity.fresh(418);
+    const original = continuity.localSave(native);
+    const older = continuity.beginEntry();
+    let release: (text: string) => void = () => {};
+    const read = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    const pending = read.then((text) => continuity.importFile(text, older));
+    const later = continuity.beginEntry();
+    await expect(continuity.importFile('{', later)).rejects.toThrow();
+    release(JSON.stringify(exportRun(createGame(7))));
+    await expect(pending).rejects.toThrow(/changed/);
+    expect(continuity.localSave(native)).toBe(original);
+  });
+  test('unsupported local origins retain playable local residents without pretending to own shelf people', async () => {
+    vi.stubGlobal('location', { origin: 'http://127.0.0.1:5273' });
+    try {
+      const h = harness([await source()]);
+      h.shelf.enabled = false;
+      const state = await new Continuity(h.lab, h.shelf).fresh(418);
+      expect(h.shelf.enabled).toBe(false);
+      expect(state.chapter).toBeNull();
+      expect(h.requests).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  test('ordinary new chapters automatically admit available browser people without a host opt-in', async () => {
+    const h = harness([await source()]);
+    h.shelf.enabled = false;
+    const continuity = new Continuity(h.lab, h.shelf);
+    const state = await continuity.fresh(418);
+    expect(h.shelf.enabled).toBe(true);
+    expect(state.chapter?.inputs).toHaveLength(1);
+    expect(stateHash(importRun(exportRun(state)))).toBe(stateHash(state));
+  });
   test('two applicable heads claim together and current replay uses full pinned actors', async () => {
     const nora = await source(CAST[0]!.castId, true);
     const samCast = CAST[1]!;
