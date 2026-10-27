@@ -5,6 +5,7 @@ import { MAPS } from './paths.ts';
 import { beforeStorm, indoors, paceWords, tiredOf } from './pressure.ts';
 import type { Job } from './settlement.ts';
 import type { State, Villager } from './sim.ts';
+import { orderNotice, returnTiming } from './work-orders.ts';
 
 /** Presentation only. Observe host break clocks, visible task transitions and how tired
  * a person says they feel before and after a break (read-only). No simulation writes or saved state.
@@ -98,7 +99,7 @@ export class WorkObservation {
         v.recoveryUntil > s.tick
           ? `Now: ${residentName(v)} is ${v.task.replace(' / ', ' and ')}. This break has ${v.recoveryUntil - s.tick} game seconds left.`
           : `Now: ${residentName(v)} ${this.current(v, s.buildings)}`;
-      return `${now}${pace} ${request}${details ? ` ${recovery} Last words: “${v.says || 'No words recorded.'}”` : ''}`;
+      return `${now}${pace} ${request} ${returnTiming(s, v)}${details ? ` ${recovery} Last words: “${v.says || 'No words recorded.'}”` : ''}`;
     }
     const running = aw.running;
     const now = running
@@ -114,7 +115,7 @@ export class WorkObservation {
       aw.job?.kind === 'gather' && s.settlement?.dispute
         ? 'The shared trolley route is disputed; gathering waits for an accepted yield.'
         : '';
-    return `${now} Location: ${MAPS[aw.map].name}. ${request} ${carrying} ${route}${details ? ` Last words: “${v.says || 'No words recorded.'}” ${recovery}` : ''}`;
+    return `${now} Location: ${MAPS[aw.map].name}. ${request} ${carrying} ${route} ${returnTiming(s, v)}${details ? ` Last words: “${v.says || 'No words recorded.'}” ${recovery}` : ''}`;
   }
 
   line(v: Worker, tick: number, buildings: readonly Site[]): string {
@@ -160,7 +161,7 @@ export function invitationReadiness(
   if (s.tick < 60)
     return `Wait ${60 - s.tick} game seconds ${s.settlement ? 'before inviting a private story' : 'until the clock reaches 1:00'}. The clock counts at every speed. Pauses do not count. No shared location is required.`;
   if (s.settlement)
-    return 'A private story can be requested now. It waits for the current act; the resident may still decline. Later collaborations have their own time, place and material requirements.';
+    return 'A private story can be requested now. During a work or travel act, wait for it to finish and ask again, or explicitly cancel it first. An accepted request can wait through a personal activity such as rest; the resident may still decline. Later collaborations have their own time, place and material requirements.';
   if (v.discovery === 2)
     return 'The small collaboration has already been shown. This chapter has no further conversation step.';
   if (action === 'collaborate' && v.discovery === 0)
@@ -189,6 +190,8 @@ export function milestone(s: State): string {
 }
 
 export function currentNotice(s: State): string {
+  const notice = orderNotice(s);
+  if (notice) return notice;
   if (
     s.buildings.some((b) => b.kind === 'storehouse' && b.complete) &&
     /Finish the storehouse/.test(s.message)

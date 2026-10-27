@@ -38,6 +38,7 @@ import {
   supplyReadiness,
   WorkObservation,
 } from './work-observation.ts';
+import { materialFlow, orderConsequences, placementReason, routeCause } from './work-orders.ts';
 
 const root = document.getElementById('app') as HTMLElement;
 // The built public entry decides before ordinary Lab, Shelf, storage or watchers.
@@ -467,6 +468,12 @@ function update() {
       : people.map((v) => workObservation.summary(s, v)).join(' '),
   );
   const overview = document.getElementById('everyone-now');
+  if (s.settlement && overview && !document.getElementById('work-route-cause')) {
+    const facts = document.createElement('div');
+    facts.innerHTML =
+      '<p class="small" id="work-route-cause"></p><p class="small" id="work-material-flow"></p>';
+    overview.closest('details')?.after(facts);
+  }
   if (overview) {
     for (const v of s.villagers) {
       let row = document.getElementById(`worker-now-${v.id}`);
@@ -489,7 +496,7 @@ function update() {
   put(
     'notice',
     placing
-      ? `Selected: ${people.map((v) => residentName(v)).join(', ') || 'no people'}. ${placementFeedback ? `${placementFeedback} ` : ''}Choose open ground for the ${placing === 'house' ? 'guest cabin (40 boards)' : 'storehouse (180 boards and 120 ballast bags)'}. ${s.settlement ? 'The game checks the site and available residents when you tap.' : 'Dots show where the building can stand. The outline shows its size. Choose people who are free to build. You still need its materials.'} No materials are spent on a refused order. Choose Cancel to leave placement.`
+      ? `Selected: ${people.map((v) => residentName(v)).join(', ') || 'no people'}. ${placementFeedback ? `${placementFeedback} ` : ''}Choose open ground for the ${placing === 'house' ? 'guest cabin (40 boards)' : 'storehouse (180 boards and 120 ballast bags)'}. ${s.settlement ? 'The game checks the site and available residents when you tap.' : 'Dots show some legal points. Other open points can also work. The outline shows its size. Choose people who are free to build. You still need its materials.'} No materials are spent on a refused order. Choose Cancel to leave placement.`
       : moveMode
         ? 'Choose a destination on the map. Tap the unfinished storehouse to add builders, or tap ground to move. Choose Cancel to leave this mode.'
         : hostNote.text && hostNote.message === currentNotice(s)
@@ -571,7 +578,7 @@ function update() {
         ? '<button class="wide" id="cancel">Cancel placement or movement</button>'
         : town
           ? `<button class="wide primary" id="train" ${s.resources.food < 35 || s.villagers.length >= capacity || s.trainingUntil !== null ? 'disabled' : ''}>Invite helper · 35 meals</button><button class="wide" id="select-workers">Select all people</button><p class="small wide">${s.villagers.length >= capacity ? 'Choose a cabin site and prepare it with 40 boards to make room for a helper.' : s.resources.food < 35 ? 'Collect more meals before inviting a helper.' : s.trainingUntil !== null ? 'A helper is learning the light tasks and will arrive shortly.' : 'A helper arrives after 15 seconds of learning these light tasks.'}</p>`
-          : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast bags</button><button id="rest" ${!people.length ? 'disabled' : ''}>Rest, then resume</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink · 2 meals each</button>${s.rules ? '<button id="rest-all">Everyone rests</button><button id="shelter-all">Everyone under a roof</button>' : ''}<p class="small wide" id="meal-why"></p><button id="move" ${!people.length ? 'disabled' : ''}>Move / add builders · choose on map</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><p class="small cabin-help">Invite helpers at the workshop hub.</p><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse · 180 boards, 120 ballast bags</button><p class="small wide" id="store-why"></p><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>${s.rules ? `<button id="shelter" ${!people.length ? 'disabled' : ''}>Go under a roof</button>` : ''}`;
+          : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast bags</button><p class="small wide" id="order-consequences"></p><button id="rest" ${!people.length ? 'disabled' : ''}>Rest · keep current request</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink · 2 meals each</button>${s.rules ? '<button id="rest-all">Everyone rests</button><button id="shelter-all">Everyone under a roof · stop work</button>' : ''}<p class="small wide" id="meal-why"></p><button id="move" ${!people.length ? 'disabled' : ''}>Move / add builders · choose on map</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><p class="small cabin-help">Invite helpers at the workshop hub.</p><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse · 180 boards, 120 ballast bags</button><p class="small wide" id="store-why"></p><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>${s.rules ? `<button id="shelter" ${!people.length ? 'disabled' : ''}>Go under a roof · stop work</button>` : ''}`;
     for (const b of actions.querySelectorAll<HTMLButtonElement>('[data-resource]'))
       b.onclick = () => {
         const node = NODES.find((n) => n.kind === b.dataset.resource);
@@ -626,6 +633,9 @@ function update() {
       update();
     });
   }
+  put('order-consequences', orderConsequences(s, selected));
+  put('work-route-cause', routeCause(s));
+  put('work-material-flow', materialFlow(s));
   put('store-why', storehouseWhy(s, people.length, store));
   put('meal-why', mealWhy(s, people.length));
   if (s.shortYield)
@@ -713,11 +723,12 @@ function destination(x: number, y: number) {
   if (placing) {
     const kind = placing;
     const before = state?.buildings.length;
+    const reason = state ? placementReason(state, selected, x, y) : '';
     issue({ kind: 'build', ids: selected, building: kind, x, y });
     if (state && state.buildings.length !== before) {
       placing = '';
       placementFeedback = '';
-    } else placementFeedback = state?.message ?? '';
+    } else placementFeedback = reason || (state?.message ?? '');
     update();
     return;
   }
