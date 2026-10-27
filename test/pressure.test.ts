@@ -99,4 +99,7 @@ test('the ending reacts to how each resident was treated', () => {
   expect(closingLine(s, nerys)).toContain('dry');
   expect(closingLine(s, nerys)).not.toContain('insisted');
   expect(stormSummary(s).join(' ')).toContain('got soaked');
+  // Retest 2026-10-27: each resident speaks in their own voice, even with identical treatment.
+  expect(new Set(s.villagers.map((v) => closingLine(s, v))).size).toBe(s.villagers.length);
+  expect(closingLine(s, sam)).toContain('boards');
 });

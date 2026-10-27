@@ -1213,12 +1213,10 @@ export function stepSettlement(s: State): void {
   }
 }
 
-// The host commander waits at the workshop hub. A reply is an in-person act within
-// 45 map units there, using the existing pair-distance scale; no commander Person is made.
-export function replyPresent(s: State, v: Villager): boolean {
-  const a = actor(s, v);
-  return a.map === 'yard' && Math.hypot(v.x - HOME.x, v.y - HOME.y) <= 45;
-}
+// The player answers a resident where that resident stands (owner retest 2026-10-27). The reply
+// stays an in-person act at the recorded point. Replay: every reply input in an existing export
+// passed the older hub-only check before it was recorded, and the start and step checks below
+// still pin the recorded map and point, so dropping the hub check never changes an old run.
 function latestReply(s: State, v: Villager): ReplyAttempt | undefined {
   return world(s).replyScenes?.[v.id]?.attempts.at(-1);
 }
@@ -1232,7 +1230,6 @@ export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>):
   if (!scene) throw new Error('Wait for the actual completed private disclosure.');
   if (s.ended || s.pauseRequested || s.chapterPaused || !v.person.body.alive || v.availableAt > s.tick)
     throw new Error('This resident is unavailable. Resume an active day before asking.');
-  if (!replyPresent(s, v)) throw new Error('Walk to the workshop hub to talk with the commander.');
   const aw = actor(s, v),
     last = latestReply(s, v);
   if (
@@ -1322,7 +1319,6 @@ function startReply(s: State, v: Villager): boolean {
   if (!a || a.status !== 'requested' || aw.running || v.person.activity || s.pauseRequested) return false;
   const scene = w.replyScenes?.[v.id];
   if (
-    !replyPresent(s, v) ||
     aw.map !== a.map ||
     Math.hypot(v.x - a.point.x, v.y - a.point.y) > 1 ||
     aw.job ||
@@ -1411,7 +1407,6 @@ function stepReply(s: State, v: Villager): boolean {
     activity.targetId !== a.id ||
     activity.startedAt !== a.activityStartedAt ||
     activity.action !== 'talk' ||
-    !replyPresent(s, v) ||
     aw.map !== a.map ||
     Math.hypot(v.x - a.point.x, v.y - a.point.y) > 1 ||
     aw.job

@@ -1035,3 +1035,60 @@ a:focus-visible {
 .work-overview ol {
   padding-inline-start: 1.25rem;
 }
+
+/* Retest 2026-10-27 (phone map and resident panel too small): outside placement the map keeps a
+ * real height, and the side column is one scroll with the resident sheet at its natural height,
+ * instead of a two-line strip nested inside another scroll. The work buttons scroll with it. */
+@media (max-width: 760px) {
+  .game:not(.placing) .layout {
+    grid-template-rows: minmax(230px, 40dvh) minmax(0, 1fr);
+  }
+  .game:not(.placing) .side {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .game:not(.placing) .side > *,
+  .game:not(.placing) .sheet > * {
+    flex: none;
+  }
+  /* The sheet's parts join the side column so names, the last event and the work buttons come
+   * first, and longer resident notes follow below them. */
+  .game:not(.placing) .sheet {
+    display: contents;
+  }
+  .game:not(.placing) .sheet > * {
+    margin-inline: 12px;
+    order: 9;
+  }
+  .game:not(.placing) .objective {
+    order: 1;
+  }
+  .game:not(.placing) #selection,
+  .game:not(.placing) .selection-help,
+  .game:not(.placing) #units {
+    order: 2;
+  }
+  .game:not(.placing) #notice {
+    order: 3;
+  }
+  .game:not(.placing) #actions {
+    order: 4;
+  }
+  .game:not(.placing) #task {
+    order: 5;
+  }
+  .game:not(.placing) #finish-day {
+    order: 6;
+  }
+  .game:not(.placing) #said {
+    order: 7;
+  }
+  .game:not(.placing) #resident,
+  .game:not(.placing) #settlement-controls {
+    order: 8;
+  }
+  .game:not(.placing) .notice {
+    max-height: none;
+  }
+}

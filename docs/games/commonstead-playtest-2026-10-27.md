@@ -720,3 +720,7 @@ Ranked asks:
 | 101.1     | tap                     |          |            | Guessing: tapping the left of the map strip.                                                                                                                                                                                |
 | 124.8     | want_quit               | CONFUSED | 1:53       | 1:53 game. I accidentally sent everyone away from the hub with a map tap, the storehouse is nowhere on this tiny map, and the Storehouse button stays greyed out. I do not know how to proceed on the phone.                |
 | 128.6     | stop                    | CONFUSED | 1:53       | About 2 minutes real. I stop here on the phone. Supplies were complete but I could not find or enable the storehouse, and the map is too small to show it.                                                                  |
+
+## Fix cycle (2026-10-27)
+
+All six new blocking asks were fixed in one cycle. Each ask's fate and the headless difficulty check are in `docs/concept.md` under "2026-10-27 — fix cycle for the same-tester retest (R2)". The second same-tester retest decides whether Commonstead is finished (two-iteration rule).

@@ -551,3 +551,30 @@ test('one ordinary route dispute supports real paired talk, costed words, cancel
   expect(importRun(exportRun(s))).toEqual(s);
   expect(importRun(exportRun(s, true))).toEqual(s);
 });
+
+// Retest 2026-10-27: the player answers a resident where she stands, and a load left in hand
+// after Cancel task is delivered by the existing walk back to the yard that the UI now offers.
+test('a reply needs no walk to the hub, and a cancelled carrier can still deliver', () => {
+  const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+  const nora = resident(s, 'v1');
+  apply(s, { kind: 'order', ids: ['v1'], target: 'move', x: 300, y: 300 });
+  story(s, 'v1');
+  until(s, () => !s.settlement?.actors.v1?.job && !s.settlement?.actors.v1?.path.length, 200);
+  expect(Math.hypot(nora.x - 525, nora.y - 475)).toBeGreaterThan(45);
+  apply(s, { kind: 'reply', ids: ['v1'], branch: 'nora-restore-drawing' });
+  const attempt = s.settlement?.replyScenes?.v1?.attempts[0];
+  until(s, () => attempt?.status === 'completed', 400);
+
+  const w = s.settlement;
+  if (!w) throw new Error('day');
+  request(s, ['v2'], 'map', 'yard');
+  apply(s, { kind: 'order', ids: ['v2'], target: 'wood' });
+  until(s, () => !!w.actors.v2?.carried, 400);
+  request(s, ['v2'], 'cancel');
+  expect(w.actors.v2?.carried).not.toBeNull();
+  const wood = s.resources.wood;
+  request(s, ['v2'], 'map', 'yard');
+  until(s, () => !w.actors.v2?.carried, 300);
+  expect(s.resources.wood).toBeGreaterThan(wood);
+  expect(stateHash(importRun(JSON.parse(JSON.stringify(exportRun(s)))))).toBe(stateHash(s));
+});

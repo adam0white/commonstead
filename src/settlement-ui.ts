@@ -23,7 +23,7 @@ export function mountSettlementControls(
     )
     .join(
       '',
-    )}<button data-day="inspect">Ask selected people to inspect supplies</button><button data-day="story">Invite a private story</button><button data-day="talk">Invite two people to talk</button><button data-day="yield">Offer to yield the trolley route</button><button data-day="spar">Offer a voluntary practice bout</button><button data-day="cancel">Cancel selected tasks</button></div><details><summary>Fictional collaborations</summary><p>First invite a private story. A completed preparation is not a finished event. Nora and Sam must both agree to the grip trial. These are fictional scenes, not real messages or real user tests.</p><div class="day-controls">${Object.entries(
+    )}<button data-day="inspect">Ask selected people to inspect supplies</button><button data-day="story">Invite a private story</button><button data-day="talk">Invite two people to talk</button><button data-day="yield">Offer to yield the trolley route</button><button data-day="spar">Offer a voluntary practice bout</button><button data-day="cancel">Cancel selected tasks</button><button data-travel-load="yard">Bring carried materials to the hub</button></div><details><summary>Fictional collaborations</summary><p>First invite a private story. A completed preparation is not a finished event. Nora and Sam must both agree to the grip trial. These are fictional scenes, not real messages or real user tests.</p><div class="day-controls">${Object.entries(
     SCENES,
   )
     .map(([id, s]) => `<button data-scene="${id}">${s.label}</button>`)
@@ -34,6 +34,8 @@ export function mountSettlementControls(
     b.onclick = () => view(b.dataset.view as Place);
   for (const b of host.querySelectorAll<HTMLButtonElement>('[data-travel]'))
     b.onclick = () => issue({ kind: 'settlement', ids: selected(), action: 'map', target: b.dataset.travel });
+  for (const b of host.querySelectorAll<HTMLButtonElement>('[data-travel-load]'))
+    b.onclick = () => issue({ kind: 'settlement', ids: selected(), action: 'map', target: 'yard' });
   for (const b of host.querySelectorAll<HTMLButtonElement>('[data-day]'))
     b.onclick = () => issue({ kind: 'settlement', ids: selected(), action: b.dataset.day ?? '' });
   for (const b of host.querySelectorAll<HTMLButtonElement>('[data-scene]'))
@@ -64,6 +66,7 @@ export function updateSettlementControls(
   s: State,
   selected: string[] = [],
   issue: (c: Command) => void = () => {},
+  choose: (id: string) => void = () => {},
 ): void {
   const w = s.settlement;
   if (!w) return;
@@ -183,6 +186,12 @@ export function updateSettlementControls(
       host.prepend(panel);
     }
     const v = selected.length === 1 ? s.villagers.find((v) => v.id === selected[0]) : undefined;
+    // Residents whose shared story still waits for an answer stay reachable from any selection.
+    const open = s.villagers.filter((r) => {
+      const sc = w.replyScenes?.[r.id];
+      const status = sc?.attempts.at(-1)?.status ?? '';
+      return sc && !sc.completedBranch && !['requested', 'running'].includes(status) && r.id !== v?.id;
+    });
     const scene = v ? w.replyScenes?.[v.id] : undefined;
     const key = JSON.stringify([
       selected,
@@ -190,9 +199,9 @@ export function updateSettlementControls(
       w.paper,
       s.pauseRequested,
       s.tick >= 1786,
-      v?.x,
-      v?.y,
       v ? w.actors[v.id] : null,
+      v?.person.activity?.action,
+      open.map((x) => x.id),
     ]);
     if (panel.dataset.replyKey === key) return;
     panel.dataset.replyKey = key;
@@ -203,8 +212,14 @@ export function updateSettlementControls(
       panel.append(el);
     };
     text('h3', 'Personal replies · fresh local day');
+    for (const r of open) {
+      const b = document.createElement('button');
+      b.textContent = `${r.name} is waiting for your answer. Select ${r.name}`;
+      b.onclick = () => choose(r.id);
+      panel.append(b);
+    }
     if (!v || !['v1', 'v7'].includes(v.id)) {
-      text('p', 'Select Nora or Sevim to read a personal reply.');
+      if (!open.length) text('p', 'Select Nora or Sevim to read a personal reply.');
       return;
     }
     if (!scene) {
@@ -216,7 +231,7 @@ export function updateSettlementControls(
     }
     text(
       'p',
-      `${v.name} shared this story at ${scene.disclosure.at} seconds into this day. The commander waits at the workshop hub. Walk there before offering a reply.`,
+      `${v.name} shared this story at ${scene.disclosure.at} seconds into this day.${scene.completedBranch ? '' : ` You can answer where ${v.name} is now. ${v.name} must be free of other tasks first.`}`,
     );
     const last = scene.attempts.at(-1);
     if (last) {
@@ -247,7 +262,7 @@ export function updateSettlementControls(
         );
     }
     for (const [branch, details] of Object.entries(REPLIES)) {
-      if (details.actor !== v.id) continue;
+      if (details.actor !== v.id || scene.completedBranch) continue;
       const command = { kind: 'reply', ids: [v.id], branch } as Extract<Command, { kind: 'reply' }>;
       let reason = '';
       try {
@@ -262,6 +277,22 @@ export function updateSettlementControls(
       b.onclick = () => issue(command);
       panel.append(b);
       if (reason) text('p', reason);
+    }
+    const aw = w.actors[v.id];
+    const busy =
+      !scene.completedBranch &&
+      !(last && ['requested', 'running'].includes(last.status)) &&
+      (aw?.job || aw?.path.length || (aw?.running && aw.running.purpose !== 'body'));
+    if (aw?.carried) {
+      const b = document.createElement('button');
+      b.textContent = `Bring ${v.name}’s carried materials to the hub`;
+      b.onclick = () => issue({ kind: 'settlement', ids: [v.id], action: 'map', target: 'yard' });
+      panel.append(b);
+    } else if (busy) {
+      const b = document.createElement('button');
+      b.textContent = `Stop ${v.name}’s current task so you can answer`;
+      b.onclick = () => issue({ kind: 'settlement', ids: [v.id], action: 'cancel' });
+      panel.append(b);
     }
     if (last && ['requested', 'running'].includes(last.status)) {
       const b = document.createElement('button');

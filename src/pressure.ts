@@ -89,30 +89,117 @@ function facts(s: State, v: Villager) {
   return { ...t, offered: t.breaks, built: t.store, inside: indoors(s, v) };
 }
 
-/** One resident's reaction at the storm, chosen from what happened to them in this run. */
+/** Of the fetching jobs, the one this resident was sent to most often, read from the input log. */
+function mainFetch(s: State, v: Villager): 'food' | 'wood' | 'stone' | '' {
+  const count: Record<string, number> = {};
+  for (const { command: c } of s.inputs)
+    if (c.kind === 'order' && c.ids.includes(v.id) && ['food', 'wood', 'stone'].includes(c.target))
+      count[c.target] = (count[c.target] ?? 0) + 1;
+  return (['wood', 'stone', 'food'] as const).reduce<'food' | 'wood' | 'stone' | ''>(
+    (a, k) => ((count[k] ?? 0) > (a ? (count[a] ?? 0) : 0) ? k : a),
+    '',
+  );
+}
+
+/**
+ * Each resident's own voice, by cast order (Nora, Sam, Dai, Nerys, Dilek, Burak, Sevim, Oskar):
+ * [no story heard, after the storm was won], [no story, lost], [story heard], [collaboration done].
+ * Story lines refer only to what that resident already said on screen.
+ */
+const OWN: readonly (readonly [string, string, string, string])[] = [
+  [
+    'The storehouse door handle is plain. I want someone to try it before I call it finished.',
+    'Next time I would design the frame so fewer people can put it up faster.',
+    'I still have not asked the person who will use that handle. I mean to.',
+    'The easier grip is back on the drawing. Someone can test it tomorrow.',
+  ],
+  [
+    'I watched how the storehouse joints fit together. I learned a lot.',
+    'I will write down what went wrong, exactly as it happened.',
+    'I still need to correct that old report where I shared it.',
+    'My game note says only what I tried. That feels better.',
+  ],
+  [
+    'Thirty-one years at the dam, and a storm still makes me check everything twice.',
+    'At the dam we would have started a day earlier. I should have said so.',
+    'I said out loud that I liked being needed. That was hard.',
+    'The inspection card is on the wall. Nora can question it.',
+  ],
+  [
+    'The river will rise tonight. I will check its level in the morning.',
+    'The river will rise tonight, and our supplies are out in it.',
+    'Now you know about the telescope. Please keep it off the inn’s sign.',
+    'If the clouds clear after the storm, the dark corner is ready.',
+  ],
+  [
+    'Tomorrow I will plan the storm-day meals from what is in the store.',
+    'Tomorrow I will cook from whatever stayed dry.',
+    'The rain on the roof will make a good recording. No voices, of course.',
+    'I have the rattle of that lid. That recording is just for me.',
+  ],
+  [
+    'I counted what went into the store. The numbers will help tomorrow.',
+    'I will have to write down what the storm cost us.',
+    'The paper ferry is still in my pocket.',
+    'The paper ferry waits on the shared table. The shared money stays separate.',
+  ],
+  [
+    'I will write a plain record of today so everyone can read it.',
+    'I will write down honestly what happened today.',
+    'I keep thinking about that pupil. I have not admitted what I did wrong.',
+    'My note to that pupil is drafted. I have not sent it.',
+  ],
+  [
+    'I did not take a single photo today. It did not feel right.',
+    'I could photograph the soaked supplies. I will not.',
+    'I still need to correct that old caption.',
+    'The new caption is accurate. It is less exciting, and that is fine.',
+  ],
+];
+
+function shelterOf(s: State, v: Villager): string {
+  const hub = s.buildings.find((b) => b.kind === 'town');
+  if (hub && Math.hypot(hub.x - v.x, hub.y - v.y) < 160) return 'at the workshop hub';
+  const near = s.buildings.find(
+    (b) => b.complete && b.kind !== 'town' && Math.hypot(b.x - v.x, b.y - v.y) < 45,
+  );
+  return near?.kind === 'house' ? 'in the guest cabin' : 'in the storehouse';
+}
+
+/** One resident's reaction at the storm, composed from what happened to them in this run. */
 export function closingLine(s: State, v: Villager): string {
   const f = facts(s, v);
   const tired = tiredWords(v);
   const said: string[] = [];
   if (f.pushed >= 2) said.push('You kept insisting that I keep working. I will remember that.');
   else if (f.pushed === 1) said.push('You insisted once that I keep working. I did not like it.');
-  if (!f.inside) said.push('The rain caught me outside. I am soaked.');
-  if (v.discovery === 2) said.push('Thank you for listening, and for the small job we did together.');
-  else if (v.discovery === 1) said.push('Thank you for listening to me during the break.');
-  if (f.offered && !f.pushed) said.push('You gave me a break when I needed one.');
-  if (!f.offered && tired === 'very tired') said.push('Nobody offered me a break, and I am worn out.');
-  if (!f.asked) said.push('Nobody asked me to help today. I watched from the side.');
-  else if (f.built)
-    said.push(
-      s.won ? 'We got the storehouse up before the rain.' : 'We could not finish the storehouse in time.',
-    );
-  else if (f.cabin) said.push('I worked on the guest cabin.');
-  else
-    said.push(
-      s.won ? 'I fetched supplies while others built the storehouse.' : 'The supplies I fetched got soaked.',
-    );
-  if (f.inside && tired !== 'very tired') said.push(`I am ${tired}, and dry.`);
-  return said.slice(0, 3).join(' ');
+  else if (f.offered) said.push('You gave me a break when I needed one.');
+  else if (tired === 'very tired') said.push('Nobody offered me a break, and I am worn out.');
+  const own = OWN[Number(v.id.slice(1)) - 1];
+  if (own) said.push(own[v.discovery >= 2 ? 3 : v.discovery === 1 ? 2 : s.won ? 0 : 1]);
+  // Building comes from accepted orders only (`note`); fetching is ranked from the input log.
+  const fetch = f.asked && !f.built && !f.cabin ? mainFetch(s, v) : '';
+  said.push(
+    !f.asked
+      ? 'Nobody asked me to help today. I watched from the side.'
+      : f.built
+        ? s.won
+          ? 'I helped put the storehouse up before the rain.'
+          : 'I worked on the storehouse, but we ran out of time.'
+        : f.cabin
+          ? 'I worked on the guest cabin.'
+          : fetch === 'stone'
+            ? `I hauled ballast bags${s.won ? ' for the storehouse' : ', and they got soaked'}.`
+            : fetch === 'food'
+              ? `I gathered meals${s.won ? ' for the dry store' : ', and they got soaked'}.`
+              : fetch === 'wood'
+                ? `I carried boards${s.won ? ' for the storehouse' : ', and they got soaked'}.`
+                : 'I helped where I was asked.',
+  );
+  said.push(
+    f.inside ? `I am ${tired}, and dry ${shelterOf(s, v)}.` : 'The rain caught me outside. I am soaked.',
+  );
+  return said.join(' ');
 }
 
 /** Workshop-wide outcome lines, in words rather than tallies where possible. */

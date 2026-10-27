@@ -133,3 +133,25 @@ New game now plays the default ten-minute chapter under `pressure/1`. Owner rena
 Headless control on seed 418 (test/pressure.test.ts): a careful crew finishes the storehouse at about 5:10; no rest management about 6:00; spending the first 90 seconds on meals loses. Known gap: departing residents still carry `commonstead-3` as their rules label after living under `pressure/1`, so receiving games keep accepting them; a separate label needs receiving-game updates first.
 
 Deferred (target 2026-11-03, needs the same-tester retest): whether the pace curve, the 280 effort and the meal need feel right to players; per-resident voice beyond treatment facts; closing reactions for the longer days.
+
+## 2026-10-27 — fix cycle for the same-tester retest (R2)
+
+Source: `docs/games/commonstead-playtest-2026-10-27.md`. No state shape, schema or simulation rule changed; schemas 3–8 replay unchanged. Each ask's fate:
+
+1. **Reply-day commander gate — fixed.** The player answers Nora or Sevim where she stands. The hub-only check is gone from the reply request, start and step. This is replay-safe: a refused reply throws before it is recorded, so every recorded reply already passed the old check, and the start and step checks still pin the recorded map and point. The panel no longer mentions a commander. It offers "Stop Nora's current task so you can answer" when she is busy. A waiting answer stays reachable from any selection ("Nora is waiting for your answer. Select Nora"). Once a reply is complete, its choices are hidden.
+2. **Identical closing lines — fixed.** Each resident's line now has four parts: how they were treated, their own sentence (from their role, their story or the finished collaboration, and the outcome), their work (building from accepted orders; otherwise the fetching job they were sent to most often, from the input log), and where they are dry or that they got soaked. Headless control: 8 of 8 lines are distinct on ten seeds, for careful and careless play.
+3. **Disabled Storehouse with no reason — fixed.** The button names its cost. A live line under it gives the shortfall ("boards 158 of 180, ballast bags 40 of 120"), says if people need selecting, or says the site is chosen and how to add builders.
+4. **Phone map and panel too small — fixed.** At 760 px wide or less, outside placement, the map is at least 230 px tall (40% of the screen height). The side column is one scroll: names, then the last event, then the work buttons, then the Now line and resident notes at their natural height. Measured at 360×690: map 276 px, against 190 px before (about 140 px visible under the speed buttons).
+5. **Meals and tiredness — fixed.** "Eat and drink · 2 meals each". A live line gives the cost against the storm-day need ("Eating now uses 6 meals and leaves 24. The store has 30; the storm day needs 40"). It also says meals do not lower tiredness, a rest does (one rest may not be enough), and very tired people work much more slowly. Headless check: a rest lowered felt tiredness from 0.66 to 0.55; a meal raised it to 0.69. New orders under the default rules: "Everyone rests" (all who are not already resting) and "Everyone under a roof". The help text says the same.
+6. **"Return carried materials first" — fixed.** On the longer days, a request to a resident left holding a load becomes the existing walk back to the yard, which delivers the load at the hub. The notice says so. "Bring carried materials to the hub" is a named button, and the reply panel shows it for a carrier. The recorded refusal message is shown with a plain projection.
+
+Smaller asks: the intro typo "per person At 10:00" is fixed. The end tally no longer counts the workshop hub as a completed building. Help now opens at its top, not scrolled to its last button.
+
+Difficulty is unchanged (headless, ten seeds, default rules): careful play (boards then ballast, rest the very tired, gather meals after the build, shelter at 9:05) wins 10/10, finishes at 5:12, has the storm day fed and has everyone under a roof. Careless play (meals first, a meal break at 1:40, no rests, no shelter) wins 0/10.
+
+Deferred (target 2026-11-10; needs the second retest or design work):
+- Julio's long-day dispute causes in the work log.
+- A second or varied day after a win (Emre, Jonas, Mei, Aisha). This is a content ask.
+- Nia's asks: an answer she can respond to after a reply, and the story invite beside the person.
+- Tessa's ask: say on the map why a placement spot is refused.
+- Closing reactions for the longer days.

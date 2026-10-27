@@ -152,6 +152,10 @@ export function eventText(message: string): string {
       'After the game clock reaches 1:00, offer a break and wait five game seconds during that break. No shared location or earlier conversation is required.',
     )
     .replace(
+      'Return these carried materials to the workshop hub first.',
+      'This person is still carrying materials. Ask again after they deliver them at the hub, or choose Bring carried materials to the hub.',
+    )
+    .replace(
       'Spend a minute together before inviting a private story.',
       'After one minute of play at Steady, you may invite a private story. Pauses do not count. No shared location or earlier conversation is required.',
     );
