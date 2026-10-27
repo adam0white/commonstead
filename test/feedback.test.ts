@@ -25,8 +25,10 @@ test('ordinary choice notes retain note receipts and recording-off privacy', asy
   vi.stubGlobal('navigator', {});
   vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
     const bytes = await (init.body as Blob).arrayBuffer();
-    envelopes.push(JSON.parse(gunzipSync(bytes).toString()));
-    return Response.json({ ok: true, id: 'mock-note-receipt' });
+    const envelope = JSON.parse(gunzipSync(bytes).toString());
+    envelopes.push(envelope);
+    // Client 0.4.14+ retires a record only on a stored receipt for its own id.
+    return Response.json({ ok: true, id: envelope.id ?? 'mock-note-receipt' });
   });
   try {
     const lab = createLab({ game: 'commonstead' });
