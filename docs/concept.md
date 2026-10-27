@@ -43,6 +43,39 @@ Grammar exception: an RTS needs a larger map than the 120–260px scene guidance
 
 ## Deferred
 
+- 2026-10-27, second same-tester retest (retests-1027b, live `36e0640`, [playtest](games/commonstead-playtest-2026-10-27b.md)): **finished** under the two-iteration rule (2 keep, 11 mixed, 1 quit). Every remaining ask is deferred here:
+  - F-781: whole-group rest and roof orders keep each person's work and warn before halting assembly. Target 2026-11-03. retests-1027b.
+  - F-782: conversation controls outside the folded sections. Target 2026-11-03. retests-1027b.
+  - F-783: the private-story wait shows a countdown and counts at every speed. Target 2026-11-03. retests-1027b.
+  - F-786: "Back to the title page" in the pause menu. Target 2026-11-03. retests-1027b.
+  - F-787: plain wording for placement ("Dots mark open centres") and the help's five-second wait. Target 2026-11-03. retests-1027b.
+  - F-784: a second reply after the resident answers. Target 2026-11-10. retests-1027b.
+  - F-785: one resident's finished work shows in another resident's story. Target 2026-11-10. retests-1027b.
+  - F-765/F-778: long-day disputes return after every yield, and the boards crew stalls with no cause. Target 2026-11-10. retests-1027b.
+  - F-776: say whether the long-day goal can still be reached. Target 2026-11-10. retests-1027b.
+  - F-764: closing lines still share their opening and closing sentences. Target 2026-11-10. retests-1027b.
+  - F-772/F-745: a harder or varied run, and an empty long-day night. Target 2026-11-10. retests-1027b.
+  - F-763: a second conversation that follows the first. Target 2026-11-10. retests-1027b.
+  - F-746/F-719: a reply on the standard day, Dai included. Target 2026-11-10. retests-1027b.
+  - F-733/F-736: the resident text pane is a 150 to 190 px scroll window. Target 2026-11-10. retests-1027b.
+  - F-724: every resident runs the same rest, wait, invite, collaborate route. Target 2026-11-10. retests-1027b.
+  - F-748: the paired talk gives one dry line. Target 2026-11-10. retests-1027b.
+  - F-730: a decision in the building stretch. Target 2026-11-10. retests-1027b.
+  - F-749/F-771: a tally that shows rests, meals and time lost. Target 2026-11-10. retests-1027b.
+  - F-775: the off-dots placement refusal names its rule. Target 2026-11-10. retests-1027b.
+  - F-769/F-729: the phone map is covered by the caption and the speed row. Target 2026-11-10. retests-1027b.
+  - F-734: more to do with the place after the cabins. Target 2026-11-10. retests-1027b.
+  - F-752: say why tiredness returns fast. Target 2026-11-10. retests-1027b.
+  - F-698: selection stays after an order. Target 2026-11-10. retests-1027b.
+  - F-780: heavy reply-day words. Target 2026-11-10. retests-1027b.
+  - F-788: the phone name row runs off the edge, the hub label sits under people, and the "Now:" line is below the buttons. Target 2026-11-10. retests-1027b.
+  - F-789: distinct labels for the two "Say this to" buttons. Target 2026-11-10. retests-1027b.
+  - F-790: "Move / add builders" says it opens placement and how to cancel. Target 2026-11-10. retests-1027b.
+  - F-791: say when boards or bags are enough. Target 2026-11-10. retests-1027b.
+  - F-792: "1 completed buildings" grammar in the tally. Target 2026-11-10. retests-1027b.
+  - F-793: warn during the day when storm meals are short. Target 2026-11-10. retests-1027b.
+  - F-794: adopt the lab-kit release that carries human-framework 818c352 (recording notice over controls). Target 2026-11-10. retests-1027b.
+
 - 2026-10-27, B3 peer engineering candidate: the explicit fresh local `settlement-replies/2` day uses native schema 6. It keeps the delivered Nora/Sevim personal reply choices from `settlement-replies/1`/schema 5 and adds a bounded public trolley-route exchange. A real conflict supplies the pair, map and dated public witness. The player must finish tasks and return carried supplies, or explicitly cancel tasks before inviting the pair. Both residents must arrive together and independently choose and complete timed talk. Each then chooses a timed outward speaking act or withholds. The second choice follows the first actual utterance or withholding. Historical words name the earlier time; no private biography is shared. Actual HF activity duration, reviews and interruption govern completion. Public hearing receipts distinguish delivery and attention from agreement. Talking never grants Yield, releases a trolley, clears the dispute or adds a route agreement. Only the existing separately completed Yield can open the route.
 - This batch ends with a reviewed native replaying peer scene; Adam accepts its feel after playing. This author supplies a review candidate, not review approval, deployment, player retention or owner acceptance. Native schemas 3/4/5 retain their meanings and complete replay. New 6 has eight fresh local canonical residents, no incoming ownership, no continuation of short-chapter disclosures, and the existing settlement departure refusal. No new cast or absent pupil, family or client response is supplied.
 - 2026-10-27, remaining engineering: review/integration of this bounded peer candidate; other personal replies, natural withholding and review/interruption evidence beyond the focused controls, same-run short-chapter replies, and B4 story/identity/storm closing/challenge work. The fixed seed proves two actual route utterances and cancellation, not free personal conversation or whole F-742/83-row closure. The eight-tick personal alternatives still lack separate completion proof. Browser phone/wide and native chooser proof for this candidate remain for the parent; no browser proof is claimed by this author. Existing B2 current-work presentation and the state-aware building-target validator remain outside this batch. Owner play/readiness and real human accessibility input are due 2026-11-03; open engineering is not an owner blocker.
