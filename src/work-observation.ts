@@ -158,7 +158,7 @@ export function invitationReadiness(
   if (!s.settlement && s.tick < v.availableAt)
     return `This resident has a usual responsibility for ${v.availableAt - s.tick} more game seconds.`;
   if (s.tick < 60)
-    return `Wait ${60 - s.tick} game seconds until the clock reaches 1:00. No shared location is required.`;
+    return `Wait ${60 - s.tick} game seconds ${s.settlement ? 'before inviting a private story' : 'until the clock reaches 1:00'}. The clock counts at every speed. Pauses do not count. No shared location is required.`;
   if (s.settlement)
     return 'A private story can be requested now. It waits for the current act; the resident may still decline. Later collaborations have their own time, place and material requirements.';
   if (v.discovery === 2)
@@ -214,4 +214,13 @@ export function observedEvents(events: readonly { at: number; text: string }[]):
       (g) =>
         `${clock(g.first)}${g.count > 1 ? `–${clock(g.last)} (${g.count} times)` : ''} into this game: ${g.text}`,
     );
+}
+
+/** Counted central stores are the game's declared RTS exception, never a read of a person. */
+export function supplyReadiness(s: State): string {
+  if (s.buildings.some((b) => b.kind === 'storehouse'))
+    return 'The storehouse materials have been spent on its site.';
+  const boards = Math.max(0, Math.ceil(180 - s.resources.wood));
+  const bags = Math.max(0, Math.ceil(120 - s.resources.stone));
+  return `${boards ? `Collect ${boards} more boards.` : 'Boards are enough for the storehouse.'} ${bags ? `Collect ${bags} more ballast bags.` : 'Ballast bags are enough for the storehouse.'}`;
 }
