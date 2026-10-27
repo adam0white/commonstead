@@ -162,7 +162,7 @@ export class Continuity {
     this.requireEntry(generation);
     const saved = JSON.parse(text);
     const state = importRun(saved.run);
-    if (state.shortYield) validateYieldSources(saved.sources);
+    if (state.shortYield || state.roofBreak) validateYieldSources(saved.sources);
     await this.validateRunEnvelopes(state);
     if (
       typeof saved.runId !== 'string' ||
@@ -209,8 +209,8 @@ export class Continuity {
     this.requireEntry(generation);
     const raw = JSON.parse(text);
     const { castSources: archiveSources, ...native } = raw;
-    const state = importRun(raw.schema === 7 || raw.schema === 8 ? native : raw);
-    if (raw.schema === 7) validateYieldSources(archiveSources ?? []);
+    const state = importRun([7, 8, 9].includes(raw.schema) ? native : raw);
+    if (raw.schema === 7 || raw.schema === 9) validateYieldSources(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];
     if (!Array.isArray(sources) || JSON.stringify(sources).length > maxArchive)
@@ -276,12 +276,20 @@ export class Continuity {
       state = this.state,
       runId = this.runId;
     const task = this.operation.then(async () => {
+      if (state?.roofBreak)
+        throw new Error(
+          'People from this recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.',
+        );
       if (state?.shortYield)
         throw new Error(
           'People from this yielded short day cannot move to another game yet. Download the run to keep this day.',
         );
       const current = () =>
-        !state?.shortYield && generation === this.generation && state === this.state && runId === this.runId;
+        !state?.shortYield &&
+        !state?.roofBreak &&
+        generation === this.generation &&
+        state === this.state &&
+        runId === this.runId;
       if (
         !state ||
         !current() ||

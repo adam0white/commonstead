@@ -1,7 +1,7 @@
 import { residentName } from './display.ts';
 import { blocked, MAPS, route } from './paths.ts';
 import { openPlacementGround } from './placement.ts';
-import { NODES, type State, type Villager } from './sim.ts';
+import { NODES, type State, taskLabel, type Villager } from './sim.ts';
 
 /** Scope: read-only public order consequences and host geometry. No new faculty, inputs,
  * saved defaults, body reads, predictions of assent, simulation writes or recovery promises.
@@ -16,6 +16,20 @@ export function orderConsequences(s: State, ids: readonly string[]): string {
 }
 
 export function returnTiming(s: State, v: Villager): string {
+  const roof = s.roofBreak?.attempts.findLast((a) => a.id === v.id);
+  if (roof) {
+    const target = roof.priorOrder?.target;
+    const earlier = target
+      ? `${taskLabel(roof.priorTarget?.kind ?? target)} at ${Math.round(roof.priorOrder!.x)}, ${Math.round(roof.priorOrder!.y)}`
+      : 'none';
+    const stage =
+      roof.stage === 'roof'
+        ? 'Walking to the hub roof. Travel time is unknown; the planned 35-second rest has not begun.'
+        : roof.stage === 'rest'
+          ? `Resting under the hub roof: ${Math.max(0, roof.restUntil! - s.tick)} planned game seconds remain. This does not guarantee recovery or later assent.`
+          : (roof.result ?? '');
+    return `Roof break recorded at ${clock(roof.capturedAt)}. Earlier request: ${earlier}. ${stage}`;
+  }
   if (s.settlement) {
     const aw = s.settlement.actors[v.id];
     if (aw?.carried)

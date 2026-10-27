@@ -55,6 +55,7 @@ export function taskLabel(target: string): string {
 
 export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
+  | { kind: 'roof-break-return'; ids: string[] }
   | { kind: 'reply'; ids: string[]; branch: ReplyBranch }
   | PeerCommand
   | { kind: 'order'; ids: string[]; target: string; x?: number; y?: number }
@@ -97,7 +98,25 @@ export type Building = {
 };
 export type ChronicleEntry = { tick: number; text: string };
 export type ShortYield = { version: 'short-yield/1'; cutover: number; chronicle: ChronicleEntry[] };
+export type RoofBreak = {
+  id: string;
+  capturedAt: number;
+  /** Index of this public input; the preceding transcript and chapter pin its source world. */
+  inputIndex: number;
+  priorOrder: Order | null;
+  priorTarget: Building | (typeof NODES)[number] | null;
+  priorTask: string;
+  priorStatus: string;
+  stage: 'roof' | 'rest' | 'reoffered' | 'unavailable' | 'cancelled';
+  restStarted?: number;
+  restUntil?: number;
+  endedAt?: number;
+  result?: string;
+};
+export const ROOF_RETURN = 'roof-break-return/1';
 export type State = {
+  /** Created only by the separately named public action, never an implicit saved default. */
+  roofBreak?: { version: typeof ROOF_RETURN; attempts: RoofBreak[] };
   /** Present only for `pressure/1` (schema 8); absent keeps legacy schema bytes. */
   rules?: typeof PRESSURE;
   /** `pressure/1` only: accepted effects of commands on each resident, for the ending. */
@@ -240,7 +259,8 @@ function offer(
 ): Affordance {
   return { id: action, action, label: action, duration: duration * BODY_MINUTES, effort, advertises, tags };
 }
-function recover(s: State, v: Villager, kind: 'rest' | 'meal', automatic = false) {
+function recover(s: State, v: Villager, kind: 'rest' | 'meal', automatic = false, roof = false) {
+  if (!roof) cancelRoofBreak(s, v.id);
   interrupt(v);
   if (kind === 'meal') s.resources.food -= 2;
   const a =
@@ -344,6 +364,7 @@ function chooseWork(s: State, v: Villager, push = false) {
   }
 }
 function assign(s: State, v: Villager, order: Order) {
+  cancelRoofBreak(s, v.id);
   if (v.order?.target === order.target && v.order.x === order.x && v.order.y === order.y) return;
   v.order = order;
   if (order.target === 'move' || order.target === 'shelter') v.recoveryUntil = 0;
@@ -352,6 +373,122 @@ function assign(s: State, v: Villager, order: Order) {
     return;
   }
   chooseWork(s, v);
+}
+/** Scope: one public host-world itinerary. HF still chooses every ordinary work act.
+ * Rest uses the existing explicit rest affordance; no body, memory or earned material is reset.
+ */
+export function activeRoofBreak(s: State, id: string): RoofBreak | undefined {
+  return s.roofBreak?.attempts.findLast((a) => a.id === id && ['roof', 'rest'].includes(a.stage));
+}
+function cancelRoofBreak(s: State, id?: string) {
+  for (const a of s.roofBreak?.attempts ?? [])
+    if ((!id || a.id === id) && ['roof', 'rest'].includes(a.stage)) {
+      a.stage = 'cancelled';
+      a.endedAt = s.tick;
+      a.result = 'Cancelled by a later interruption. Earlier work will not be re-offered.';
+    }
+}
+export function roofBreakUnavailable(s: State, ids: readonly string[]): string {
+  if (!s.rules || s.settlement)
+    return 'Roof break and return is available only in the ten-minute storm day. Longer-day jobs and carried loads are not supported by this action.';
+  if (s.ended || s.pauseRequested || s.chapterPaused)
+    return 'Resume an unfinished day before requesting a roof break.';
+  if (!ids.length || ids.some((id) => !s.villagers.some((v) => v.id === id)))
+    return 'Select residents for the roof break.';
+  if (ids.some((id) => activeRoofBreak(s, id)))
+    return 'A selected resident already has a roof break in progress. A new order interrupts it; repeating this action does not restart it.';
+  if (s.villagers.some((v) => ids.includes(v.id) && s.tick < v.availableAt))
+    return 'A selected resident is still attending a usual responsibility.';
+  if (!s.buildings.some((b) => b.kind === 'town' && b.complete))
+    return 'The workshop hub roof is unavailable.';
+  if (s.inputs.length >= 10000 || (s.roofBreak?.attempts.length ?? 0) + ids.length > 10000)
+    return 'The recorded roof-break limit has been reached.';
+  return '';
+}
+function startRoofBreak(s: State, c: Extract<GameCommand, { kind: 'roof-break-return' }>) {
+  validateRoofCommand(c);
+  // Refused/duplicate requests do not add inputs or change an active itinerary.
+  if (roofBreakUnavailable(s, c.ids)) return;
+  const hub = s.buildings.find((b) => b.kind === 'town')!;
+  const inputIndex = s.inputs.length;
+  s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+  s.roofBreak ??= { version: ROOF_RETURN, attempts: [] };
+  for (const v of s.villagers.filter((v) => c.ids.includes(v.id))) {
+    const a: RoofBreak = {
+      id: v.id,
+      capturedAt: s.tick,
+      inputIndex,
+      priorOrder: structuredClone(v.order),
+      priorTarget: structuredClone([...NODES, ...s.buildings].find((t) => t.id === v.order?.target) ?? null),
+      priorTask: v.task,
+      priorStatus: v.status,
+      stage: 'roof',
+    };
+    interrupt(v);
+    v.recoveryUntil = 0;
+    v.order = {
+      target: 'shelter',
+      x: hub.x + 30 * Math.cos(Number(v.id.slice(1)) * 2.4),
+      y: hub.y + 30 * Math.sin(Number(v.id.slice(1)) * 2.4),
+    };
+    s.roofBreak.attempts.push(a);
+    if (Math.hypot(v.order.x - v.x, v.order.y - v.y) <= 15) beginRoofRest(s, v, a);
+    else chooseWork(s, v);
+  }
+  s.message =
+    'Selected residents stop work and walk under the hub roof. There they will take a planned 35-second rest, then consider their own earlier work. They may choose another personal activity. A new task interrupts this sequence.';
+}
+function beginRoofRest(s: State, v: Villager, a: RoofBreak) {
+  v.order = null;
+  note(s, v.id, { rest: true });
+  recover(s, v, 'rest', false, true);
+  v.invitedBreak = true;
+  v.breakStarted = s.tick;
+  a.stage = 'rest';
+  a.restStarted = s.tick;
+  a.restUntil = v.recoveryUntil;
+  v.says = 'I am taking the planned break under the hub roof. Afterward I can consider the earlier request.';
+}
+function reofferRoofWork(s: State, v: Villager, a: RoofBreak) {
+  const order = a.priorOrder;
+  const node = NODES.find((n) => n.id === order?.target);
+  const site = s.buildings.find((b) => b.id === order?.target && b.kind !== 'town');
+  a.endedAt = s.tick;
+  const target = node ?? site;
+  const sameTarget =
+    target &&
+    a.priorTarget &&
+    target.id === a.priorTarget.id &&
+    target.kind === a.priorTarget.kind &&
+    target.x === a.priorTarget.x &&
+    target.y === a.priorTarget.y;
+  if (!order || !sameTarget || (!node && (!site || site.complete))) {
+    a.stage = 'unavailable';
+    a.result = !order
+      ? 'No earlier work request was recorded.'
+      : site?.complete
+        ? 'The earlier building is complete. No work was re-offered.'
+        : 'The earlier target is unavailable or was not work. No work was re-offered.';
+    v.says = a.result;
+    return;
+  }
+  a.stage = 'reoffered';
+  a.result =
+    'The earlier work was re-offered through ordinary choices. Further rest or refusal remains possible.';
+  v.order = structuredClone(order);
+  note(s, v.id, { asked: true });
+}
+function validateRoofCommand(raw: unknown) {
+  exactKeys(raw, ['kind', 'ids']);
+  if (
+    raw.kind !== 'roof-break-return' ||
+    !Array.isArray(raw.ids) ||
+    !raw.ids.length ||
+    raw.ids.length > 20 ||
+    new Set(raw.ids).size !== raw.ids.length ||
+    raw.ids.some((id) => typeof id !== 'string' || !/^v[1-9][0-9]?$/.test(id))
+  )
+    throw new Error('Invalid roof-break residents');
 }
 /** Eligibility is limited to the original short chapter. UI also checks its menu pause. */
 export function canYieldDay(s: State): boolean {
@@ -373,6 +510,11 @@ export function publicPlaceText(text: string): string {
 }
 
 export function apply(s: State, c: GameCommand): void {
+  if (c.kind === 'roof-break-return') {
+    startRoofBreak(s, c);
+    return;
+  }
+  if (s.roofBreak && s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
   if (c.kind === 'yield-day') {
     exactKeys(c, ['kind']);
     if (!canYieldDay(s) || s.inputs.length >= 10000)
@@ -443,6 +585,7 @@ export function apply(s: State, c: GameCommand): void {
   }
   if (c.kind === 'settlement' || c.kind === 'reply' || c.kind === 'peer') return;
   if (c.kind === 'pause-chapter') {
+    cancelRoofBreak(s);
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
     s.message = s.chapterPaused
@@ -596,6 +739,7 @@ export function apply(s: State, c: GameCommand): void {
   if (c.target === 'push') {
     for (const v of selected)
       if (v.order) {
+        cancelRoofBreak(s, v.id);
         note(s, v.id, { push: true });
         v.recoveryUntil = 0;
         chooseWork(s, v, true);
@@ -647,6 +791,7 @@ export function step(s: State): void {
     if (v.recoveryUntil) {
       if (s.tick < v.recoveryUntil) continue;
       const action = v.person.activity?.action;
+      const roofRest = activeRoofBreak(s, v.id);
       if (v.person.activity)
         finish(v.person, {
           affordanceId: v.person.activity.affordanceId,
@@ -654,10 +799,14 @@ export function step(s: State): void {
           at: v.person.now,
           status: 'completed',
           needs: action === 'eat' ? { food: 0.7, water: 0.8 } : action === 'drink' ? { water: 0.8 } : {},
-          summary: `I finished ${action === 'rest' ? 'resting' : action === 'eat' ? 'eating' : 'drinking'}. I am returning to my task.`,
+          summary:
+            roofRest?.stage === 'rest'
+              ? 'I finished the planned rest under the hub roof.'
+              : `I finished ${action === 'rest' ? 'resting' : action === 'eat' ? 'eating' : 'drinking'}. I am returning to my task.`,
         });
       v.recoveryUntil = 0;
       v.actionUntil = 0;
+      if (roofRest?.stage === 'rest' && roofRest.restUntil === s.tick) reofferRoofWork(s, v, roofRest);
       if (v.order) chooseWork(s, v);
       else {
         v.task = 'idle';
@@ -692,6 +841,8 @@ export function step(s: State): void {
       v.task = 'idle';
       v.status = 'waiting';
       v.says = shelter ? 'I am under the roof at the hub.' : 'I am here.';
+      const roof = activeRoofBreak(s, v.id);
+      if (shelter && roof?.stage === 'roof') beginRoofRest(s, v, roof);
       continue;
     }
     if (v.person.activity?.action === 'move') {
@@ -739,6 +890,7 @@ export function step(s: State): void {
         ? 'The storm will arrive in two minutes. Bring everyone under a roof: the workshop hub or a finished building.'
         : 'The storm will arrive in two minutes. Finish the storehouse, then bring everyone under a roof.';
   if (s.tick === 600) {
+    cancelRoofBreak(s);
     s.ended = true;
     // The actual storm ends work. It interrupts remaining acts; it does not complete obligations.
     for (const v of s.villagers) {
@@ -787,10 +939,13 @@ export function replay(
   config?: SettlementConfig,
   allowYield = false,
   rules?: typeof PRESSURE,
+  allowRoof = false,
 ): State {
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
+  if (!allowRoof && inputs.some((i) => i?.command?.kind === 'roof-break-return'))
+    throw new Error('Roof command requires its native extension');
   if (!allowYield && inputs.some((i) => i?.command?.kind === 'yield-day'))
     throw new Error('Yield command in legacy schema');
   if (!hasReplies(config?.edition ?? '') && inputs.some((i) => i?.command?.kind === 'reply'))
@@ -802,7 +957,7 @@ export function replay(
   for (const input of inputs) {
     if (allowYield || rules) {
       exactKeys(input, ['tick', 'command']);
-      validateShortInput(input.command);
+      validateShortInput(input.command, allowRoof);
     }
     if (hasReplies(config?.edition ?? '')) {
       exactKeys(input, ['tick', 'command']);
@@ -831,6 +986,20 @@ export function replay(
   return s;
 }
 export function exportRun(s: State, compact = false): unknown {
+  if (s.roofBreak)
+    return {
+      schema: 9,
+      framework: '3.0.0',
+      rules: ROOF_RETURN,
+      baseRules: PRESSURE,
+      extension: { version: ROOF_RETURN },
+      chapter: structuredClone(s.chapter),
+      seed: s.seed,
+      tick: s.tick,
+      inputs: structuredClone(s.inputs),
+      hash: stateHash(s),
+      ...(compact ? { compact: true } : { state: structuredClone(s) }),
+    };
   if (s.rules)
     return {
       schema: 8,
@@ -891,6 +1060,7 @@ export function exportRun(s: State, compact = false): unknown {
 export function importRun(raw: unknown): State {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
+    if ((raw as { schema?: unknown }).schema === 9) return importRoofBreak(raw);
     if ((raw as { schema?: unknown }).schema === 7) return importShortYield(raw);
     if ((raw as { schema?: unknown }).schema === 8) return importPressure(raw);
     const r = raw as {
@@ -1136,7 +1306,57 @@ function importPressure(raw: unknown): State {
   return s;
 }
 
-function validateShortInput(raw: unknown): void {
+function importRoofBreak(raw: unknown): State {
+  requireShortJson(raw);
+  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
+  const r = raw as Record<string, unknown>;
+  exactKeys(r, [
+    'schema',
+    'framework',
+    'rules',
+    'baseRules',
+    'extension',
+    'chapter',
+    'seed',
+    'tick',
+    'inputs',
+    'hash',
+    r.compact === true ? 'compact' : 'state',
+  ]);
+  exactKeys(r.extension, ['version']);
+  if (
+    r.framework !== '3.0.0' ||
+    r.rules !== ROOF_RETURN ||
+    r.baseRules !== PRESSURE ||
+    r.extension.version !== ROOF_RETURN ||
+    (r.compact !== undefined && r.compact !== true)
+  )
+    throw new Error('version');
+  if (r.chapter !== null) checkChapter(r.chapter as Chapter);
+  const s = replay(
+    r.seed as number,
+    r.inputs as Input[],
+    r.tick as number,
+    (r.chapter as Chapter | null) ?? undefined,
+    undefined,
+    false,
+    PRESSURE,
+    true,
+  );
+  if (
+    !s.roofBreak ||
+    stable(s.inputs) !== stable(r.inputs) ||
+    stateHash(s) !== r.hash ||
+    (r.compact !== true && stable(s) !== stable(r.state))
+  )
+    throw new Error('state mismatch');
+  return s;
+}
+function validateShortInput(raw: unknown, allowRoof = false): void {
+  if (allowRoof && (raw as { kind?: string })?.kind === 'roof-break-return') {
+    validateRoofCommand(raw);
+    return;
+  }
   exactKeys(raw, ['kind'], ['ids', 'target', 'x', 'y', 'building']);
   const c = raw as unknown as Command;
   if (['yield-day', 'train', 'pause-chapter', 'resume-chapter'].includes(c.kind)) {
