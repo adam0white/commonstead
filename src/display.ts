@@ -12,6 +12,7 @@ export function nextTask(
     'ballast bags': 'collecting ballast bags',
     idle: 'waiting',
     move: 'moving to the selected place',
+    shelter: 'shelter at the workshop hub',
     house: 'preparing a guest cabin',
     'guest cabin': 'preparing a guest cabin',
     storehouse: 'assembling the storehouse',

@@ -15,6 +15,15 @@ import { admissionLine, assignmentText, nextTask, residentName } from './display
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 import { openPlacementGround } from './placement.ts';
 import {
+  note,
+  PRESSURE,
+  PRESSURE_FOOD,
+  PRESSURE_OPENING,
+  STORE_EFFORT,
+  type Treatment,
+  workPace,
+} from './pressure.ts';
+import {
   applySettlement,
   initSettlement,
   type Settlement,
@@ -39,6 +48,7 @@ export function taskLabel(target: string): string {
       stone: 'ballast bags',
       house: 'guest cabin',
       storehouse: 'storehouse',
+      shelter: 'shelter at the workshop hub',
     }[target] ?? target
   );
 }
@@ -88,6 +98,10 @@ export type Building = {
 export type ChronicleEntry = { tick: number; text: string };
 export type ShortYield = { version: 'short-yield/1'; cutover: number; chronicle: ChronicleEntry[] };
 export type State = {
+  /** Present only for `pressure/1` (schema 8); absent keeps legacy schema bytes. */
+  rules?: typeof PRESSURE;
+  /** `pressure/1` only: accepted effects of commands on each resident, for the ending. */
+  record?: Record<string, Treatment>;
   shortYield?: ShortYield;
   settlement?: Settlement;
   chapter: Chapter | null;
@@ -151,8 +165,14 @@ function makeVillager(seed: number, n: number): Villager {
     status: 'waiting',
   };
 }
-export function createGame(seed: number, chapter?: Chapter, config?: SettlementConfig): State {
+export function createGame(
+  seed: number,
+  chapter?: Chapter,
+  config?: SettlementConfig,
+  rules?: typeof PRESSURE,
+): State {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error('Invalid seed');
+  if (rules !== undefined && (rules !== PRESSURE || config)) throw new Error('Invalid rules');
   const villagers = Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1));
   if (chapter) {
     checkChapter(chapter);
@@ -192,6 +212,11 @@ export function createGame(seed: number, chapter?: Chapter, config?: SettlementC
     ended: false,
     won: false,
   };
+  if (rules) {
+    state.rules = rules;
+    state.resources.food = PRESSURE_FOOD;
+    state.message = PRESSURE_OPENING;
+  }
   if (config) initSettlement(state, config);
   return state;
 }
@@ -321,7 +346,7 @@ function chooseWork(s: State, v: Villager, push = false) {
 function assign(s: State, v: Villager, order: Order) {
   if (v.order?.target === order.target && v.order.x === order.x && v.order.y === order.y) return;
   v.order = order;
-  if (order.target === 'move') v.recoveryUntil = 0;
+  if (order.target === 'move' || order.target === 'shelter') v.recoveryUntil = 0;
   if (v.recoveryUntil > s.tick) {
     v.status = `${v.task}; then ${order.target}`;
     return;
@@ -331,6 +356,7 @@ function assign(s: State, v: Villager, order: Order) {
 /** Eligibility is limited to the original short chapter. UI also checks its menu pause. */
 export function canYieldDay(s: State): boolean {
   return (
+    !s.rules &&
     !s.settlement &&
     !s.shortYield &&
     !s.ended &&
@@ -490,6 +516,8 @@ export function apply(s: State, c: GameCommand): void {
     };
     s.buildings.push(b);
     for (const v of selected)
+      note(s, v.id, { asked: true, [c.building === 'house' ? 'cabin' : 'store']: true });
+    for (const v of selected)
       assign(s, v, {
         target: b.id,
         x: b.x + 18 * Math.cos(Number(v.id.slice(1)) * 2.4),
@@ -504,6 +532,7 @@ export function apply(s: State, c: GameCommand): void {
       return;
     }
     for (const v of selected) {
+      note(s, v.id, { rest: true });
       recover(s, v, c.target);
       v.invitedBreak = true;
       v.breakStarted = s.tick;
@@ -552,9 +581,22 @@ export function apply(s: State, c: GameCommand): void {
     s.message = v.says;
     return;
   }
+  if (s.rules && c.target === 'shelter') {
+    const hub = s.buildings.find((b) => b.kind === 'town');
+    if (!hub) return;
+    for (const v of selected)
+      assign(s, v, {
+        target: 'shelter',
+        x: hub.x + 30 * Math.cos(Number(v.id.slice(1)) * 2.4),
+        y: hub.y + 30 * Math.sin(Number(v.id.slice(1)) * 2.4),
+      });
+    s.message = `${selected.map((v) => residentName(v)).join(', ')} will go under the roof at the workshop hub.`;
+    return;
+  }
   if (c.target === 'push') {
     for (const v of selected)
       if (v.order) {
+        note(s, v.id, { push: true });
         v.recoveryUntil = 0;
         chooseWork(s, v, true);
       }
@@ -572,6 +614,10 @@ export function apply(s: State, c: GameCommand): void {
     s.message = 'Choose a destination.';
     return;
   }
+  const site = s.buildings.find((b) => b.id === c.target && b.kind !== 'town');
+  if (c.target !== 'move')
+    for (const v of selected)
+      note(s, v.id, { asked: true, ...(site ? { [site.kind === 'house' ? 'cabin' : 'store']: true } : {}) });
   for (const v of selected)
     assign(s, v, {
       target: c.target,
@@ -639,12 +685,13 @@ export function step(s: State): void {
       v.y += (v.order.y - v.y) * scale;
       continue;
     }
-    if (v.order.target === 'move') {
+    if (v.order.target === 'move' || v.order.target === 'shelter') {
+      const shelter = v.order.target === 'shelter';
       interrupt(v);
       v.order = null;
       v.task = 'idle';
       v.status = 'waiting';
-      v.says = 'I am here.';
+      v.says = shelter ? 'I am under the roof at the hub.' : 'I am here.';
       continue;
     }
     if (v.person.activity?.action === 'move') {
@@ -652,19 +699,25 @@ export function step(s: State): void {
       chooseWork(s, v);
       continue;
     }
-    const capacity = readPerson(v.person).body.capacity * (v.person.activity?.protest ? 0.75 : 1);
+    const capacity =
+      readPerson(v.person).body.capacity *
+      (v.person.activity?.protest ? (s.rules ? 0.6 : 0.75) : 1) *
+      (s.rules ? workPace(v) : 1);
     const node = NODES.find((n) => n.id === v.order?.target);
-    if (node) s.resources[node.kind] += 0.52 * capacity;
+    if (node) s.resources[node.kind] += (s.rules && node.kind === 'food' ? 0.25 : 0.52) * capacity;
     const b = s.buildings.find((b) => b.id === v.order?.target);
     if (b && !b.complete) {
-      b.progress = Math.min(1, b.progress + capacity / (b.kind === 'house' ? 35 : 180));
+      b.progress = Math.min(
+        1,
+        b.progress + capacity / (b.kind === 'house' ? 35 : s.rules ? STORE_EFFORT : 180),
+      );
       if (b.progress === 1) {
         b.complete = true;
         s.shortYield?.chronicle.push({
           tick: s.tick,
           text: `The ${taskLabel(b.kind)} (${b.id}) was completed.`,
         });
-        s.message = `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? 'The shared supplies are ready for the storm.' : 'There is room for two more people.'}`;
+        s.message = `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? (s.rules ? 'The shared supplies will stay dry. Before the storm, save meals for the storm day, let tired people rest, and bring everyone under a roof.' : 'The shared supplies are ready for the storm.') : 'There is room for two more people.'}`;
       }
     }
     if (b?.complete) {
@@ -679,7 +732,12 @@ export function step(s: State): void {
     s.chapterPaused = true;
     s.message = 'Everyone has finished. The game is paused so people can leave.';
   }
-  if (s.tick === 480) s.message = 'The storm will arrive in two minutes. Finish the storehouse.';
+  if (s.tick === 480)
+    s.message = !s.rules
+      ? 'The storm will arrive in two minutes. Finish the storehouse.'
+      : s.buildings.some((b) => b.kind === 'storehouse' && b.complete)
+        ? 'The storm will arrive in two minutes. Bring everyone under a roof: the workshop hub or a finished building.'
+        : 'The storm will arrive in two minutes. Finish the storehouse, then bring everyone under a roof.';
   if (s.tick === 600) {
     s.ended = true;
     // The actual storm ends work. It interrupts remaining acts; it does not complete obligations.
@@ -728,6 +786,7 @@ export function replay(
   chapter?: Chapter,
   config?: SettlementConfig,
   allowYield = false,
+  rules?: typeof PRESSURE,
 ): State {
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
@@ -738,10 +797,10 @@ export function replay(
     throw new Error('Reply command in legacy edition');
   if (config?.edition !== PEER_EDITION && inputs.some((i) => i?.command?.kind === 'peer'))
     throw new Error('Peer command in legacy edition');
-  const s = createGame(seed, chapter, config);
+  const s = createGame(seed, chapter, config, rules);
   let previous = -1;
   for (const input of inputs) {
-    if (allowYield) {
+    if (allowYield || rules) {
       exactKeys(input, ['tick', 'command']);
       validateShortInput(input.command);
     }
@@ -772,6 +831,18 @@ export function replay(
   return s;
 }
 export function exportRun(s: State, compact = false): unknown {
+  if (s.rules)
+    return {
+      schema: 8,
+      framework: '3.0.0',
+      rules: s.rules,
+      chapter: structuredClone(s.chapter),
+      seed: s.seed,
+      tick: s.tick,
+      inputs: structuredClone(s.inputs),
+      hash: stateHash(s),
+      ...(compact ? { compact: true } : { state: structuredClone(s) }),
+    };
   if (s.shortYield)
     return {
       schema: 7,
@@ -821,6 +892,7 @@ export function importRun(raw: unknown): State {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
     if ((raw as { schema?: unknown }).schema === 7) return importShortYield(raw);
+    if ((raw as { schema?: unknown }).schema === 8) return importPressure(raw);
     const r = raw as {
       chapter: Chapter | null;
       schema: number;
@@ -1018,6 +1090,45 @@ function importShortYield(raw: unknown): State {
     !s.shortYield ||
     stable(s.inputs) !== stable(inputs) ||
     stable({ version: s.shortYield.version, cutover: s.shortYield.cutover }) !== stable(r.extension) ||
+    stateHash(s) !== r.hash ||
+    (r.compact !== true && stable(s) !== stable(r.state))
+  )
+    throw new Error('state mismatch');
+  return s;
+}
+
+/** Closed native schema 8: the default short chapter under `pressure/1`. */
+function importPressure(raw: unknown): State {
+  requireShortJson(raw);
+  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
+  const r = raw as Record<string, unknown>;
+  exactKeys(r, [
+    'schema',
+    'framework',
+    'rules',
+    'chapter',
+    'seed',
+    'tick',
+    'inputs',
+    'hash',
+    r.compact === true ? 'compact' : 'state',
+  ]);
+  if (r.framework !== '3.0.0' || r.rules !== PRESSURE || (r.compact !== undefined && r.compact !== true))
+    throw new Error('version');
+  if (r.chapter !== null) checkChapter(r.chapter as Chapter);
+  const inputs = r.inputs as Input[];
+  if (!Array.isArray(inputs) || inputs.length > 10000) throw new Error('inputs');
+  const s = replay(
+    r.seed as number,
+    inputs,
+    r.tick as number,
+    (r.chapter as Chapter | null) ?? undefined,
+    undefined,
+    false,
+    PRESSURE,
+  );
+  if (
+    stable(s.inputs) !== stable(inputs) ||
     stateHash(s) !== r.hash ||
     (r.compact !== true && stable(s) !== stable(r.state))
   )

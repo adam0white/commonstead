@@ -641,7 +641,7 @@ test('short yield retains actual admitted Repair Nora and run metadata and refus
   );
   const h = harness([fixture.envelope]);
   const c = new Continuity(h.lab, h.shelf);
-  const s = await c.fresh(42);
+  const s = await c.fresh(42, false, undefined, null);
   expect(s.chapter?.inputs[0]?.parent.revision).toBe(fixture.envelope.revision);
   c.sources = [
     { revision: fixture.envelope.revision, source: fixture.envelope.source, snapshot: fixture.raw },

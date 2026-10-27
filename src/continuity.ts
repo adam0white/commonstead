@@ -12,6 +12,7 @@ import {
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
 import { admitResident, type Chapter, DIALECT, RULES, residentTransfer } from './passport.ts';
+import { PRESSURE } from './pressure.ts';
 import type { SettlementConfig } from './settlement.ts';
 import { apply, createGame, exportRun, importRun, type State } from './sim.ts';
 
@@ -61,7 +62,12 @@ export class Continuity {
     this.heads = [];
     this.sources = [];
   }
-  async fresh(seed: number, localOnly = false, config?: SettlementConfig) {
+  async fresh(
+    seed: number,
+    localOnly = false,
+    config?: SettlementConfig,
+    rules: typeof PRESSURE | null = PRESSURE,
+  ) {
     if (config) localOnly = true;
     if (this.busy)
       throw new Error('A chapter is already being prepared. Wait for it to finish before starting another.');
@@ -107,7 +113,8 @@ export class Continuity {
         throw new Error(
           'The game changed while the chapter was being prepared. No new chapter started. Try starting it again.',
         );
-      const state = createGame(seed, chapter, config);
+      // The default short chapter plays under the pressure rules; longer days keep their editions.
+      const state = createGame(seed, chapter, config, config || !rules ? undefined : rules);
       this.state = state;
       this.runId = crypto.randomUUID();
       this.sources = [];
@@ -185,7 +192,7 @@ export class Continuity {
     const generation = this.generation;
     const raw = JSON.parse(text);
     const { castSources: archiveSources, ...native } = raw;
-    const state = importRun(raw.schema === 7 ? native : raw);
+    const state = importRun(raw.schema === 7 || raw.schema === 8 ? native : raw);
     if (raw.schema === 7) validateYieldSources(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];

@@ -1,11 +1,13 @@
+import type { Person } from '@adam0white/human-framework';
 import { DISCOVERIES } from './cast.ts';
 import { nextTask, personStatus, residentName } from './display.ts';
 import { MAPS } from './paths.ts';
+import { beforeStorm, indoors, paceWords, tiredOf } from './pressure.ts';
 import type { Job } from './settlement.ts';
 import type { State, Villager } from './sim.ts';
 
-/** Presentation only. Observe host break clocks and visible task transitions.
- * No Person fields, recovery estimates, simulation writes or saved state.
+/** Presentation only. Observe host break clocks, visible task transitions and how tired
+ * a person says they feel before and after a break (read-only). No simulation writes or saved state.
  * History covers this open play view; loading a run does not invent earlier observations.
  */
 type Worker = {
@@ -15,11 +17,12 @@ type Worker = {
   task: string;
   recoveryUntil: number;
   order: { target: string } | null;
+  person?: Person;
 };
 type Site = { id: string; kind: string };
 export class WorkObservation {
   private dayBreaks = new Map<string, { id: string; until: number; task: string }>();
-  private breaks = new Map<string, { until: number; task: string }>();
+  private breaks = new Map<string, { until: number; task: string; before: string }>();
   private outcomes = new Map<string, string>();
 
   observe(tick: number, people: readonly Worker[], buildings: readonly Site[]) {
@@ -27,16 +30,25 @@ export class WorkObservation {
       const prior = this.breaks.get(v.id);
       if (prior && (v.recoveryUntil !== prior.until || tick >= prior.until)) {
         const clock = `${Math.floor(tick / 60)}:${String(tick % 60).padStart(2, '0')}`;
+        const name = residentName(v);
+        const after = v.person ? tiredOf(v.person) : '';
+        const change = !after
+          ? ''
+          : prior.before === after
+            ? ` The break did not change how tired ${name} feels: still ${after}.`
+            : ` ${name} felt ${prior.before} before the break and feels ${after} now.`;
         this.outcomes.set(
           v.id,
           tick >= prior.until
-            ? `At ${clock}, ${residentName(v)} finished ${prior.task === 'resting' ? 'resting' : prior.task === 'drinking' ? 'drinking' : 'eating and drinking'}. Afterward, ${residentName(v)} ${this.current(v, buildings)}`
-            : `${residentName(v)}'s ${prior.task === 'resting' ? 'rest' : 'meal or drink'} ended before the planned end.`,
+            ? `At ${clock}, ${name} finished ${prior.task === 'resting' ? 'resting' : prior.task === 'drinking' ? 'drinking' : 'eating and drinking'}.${change} Afterward, ${name} ${this.current(v, buildings)}`
+            : `${name}'s ${prior.task === 'resting' ? 'rest' : 'meal or drink'} ended before the planned end.${change}`,
         );
         this.breaks.delete(v.id);
       }
       if (v.recoveryUntil > tick) {
-        this.breaks.set(v.id, { until: v.recoveryUntil, task: v.task });
+        const before =
+          prior && prior.until === v.recoveryUntil ? prior.before : v.person ? tiredOf(v.person) : '';
+        this.breaks.set(v.id, { until: v.recoveryUntil, task: v.task, before });
       }
     }
   }
@@ -74,9 +86,10 @@ export class WorkObservation {
 
   summary(s: State, v: Villager, details = true): string {
     const aw = s.settlement?.actors[v.id];
-    const recovery = this.outcomes.get(v.id)
-      ? `${this.outcomes.get(v.id)} This does not establish how rested the person feels.`
-      : 'Recovery before this view was opened was not observed.';
+    const recovery = this.outcomes.get(v.id) ?? 'No break has ended since this view was opened.';
+    const pace = s.rules
+      ? ` ${residentName(v)} feels ${tiredOf(v.person)}, works ${paceWords(v)} and is ${indoors(s, v) ? 'under a roof' : 'outside'}.`
+      : '';
     if (!aw) {
       const request = v.order
         ? `Retained request: ${nextTask(v.order.target, s.buildings)}.`
@@ -85,7 +98,7 @@ export class WorkObservation {
         v.recoveryUntil > s.tick
           ? `Now: ${residentName(v)} is ${v.task.replace(' / ', ' and ')}. This break has ${v.recoveryUntil - s.tick} game seconds left.`
           : `Now: ${residentName(v)} ${this.current(v, s.buildings)}`;
-      return `${now} ${request}${details ? ` ${recovery} Last words: “${v.says || 'No words recorded.'}”` : ''}`;
+      return `${now}${pace} ${request}${details ? ` ${recovery} Last words: “${v.says || 'No words recorded.'}”` : ''}`;
     }
     const running = aw.running;
     const now = running
@@ -169,6 +182,7 @@ export function milestone(s: State): string {
     return s.won
       ? 'The storm arrived. The supplies stayed dry.'
       : 'The storm arrived. The supplies got soaked.';
+  if (store?.complete && s.rules) return `The storehouse is ready. ${beforeStorm(s)}`;
   if (store?.complete)
     return `The storehouse is ready. The storm still arrives at ${storm}. Preparation is complete; the storm outcome is still ahead. Continue to watch it, or open the pause menu to save this place and stop here.`;
   return `Finish the storehouse before the storm at ${storm}.${store ? ` It is ${Math.floor(store.progress * 100)}% complete.` : ' It needs 180 boards and 120 ballast bags.'}`;

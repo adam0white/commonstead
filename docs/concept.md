@@ -1,6 +1,6 @@
 # Commonstead
 
-Eight residents at a contemporary residential workshop near Alder Quay must assemble a small prefabricated supply store before an approaching storm. Prepared boards and small ballast bags arrive at the yard. Trolleys carry loads; each person chooses a comfortable load. No powered tools, structural alterations, electrical work or work at height. Preparing an existing guest cabin adds beds; it does not construct a dwelling. The player starts as an RTS commander and discovers that reliable production requires listening to people. Original name, text and Canvas drawings. No borrowed game assets or code.
+Eight residents at a contemporary residential workshop near Mill Bridge must assemble a small prefabricated supply store before an approaching storm. Prepared boards and small ballast bags arrive at the yard. Trolleys carry loads; each person chooses a comfortable load. No powered tools, structural alterations, electrical work or work at height. Preparing an existing guest cabin adds beds; it does not construct a dwelling. The player starts as an RTS commander and discovers that reliable production requires listening to people. Original name, text and Canvas drawings. No borrowed game assets or code.
 
 ## Authorization and completion
 
@@ -120,3 +120,16 @@ The Public chronicle contains actual post-cutover building/storm transitions and
 Schema7 departure adoption is OPEN: manual, fork and automatic checkpoints refuse before Shelf access or source/head writes. Existing incoming histories and castSources remain provenance; native file import grants no browser ownership. The retained actual public Repair Nora2.21 fixture is tested through the supported admission harness. That harness is not a browser-owner receipt. No joint Nora/Sevim admitted fixture is available in the repository. Actual HF3 Small Works obligations remain unsupported and refused. Longer4/local5/6 finish controls are separate open engineering, not exclusions.
 
 Author evidence: ~/code/.lab-scratch/games-deferred/commonstead-finish-day-author-report.md and commonstead-finish-day-manifest.json. Parent owns ONE independent review, integration/CI, any browser proof and delivery. No manual browser/player/profile/commit/push/deploy/self-review was run in this author phase. Earlier historical receipts retain their original scope.
+
+## 2026-10-27 — pressure rules for the default chapter (`pressure/1`, schema 8)
+
+New game now plays the default ten-minute chapter under `pressure/1`. Owner rename (2026-10-26): the opening says Mill Bridge directly; the legacy Alder Quay string stays only inside schema 3–7 replays and is still shown as Mill Bridge. Earlier schema 3–7 files replay unchanged; the longer and reply days keep their editions.
+
+- Tiredness slows work. Gathering and assembly use HF capacity times a pace from how tired the person feels (full below 0.3, a quarter at worst). Insisting on work lowers the pace further. The storehouse takes 280 person-seconds of assembly at full pace (legacy 180).
+- The day does not end when the storehouse is done. The storm keeps everyone indoors tomorrow, so the dry store needs 5 meals per person; the chapter starts with 30, and meals are gathered at about half the rate of boards. At 10:00 each resident is either under a roof (workshop hub or beside a finished building) or caught in the rain. "Go under a roof" sends people to the hub. "Leave the remaining day to the residents" is not offered under these rules.
+- The ending gives each resident a reaction built from this run: insisting, breaks offered, conversations, whether they built or fetched, rain, and how tired they feel. The workshop lines say whether the storm day is fed and who got wet.
+- The Now line after a break says how tired the person felt before and after it, and under these rules how fast they work.
+
+Headless control on seed 418 (test/pressure.test.ts): a careful crew finishes the storehouse at about 5:10; no rest management about 6:00; spending the first 90 seconds on meals loses. Known gap: departing residents still carry `commonstead-3` as their rules label after living under `pressure/1`, so receiving games keep accepting them; a separate label needs receiving-game updates first.
+
+Deferred (target 2026-11-03, needs the same-tester retest): whether the pace curve, the 280 effort and the meal need feel right to players; per-resident voice beyond treatment facts; closing reactions for the longer days.

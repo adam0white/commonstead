@@ -29,6 +29,10 @@ test('observed break completion reports the actual return without certifying rec
   const before = stateHash(s);
   const line = observation.line(nora, s.tick, s.buildings);
   expect(line).toContain('finished resting');
+  expect(line).toMatch(
+    /Nora felt (very tired|tired|a little tired) before the break and feels [a-z ]+ now|did not change how tired Nora feels/,
+  );
+  expect(line).not.toContain('does not establish');
   expect(line).toContain('collecting prepared boards');
   expect(line).toContain('working');
   expect(nora.says).toContain('I am tired');
@@ -54,7 +58,7 @@ test('one present-work view separates queued requests, supplies in transit and m
   const pending = observation.summary(s, nora);
   expect(pending).toContain('Request waiting');
   expect(pending).toContain('collect and return prepared boards');
-  expect(pending).toContain('Recovery before this view was opened was not observed');
+  expect(pending).toContain('No break has ended since this view was opened.');
   expect(pending).not.toContain('will go back');
   expect(JSON.stringify(s)).toBe(before);
   let carried = false;

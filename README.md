@@ -1,6 +1,6 @@
 # Commonstead
 
-A ten-minute residential workshop near Alder Quay with eight Human Framework people. Build a storehouse before the storm to keep the shared supplies dry. Direct control gives way to fatigue, recovery and remembered pressure.
+A ten-minute residential workshop near Mill Bridge with eight Human Framework people. Build a storehouse before the storm to keep the shared supplies dry. Direct control gives way to fatigue, recovery and remembered pressure.
 
 - `pnpm install --frozen-lockfile`
 - `pnpm run dev`
