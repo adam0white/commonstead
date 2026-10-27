@@ -1,3 +1,11 @@
+# Memory-only file preservation candidate — 2026-10-27
+
+Remaining: one independent exact-diff review, signed source/PR/exact CI, director merge, clean deployment/live verification and cleanup. This is one C2/C3 unit based on be605144fa21cb79d6a75f9f2c741f14d8402aaf. The public built /file/ entry selects memory mode before ordinary Lab/Continuity/Shelf/native title and watchers. It uses the complete existing UI with staged production simulation and pure existing validators. Native startup/save/Resume and the reviewed source publication fix remain unchanged.
+
+Complete original bytes/metadata/SHA256 and full current export remain separately downloadable. Imports retain exact paused state until replayable explicit Resume. Capacity stops before committing a partial input/frame/yield batch; source metadata grants no ownership. SDK15 preservation/kit17 notice respect the persistent switch and privacy signals; blocked recording does not prevent local file play. No owner/profile/queue or player evidence is supplied. Longer-edition ownership and30 local asks remain separate. The external exact-file plan and receipts use gd-resume-commonstead-file.
+
+---
+
 # Public entry candidate — 2026-10-27
 
 Remaining: independent review, exact CI, clean deployment and two viewport engineering checks for the public-entry batch. Origin baseline is 05179553e237755bce41dda28c110d1dc32f0e7e, exact ci 40477742410, live matched dirty:false before edits. B3 peer and B2 current-work candidates in older prose are already integrated in that baseline. Do not rebuild them from old candidate descriptions.

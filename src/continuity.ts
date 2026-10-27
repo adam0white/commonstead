@@ -155,13 +155,9 @@ export class Continuity {
     }
   }
   async validateRunEnvelopes(state: State) {
-    if (state.chapter)
-      await Promise.all(
-        [...state.chapter.claims, ...state.chapter.inputs.map((i) => i.parent)].map((p) =>
-          validatePersona(p),
-        ),
-      );
+    await validateRunEnvelopes(state);
   }
+
   async loadLocal(text: string, generation = this.beginEntry()) {
     this.requireEntry(generation);
     const saved = JSON.parse(text);
@@ -424,7 +420,7 @@ export function resumeForPlay(state: State) {
     apply(state, { kind: 'resume-chapter' });
 }
 
-function validateYieldSources(raw: unknown): void {
+export function validateYieldSources(raw: unknown): void {
   const keys = (value: unknown, required: string[]) => {
     if (
       !value ||
@@ -457,4 +453,12 @@ function validateYieldSources(raw: unknown): void {
     };
     safe(source.snapshot);
   }
+}
+
+/** Pure validation shared by native and memory-only entries. */
+export async function validateRunEnvelopes(state: State) {
+  if (state.chapter)
+    await Promise.all(
+      [...state.chapter.claims, ...state.chapter.inputs.map((i) => i.parent)].map((p) => validatePersona(p)),
+    );
 }

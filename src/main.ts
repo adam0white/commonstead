@@ -1,6 +1,7 @@
 import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY, resumeForPlay, watchShelfPreference } from './continuity.ts';
+import { createFileSession } from './file-session.ts';
 import { MAPS, type Place } from './paths.ts';
 import { dayClock, EDITION } from './settlement.ts';
 import { PEER_EDITION } from './settlement-dialogue.ts';
@@ -33,12 +34,23 @@ import {
 import { currentNotice, invitationReadiness, milestone, WorkObservation } from './work-observation.ts';
 
 const root = document.getElementById('app') as HTMLElement;
-const lab = createLab({ game: 'commonstead' });
-const continuity = new Continuity(lab, personaChannel(), () => {
-  const el = document.getElementById('continuity-status');
-  if (el) el.textContent = continuity.status;
-  if (state) save();
+// The built public entry decides before ordinary Lab, Shelf, storage or watchers.
+const fileMode = document.documentElement.dataset.session === 'file';
+const fileSession = fileMode ? createFileSession() : null;
+const candidateLab = createLab({
+  game: 'commonstead',
+  ...(fileMode ? { preservation: 'preserve' as const } : {}),
 });
+const recordingStatus = candidateLab.preservationStatus;
+const lab = fileMode && recordingStatus !== 'existing-local' ? null : candidateLab;
+if (!lab) candidateLab.dispose();
+const continuity = fileMode
+  ? null
+  : new Continuity(lab!, personaChannel(), () => {
+      const el = document.getElementById('continuity-status');
+      if (el) el.textContent = continuity!.status;
+      if (state) save();
+    });
 const SAVE = LOCAL_KEY,
   NAME = 'commonstead-name';
 let state: State | null = null,
@@ -68,6 +80,9 @@ let pointer: {
   at: number;
   ordered: boolean;
 } | null = null;
+let fileRAF: number | null = null;
+let fileCallbackEpoch = 0;
+let fileTools: HTMLElement | null = null;
 let holdTimer: ReturnType<typeof setTimeout> | null = null;
 const esc = (v: unknown) =>
   String(v).replace(
@@ -75,6 +90,7 @@ const esc = (v: unknown) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
   );
 function stored(key: string) {
+  if (fileMode) return null;
   try {
     return localStorage.getItem(key);
   } catch {
@@ -82,6 +98,7 @@ function stored(key: string) {
   }
 }
 function remember(key: string, value: string) {
+  if (fileMode) return;
   try {
     localStorage.setItem(key, value);
   } catch {
@@ -89,16 +106,24 @@ function remember(key: string, value: string) {
   }
 }
 function save() {
+  if (fileSession) {
+    if (state) lab?.captureSave(fileSession.snapshot());
+    return;
+  }
   if (!state) return;
   const run = exportRun(state);
-  remember(SAVE, continuity.localSave(state, paused));
-  lab.captureSave(run);
+  remember(SAVE, continuity!.localSave(state, paused));
+  lab?.captureSave(run);
 }
 function download() {
+  if (fileSession) {
+    downloadJson('commonstead-file-current.json', fileSession.snapshot());
+    return;
+  }
   if (state)
     downloadJson(
       'commonstead-run.json',
-      state.settlement?.config.edition === PEER_EDITION ? exportRun(state) : continuity.export(state),
+      state.settlement?.config.edition === PEER_EDITION ? exportRun(state) : continuity!.export(state),
     );
 }
 /** A display-only note that stays until the recorded game message changes. */
@@ -141,13 +166,17 @@ function issue(cmd: Command) {
   }
   workObservation.observeState(state);
   try {
-    apply(state, cmd);
+    if (fileSession) {
+      fileSession.apply(cmd);
+      state = fileSession.state();
+    } else apply(state, cmd);
   } catch (error) {
+    if (fileSession && !fileSession.running) fileError(error);
     const notice = document.getElementById('notice');
     if (notice) notice.textContent = error instanceof Error ? error.message : 'The request could not start.';
     return;
   }
-  workObservation.observeState(state);
+  if (state) workObservation.observeState(state);
   save();
   update();
 }
@@ -162,35 +191,39 @@ function shellBindings() {
   bind('info', info);
 }
 function title() {
+  if (fileSession) {
+    fileTitle();
+    return;
+  }
   screen = 'title';
-  continuity.clear();
+  continuity!.clear();
   state = null;
   selected = [];
   canvas = null;
   paused = false;
-  lab.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><details><summary>Choose a longer settlement day</summary><p>Optional: thirty minutes at Steady, with a full day and night for eight fresh local residents. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Choose a fresh day with personal replies</summary><p>Start a new local day with eight fresh residents. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Choose a fresh day with resident conversations</summary><p>Eight fresh local residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. This day does not continue your short chapter or load saved character histories.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><p class="small">Load a saved playtest. The game replays its orders and checks the result before loading it. Loading replaces this device's saved game after validation.</p><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details></div><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><p id="load-status" class="status" role="status"></p></section></main>`;
+  lab?.screen('title');
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><details><summary>Choose a longer settlement day</summary><p>Optional: thirty minutes at Steady, with a full day and night for eight fresh local residents. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Choose a fresh day with personal replies</summary><p>Start a new local day with eight fresh residents. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Choose a fresh day with resident conversations</summary><p>Eight fresh local residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. This day does not continue your short chapter or load saved character histories.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><a href="/file/">Open a file session without replacing the native save</a></details></div><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><p id="load-status" class="status" role="status"></p></section></main>`;
   const begin = async (
     localOnly = false,
     day: false | true | typeof REPLY_EDITION | typeof PEER_EDITION = false,
   ) => {
-    const generation = continuity.beginEntry();
+    const generation = continuity!.beginEntry();
     const status = document.getElementById('load-status');
     try {
-      const prepared = await continuity.fresh(
+      const prepared = await continuity!.fresh(
         418,
         localOnly,
         day ? { edition: day === true ? EDITION : day } : undefined,
         undefined,
         generation,
       );
-      if (!continuity.currentEntry(generation)) return;
+      if (!continuity!.currentEntry(generation)) return;
       closeModal();
       start(prepared);
-      await continuity.recording(false, generation);
-      if (continuity.currentEntry(generation)) save();
+      await continuity!.recording(false, generation);
+      if (continuity!.currentEntry(generation)) save();
     } catch (error) {
-      if (!continuity.currentEntry(generation)) return;
+      if (!continuity!.currentEntry(generation)) return;
       console.error(error);
       if (status)
         status.textContent =
@@ -201,7 +234,7 @@ function title() {
     }
   };
   bind('new-peer', () => {
-    continuity.beginEntry();
+    continuity!.beginEntry();
     if (!stored(SAVE)) {
       void begin(true, PEER_EDITION);
       return;
@@ -217,7 +250,7 @@ function title() {
     });
   });
   bind('new-replies', () => {
-    continuity.beginEntry();
+    continuity!.beginEntry();
     if (!stored(SAVE)) {
       void begin(true, REPLY_EDITION);
       return;
@@ -233,7 +266,7 @@ function title() {
     });
   });
   bind('new-day', () => {
-    continuity.beginEntry();
+    continuity!.beginEntry();
     if (!stored(SAVE)) {
       void begin(true, true);
       return;
@@ -249,7 +282,7 @@ function title() {
     });
   });
   bind('new', () => {
-    continuity.beginEntry();
+    continuity!.beginEntry();
     if (!stored(SAVE)) {
       void begin();
       return;
@@ -266,20 +299,20 @@ function title() {
     bind('cancel-new', () => document.getElementById('new-confirm')?.remove());
   });
   bind('title-feedback', () => {
-    continuity.beginEntry();
+    continuity!.beginEntry();
     feedback();
   });
   bind('continue', () => {
-    const generation = continuity.beginEntry();
+    const generation = continuity!.beginEntry();
     void (async () => {
       try {
-        const loaded = await continuity.loadLocal(stored(SAVE) ?? '', generation);
-        if (!continuity.currentEntry(generation)) return;
+        const loaded = await continuity!.loadLocal(stored(SAVE) ?? '', generation);
+        if (!continuity!.currentEntry(generation)) return;
         start(loaded);
-        await continuity.recording(false, generation);
-        if (continuity.currentEntry(generation)) save();
+        await continuity!.recording(false, generation);
+        if (continuity!.currentEntry(generation)) save();
       } catch (error) {
-        if (!continuity.currentEntry(generation)) return;
+        if (!continuity!.currentEntry(generation)) return;
         const el = document.getElementById('load-status');
         console.error(error);
         if (el)
@@ -288,33 +321,9 @@ function title() {
       }
     })();
   });
-  document.getElementById('load')?.addEventListener('cancel', () => continuity.beginEntry());
-  document.getElementById('load')?.addEventListener('change', async (e) => {
-    const generation = continuity.beginEntry();
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    const status = document.getElementById('load-status');
-    if (file.size > 5_000_000) {
-      if (status) status.textContent = 'This playtest file is too large. Choose a file smaller than 5 MB.';
-      return;
-    }
-    try {
-      const text = await file.text();
-      if (!continuity.currentEntry(generation)) return;
-      const loaded = await continuity.importFile(text, generation);
-      if (!continuity.currentEntry(generation)) return;
-      start(loaded);
-      await continuity.recording(false, generation);
-      if (continuity.currentEntry(generation)) save();
-    } catch {
-      if (continuity.currentEntry(generation) && status)
-        status.textContent =
-          'This playtest did not match its replay, so it could not load. Your saved game is unchanged. Choose another file.';
-    }
-  });
 }
 function start(s: State) {
-  resumeForPlay(s);
+  if (!fileSession) resumeForPlay(s);
   workObservation = new WorkObservation();
   workObservation.observeState(s);
   unitKey = '';
@@ -327,7 +336,7 @@ function start(s: State) {
   paused = false;
   carry = 0;
   last = performance.now();
-  lab.screen('play');
+  lab?.screen('play');
   root.innerHTML = `<main class="game ${s.settlement ? 'settlement-day' : ''}">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="The map shows the workshop yard. You can use the person and resource buttons below to give orders."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry.</strong><p id="deadline" class="deadline"></p><p class="details">A cabin prepared with 40 boards makes room for two more people. Invite helpers at the workshop hub.</p></section><section class="sheet"><h2 id="selection">Select a person or the workshop hub.</h2><p class="small selection-help">Names add or remove people. Map taps replace the selection. Drag a box to select a group.</p><div id="units" class="unit-list" aria-label="Add or remove selected people"></div><details class="work-overview"><summary>Everyone now</summary><p class="small">Current activity and retained requests are separate. Last words may describe an earlier event. After a break, the Now line says how tired the person felt before and after it. A reason for an earlier choice may not have been recorded.</p><ol id="everyone-now"></ol></details><p id="task" class="task"></p><p id="said" class="speech"></p><details class="work-help"><summary>Dividing work and adding builders</summary><p class="small">Different groups can collect boards and ballast at the same time. Travel takes time. A person collecting supplies cannot assemble the storehouse at the same time. Residents may choose their own breaks.</p><p class="small">Select people, choose Move / add builders, then tap the unfinished storehouse to add them to assembly.</p></details><div id="resident"></div><div id="settlement-controls"></div></section><div class="notice" id="notice" role="status"></div><section id="finish-day"></section><section class="actions" id="actions"></section></aside></div></main>`;
   canvas = document.getElementById('map') as HTMLCanvasElement;
   shellBindings();
@@ -363,8 +372,12 @@ function start(s: State) {
     };
   bindMap(canvas);
   update();
-  if (s.ended) end();
-  else if (s.shortYield && continuity.playPaused) {
+  if (fileSession) {
+    paused = !fileSession.running;
+    if (s.ended) end();
+    else if (paused) menu();
+  } else if (s.ended) end();
+  else if (s.shortYield && continuity!.playPaused) {
     menu();
     save();
   } else save();
@@ -666,7 +679,13 @@ function targetAt(x: number, y: number) {
 }
 function destination(x: number, y: number) {
   if (state?.settlement && selected.some((id) => state?.settlement?.actors[id]?.map !== viewedMap)) {
-    state.message = 'Select residents on the map you are viewing. Use Travel to ask them to change maps.';
+    if (fileSession)
+      hostNote = {
+        message: currentNotice(state),
+        text: 'Select residents on the map you are viewing. Use Travel to ask them to change maps.',
+      };
+    else
+      state.message = 'Select residents on the map you are viewing. Use Travel to ask them to change maps.';
     update();
     return;
   }
@@ -712,7 +731,17 @@ function bindMap(map: HTMLCanvasElement) {
       at: performance.now(),
       ordered: false,
     };
+    const holdEpoch = fileSession?.epoch,
+      callbackEpoch = fileCallbackEpoch;
     holdTimer = setTimeout(() => {
+      if (
+        fileSession &&
+        (holdEpoch !== fileSession.epoch ||
+          callbackEpoch !== fileCallbackEpoch ||
+          paused ||
+          !fileSession.running)
+      )
+        return;
       if (pointer && Math.hypot(pointer.x2 - pointer.x, pointer.y2 - pointer.y) < 20) {
         destination(pointer.x, pointer.y);
         pointer.ordered = true;
@@ -768,20 +797,34 @@ function bindMap(map: HTMLCanvasElement) {
     pointer = null;
   };
 }
+/** User closes retire every pending file selection and owned callback. */
 function closeModal() {
+  if (fileSession) {
+    fileSession.invalidate();
+    cancelFileCallbacks();
+  }
+  removeModal();
+}
+/** Successful file installation and explicit Resume keep their validated session. */
+function removeModal() {
+  fileTools?.remove();
   modal?.remove();
   modal = null;
-  paused = false;
+  paused = fileSession ? !fileSession.running : false;
   last = performance.now();
   if (state?.shortYield) save();
+  if (fileSession) scheduleFileFrame();
 }
 function sheet(html: string, infoOnly = false) {
+  fileTools?.remove();
+  if (fileSession) cancelFileCallbacks();
   modal?.remove();
   paused = true;
   modal = document.createElement('div');
   modal.className = 'modal';
   modal.innerHTML = `<section role="dialog" aria-modal="true" aria-label="${infoOnly ? 'Controls' : 'Game menu'}" class="panel ${infoOnly ? 'info-panel' : ''}">${html}</section>`;
   root.append(modal);
+  if (fileTools) modal.querySelector('.panel')?.append(fileTools);
   modal.addEventListener('click', (e) => {
     if (e.target === modal) closeModal();
   });
@@ -808,18 +851,31 @@ function info() {
 }
 function menu() {
   sheet(
-    `<h2>Paused</h2><p>Your game is saved on this device.</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div><button id="menu-title">Back to the title page</button><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><button id="download">Download this run</button><div id="compact-download"></div></details></div>`,
+    `<h2>Paused</h2><p>${fileSession ? 'This file session stays in memory. Download it before leaving.' : 'Your game is saved on this device.'}</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div><button id="menu-title">Back to the title page</button><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><button id="download">Download this run</button><div id="compact-download"></div></details></div>`,
   );
   if (state?.shortYield) save();
-  document.getElementById('toggle')?.append(telemetryToggle(lab));
+  if (lab) document.getElementById('toggle')?.append(telemetryToggle(lab));
   bind('menu-title', () => {
     save();
     closeModal();
     title();
   });
-  bind('resume', closeModal);
+  bind('resume', () => {
+    if (fileSession) {
+      try {
+        fileSession.resume();
+        state = fileSession.state();
+      } catch (error) {
+        fileError(error);
+        return;
+      }
+    }
+    if (fileSession) removeModal();
+    else closeModal();
+    if (fileSession) scheduleFileFrame();
+  });
   bind('download', download);
-  if (state?.settlement || state?.shortYield) {
+  if (!fileSession && (state?.settlement || state?.shortYield)) {
     const b = document.createElement('button');
     b.textContent = 'Download compact run';
     b.onclick = () => {
@@ -831,8 +887,13 @@ function menu() {
   bind('fullscreen', () => {
     document.documentElement.requestFullscreen?.().catch(() => {});
   });
+  if (fileSession) {
+    document.getElementById('new-menu')?.remove();
+    document.querySelector('#menu-title + a')?.remove();
+    return;
+  }
   bind('new-menu', () => {
-    continuity.beginEntry();
+    continuity!.beginEntry();
     const holder = document.getElementById('menu-confirm');
     if (!holder) return;
     holder.innerHTML =
@@ -841,17 +902,17 @@ function menu() {
       holder.innerHTML = '';
     });
     bind('replace-menu', () => {
-      const generation = continuity.beginEntry();
+      const generation = continuity!.beginEntry();
       void (async () => {
         try {
-          const prepared = await continuity.fresh(418, false, undefined, undefined, generation);
-          if (!continuity.currentEntry(generation)) return;
+          const prepared = await continuity!.fresh(418, false, undefined, undefined, generation);
+          if (!continuity!.currentEntry(generation)) return;
           closeModal();
           start(prepared);
-          await continuity.recording(false, generation);
-          if (continuity.currentEntry(generation)) save();
+          await continuity!.recording(false, generation);
+          if (continuity!.currentEntry(generation)) save();
         } catch (error) {
-          if (!continuity.currentEntry(generation)) return;
+          if (!continuity!.currentEntry(generation)) return;
           console.error(error);
           const status = document.getElementById('setup-status');
           if (status)
@@ -863,6 +924,14 @@ function menu() {
   });
 }
 function feedback() {
+  if (!lab) {
+    fileError(
+      new Error(
+        `Recording and feedback unavailable: ${recordingStatus}. File play and downloads remain local.`,
+      ),
+    );
+    return;
+  }
   sheet(
     `<h2>Feedback</h2><div class="feedback-body"><p>Tell us what happened.</p><div class="verdicts" aria-label="What is happening?">${Object.entries(
       FEEDBACK_LABELS,
@@ -889,7 +958,7 @@ function feedback() {
       for (const v of document.querySelectorAll('[data-verdict]'))
         v.setAttribute('aria-pressed', String(v === b));
     };
-  const share = feedbackPersonaControl(lab);
+  const share = feedbackPersonaControl(lab!);
   if (share) document.getElementById('feedback-persona')?.append(share);
   const send = document.getElementById('send') as HTMLButtonElement;
   const status = document.getElementById('send-status') as HTMLElement;
@@ -910,7 +979,7 @@ function feedback() {
         // An unavailable optional run does not block the note.
       }
       const sharePlay = feedbackSharePlay(share);
-      const id = await lab.sendFeedback(note, { name, run, sharePlay });
+      const id = await lab?.sendFeedback(note, { name, run, sharePlay });
       status.textContent = `Your feedback was sent. Your note is stored. Reference: ${id}.`;
       status.scrollIntoView({ block: 'nearest' });
       send.textContent = state ? 'Back to the game' : 'Back to the title page';
@@ -927,12 +996,13 @@ function feedback() {
 }
 function end() {
   if (!state) return;
+  fileTools?.remove();
   screen = 'end';
   canvas = null;
-  lab.screen('storm outcome');
-  if (!state.chapterPaused) {
+  lab?.screen('storm outcome');
+  if (!fileSession && !state.chapterPaused) {
     apply(state, { kind: 'pause-chapter' });
-    void continuity.checkpointAll();
+    void continuity!.checkpointAll();
   }
   save();
   root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">${state.settlement ? 'It is tomorrow at 08:00. The storm arrived at 20:00.' : 'The storm arrived at 10:00.'}</p><h1>${state.won ? 'The supplies stayed dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p>${state.shortYield ? `<h2>Public chronicle</h2><ol>${state.shortYield.chronicle.map((entry) => `<li>${Math.floor(entry.tick / 60)}:${String(entry.tick % 60).padStart(2, '0')} · ${esc(publicPlaceText(entry.text))}</li>`).join('')}</ol>` : ''}${
@@ -956,19 +1026,22 @@ function end() {
   bind('end-feedback', feedback);
   bind('end-download', download);
   bind('end-title', title);
+  if (fileTools) document.querySelector('.end-card')?.append(fileTools);
+  if (fileSession) document.querySelector('.end-card a[href$="/lab/people/"]')?.remove();
 }
 const attemptedDeaths = new Set<string>();
-watchShelfPreference(() => continuity.invalidate());
-watchPersonaCheckpoint(async () => {
-  const current = state;
-  if (!current || current.villagers.some((v) => v.person.activity)) return;
-  const wasPaused = current.chapterPaused;
-  if (!wasPaused) apply(current, { kind: 'pause-chapter' });
-  await continuity.checkpointAll();
-  if (!wasPaused && state === current && !current.ended) apply(current, { kind: 'resume-chapter' });
-  save();
-});
-lab.trackRun(() => (state ? exportRun(state) : null), {
+if (!fileSession) watchShelfPreference(() => continuity!.invalidate());
+if (!fileSession)
+  watchPersonaCheckpoint(async () => {
+    const current = state;
+    if (!current || current.villagers.some((v) => v.person.activity)) return;
+    const wasPaused = current.chapterPaused;
+    if (!wasPaused) apply(current, { kind: 'pause-chapter' });
+    await continuity!.checkpointAll();
+    if (!wasPaused && state === current && !current.ended) apply(current, { kind: 'resume-chapter' });
+    save();
+  });
+lab?.trackRun(() => (state ? (fileSession ? fileSession.snapshot() : exportRun(state)) : null), {
   runKey: () => (state?.settlement ? `${EDITION}:${state.seed}` : (state?.seed ?? 'title')),
   getLogs: () => state?.villagers.map((v) => `${v.name}: ${v.says}`) ?? [],
 });
@@ -982,13 +1055,35 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
-window.addEventListener('pagehide', () => continuity.beginEntry());
+window.addEventListener('pagehide', () => {
+  if (fileSession) {
+    fileSession.invalidate();
+    cancelFileCallbacks();
+    paused = true;
+  } else continuity!.beginEntry();
+  // The active SDK owns asynchronous final capture; do not dispose it here.
+});
+if (fileSession)
+  window.addEventListener('popstate', () => {
+    fileSession.invalidate();
+    cancelFileCallbacks();
+    paused = true;
+  });
 document.addEventListener('visibilitychange', () => {
+  if (fileSession && document.hidden) {
+    fileSession.invalidate();
+    cancelFileCallbacks();
+    paused = true;
+  }
   if (state?.shortYield) carry = 0;
   save();
   last = performance.now();
 });
 function frame(now: number) {
+  if (fileSession) {
+    fileFrame(now);
+    return;
+  }
   const elapsed = Math.min(1, (now - last) / 1000);
   let advanced = false;
   last = now;
@@ -1008,15 +1103,15 @@ function frame(now: number) {
     }
     if (advanced) {
       update();
-      for (const head of continuity.heads) {
+      for (const head of continuity!.heads) {
         if (
           !attemptedDeaths.has(head.revision) &&
           !head.terminal &&
           state.villagers.some((v) => v.person.id === head.castId && !v.person.body.alive)
         ) {
           attemptedDeaths.add(head.revision);
-          void continuity.checkpoint(head.castId).catch((error) => {
-            continuity.status = String(error);
+          void continuity!.checkpoint(head.castId).catch((error) => {
+            continuity!.status = String(error);
           });
         }
       }
@@ -1046,7 +1141,159 @@ function frame(now: number) {
 title();
 const noticeFooter = document.createElement('footer');
 noticeFooter.className = 'lab-footer';
-const notice = telemetryNotice();
+const notice = telemetryNotice(undefined, fileMode ? { preservation: 'preserve' } : {});
 if (notice) noticeFooter.append(notice);
 document.body.append(noticeFooter);
-requestAnimationFrame(frame);
+if (fileSession) mountFileTools();
+else requestAnimationFrame(frame);
+
+// This adapter feeds the complete existing UI from staged production simulation state.
+function cancelFileCallbacks() {
+  fileCallbackEpoch++;
+  if (fileRAF !== null) cancelAnimationFrame(fileRAF);
+  fileRAF = null;
+  if (holdTimer !== null) clearTimeout(holdTimer);
+  holdTimer = null;
+  pointer = null;
+  carry = 0;
+}
+function fileError(error: unknown) {
+  cancelFileCallbacks();
+  fileSession?.invalidate();
+  paused = true;
+  if (state && !modal) menu();
+  const status = document.getElementById('file-status');
+  if (status) status.textContent = error instanceof Error ? error.message : String(error);
+}
+function fileTitle() {
+  fileSession!.invalidate();
+  cancelFileCallbacks();
+  fileTools?.remove();
+  modal?.remove();
+  modal = null;
+  screen = 'title';
+  state = null;
+  canvas = null;
+  selected = [];
+  paused = true;
+  root.innerHTML =
+    '<main class="title"><section class="title-body"><h1>Commonstead · file session</h1><p>Choose a Commonstead run below. It stays in memory. The native saved game is unchanged. Download the current run before leaving or reloading.</p><a href="/">Native Commonstead</a></section></main>';
+  if (fileTools) root.querySelector('.title-body')?.append(fileTools);
+}
+function fileBlob(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob),
+    a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function mountFileTools() {
+  const tools = document.createElement('section');
+  fileTools = tools;
+  tools.className = 'sheet';
+  tools.setAttribute('aria-label', 'File session');
+  tools.innerHTML = `<label>Choose a run <input id="file-load" type="file" accept="application/json,.json,.gz"></label><button id="file-original">Download original bytes</button><button id="file-metadata">Download original metadata and SHA256</button><button id="file-current">Download complete current run</button><p id="file-status" role="status">${lab ? 'Recording uses the existing persistent Recording switch.' : `Recording unavailable: ${recordingStatus}. File play and downloads remain local.`}</p><p>Selected, expanded and current export limits: 5,000,000 bytes each; original plus current: 10,000,000 bytes. Source archive: at most100 entries and1,000,000 serialized UTF16 units.</p>`;
+  root.querySelector('.title-body')?.append(tools);
+  const input = document.getElementById('file-load') as HTMLInputElement;
+  input.addEventListener('cancel', () => {
+    fileSession!.invalidate();
+    cancelFileCallbacks();
+    paused = true;
+  });
+  input.addEventListener('change', async () => {
+    cancelFileCallbacks();
+    paused = true;
+    const pending = fileSession!.select(input.files?.[0]);
+    const epoch = fileSession!.epoch;
+    try {
+      if (!(await pending) || epoch !== fileSession!.epoch) return;
+      removeModal();
+      start(fileSession!.state()!);
+      const status = document.getElementById('file-status');
+      if (status)
+        status.textContent = `${fileSession!.compact ? 'Compact input: state reconstructed by replay.' : 'Full input: complete supplied state matched replay.'} Imported paused. Resume explicitly to play. ${lab ? 'Recording follows your persistent switch.' : `Recording unavailable: ${recordingStatus}.`}`;
+      save();
+    } catch (error) {
+      if (epoch === fileSession!.epoch) fileError(error);
+    }
+  });
+  bind('file-current', download);
+  bind('file-original', () => {
+    const original = fileSession!.original();
+    if (original) fileBlob(original.name, new Blob([original.bytes], { type: original.type }));
+  });
+  bind('file-metadata', () => {
+    const original = fileSession!.original();
+    if (original) {
+      const { bytes: _bytes, ...metadata } = original;
+      downloadJson('commonstead-original-metadata.json', metadata);
+    }
+  });
+}
+function scheduleFileFrame() {
+  if (!fileSession?.running || fileRAF !== null || paused) return;
+  const epoch = fileSession.epoch,
+    callbackEpoch = fileCallbackEpoch;
+  const handle = requestAnimationFrame((now) => {
+    if (
+      epoch !== fileSession.epoch ||
+      callbackEpoch !== fileCallbackEpoch ||
+      !fileSession.running ||
+      paused ||
+      fileRAF !== handle
+    )
+      return;
+    fileRAF = null;
+    frame(now);
+  });
+  fileRAF = handle;
+}
+function fileFrame(now: number) {
+  if (!fileSession || !state || screen !== 'play' || paused || document.hidden || !fileSession.running)
+    return;
+  carry += Math.min(1, (now - last) / 1000) * speed;
+  last = now;
+  try {
+    const ticks = Math.floor(carry);
+    if (state.shortYield || ticks > 0) {
+      fileSession.advance(ticks);
+      state = fileSession.state()!;
+      carry -= ticks;
+      workObservation.observeState(state);
+      save();
+      update();
+      if (state.ended) {
+        end();
+        return;
+      }
+    }
+  } catch (error) {
+    fileError(error);
+    return;
+  }
+  if (canvas)
+    draw(
+      canvas,
+      state,
+      selected,
+      pointer ? { ...pointer, held: Math.min(1, (now - pointer.at) / 500) } : null,
+      placing,
+      viewedMap,
+      placementPoint,
+    );
+  scheduleFileFrame();
+}
+
+if (fileSession)
+  document.addEventListener(
+    'click',
+    (event) => {
+      if ((event.target as Element)?.closest('a[href]')) {
+        fileSession.invalidate();
+        cancelFileCallbacks();
+        paused = true;
+      }
+    },
+    true,
+  );

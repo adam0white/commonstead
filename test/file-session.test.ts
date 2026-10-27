@@ -1,0 +1,203 @@
+// Synthetic production codec controls. No browser profile or ownership receipts.
+import { describe, expect, test, vi } from 'vitest';
+import * as validation from '../src/continuity.ts';
+import { createFileSession } from '../src/file-session.ts';
+import { PRESSURE } from '../src/pressure.ts';
+import { EDITION } from '../src/settlement.ts';
+import { PEER_EDITION } from '../src/settlement-dialogue.ts';
+import { REPLY_EDITION } from '../src/settlement-scenes.ts';
+import { apply, createGame, exportRun, importRun, step, stepYieldBatch } from '../src/sim.ts';
+
+const file = (raw: unknown) =>
+  new File([JSON.stringify(raw)], 'synthetic.json', { type: 'application/json', lastModified: 42 });
+const sources = [
+  {
+    revision: 'synthetic',
+    source: { game: 'commonstead', build: 'control', engine: '2.23.0', rules: 'commonstead-3' },
+    snapshot: { full: '界', history: [1, 2, 3] },
+  },
+];
+describe('complete memory file session', () => {
+  test('real full and compact codecs retain all people, clocks and history, paused until explicit Resume', async () => {
+    for (const config of [
+      undefined,
+      { edition: EDITION },
+      { edition: REPLY_EDITION },
+      { edition: PEER_EDITION },
+    ] as const) {
+      for (const compact of [false, true]) {
+        const state = createGame(418, undefined, config, config ? undefined : PRESSURE);
+        step(state);
+        apply(state, { kind: 'pause-chapter' });
+        const raw = exportRun(state, compact);
+        const c = createFileSession();
+        expect(await c.select(file(raw))).toBe(true);
+        expect(c.state()).toEqual(state);
+        expect(c.running).toBe(false);
+        expect(c.compact).toBe(compact);
+        c.advance(3);
+        expect(c.state()).toEqual(state);
+        c.resume();
+        apply(state, { kind: 'resume-chapter' });
+        c.advance(3);
+        for (let i = 0; i < 3; i++) step(state);
+        expect(c.state()).toEqual(state);
+        expect(importRun(c.snapshot())).toEqual(state);
+        const original = c.original()!;
+        expect(original.name).toBe('synthetic.json');
+        expect(original.lastModified).toBe(42);
+        expect(original.sha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(new TextDecoder().decode(original.bytes)).toBe(JSON.stringify(raw));
+      }
+    }
+  });
+  test('retains nonempty source archive and refuses replies archive and full clock mutation', async () => {
+    const s = createGame(418);
+    const raw = { ...(exportRun(s) as object), castSources: sources };
+    const c = createFileSession();
+    await c.select(file(raw));
+    expect(c.snapshot()).toEqual(raw);
+    const bad = structuredClone(raw) as typeof raw & { state: { tick: number } };
+    bad.state.tick++;
+    await expect(c.select(file(bad))).rejects.toThrow();
+    expect(c.snapshot()).toEqual(raw);
+    const replies = createGame(418, undefined, { edition: REPLY_EDITION });
+    await expect(c.select(file({ ...(exportRun(replies) as object), castSources: sources }))).rejects.toThrow(
+      /archive/i,
+    );
+    expect(c.snapshot()).toEqual(raw);
+  });
+  test('late A after B, rejection, empty and close cannot install', async () => {
+    for (const later of ['B', 'invalid', 'empty', 'close']) {
+      let release!: (b: ArrayBuffer) => void;
+      const a = file(exportRun(createGame(1)));
+      const bytes = await a.arrayBuffer();
+      a.arrayBuffer = () =>
+        new Promise((resolve) => {
+          release = resolve;
+        });
+      const c = createFileSession();
+      const pending = c.select(a);
+      if (later === 'B') await c.select(file(exportRun(createGame(2))));
+      if (later === 'invalid') await expect(c.select(file({}))).rejects.toThrow();
+      if (later === 'empty') await c.select();
+      if (later === 'close') c.invalidate();
+      release(bytes);
+      expect(await pending).toBe(false);
+      expect(c.state()?.seed ?? null).toBe(later === 'B' ? 2 : null);
+    }
+  });
+  test('capacity refuses complete proposed frame and retains complete original and export', async () => {
+    const s = createGame(418, undefined, undefined, PRESSURE);
+    const raw = exportRun(s);
+    const size = new TextEncoder().encode(JSON.stringify(raw)).byteLength;
+    const c = createFileSession({ currentBytes: size + 20 });
+    await c.select(file(raw));
+    const before = c.snapshot(),
+      original = c.original();
+    c.resume();
+    expect(() => c.advance(12)).toThrow(/capacity/i);
+    expect(c.snapshot()).toEqual(before);
+    expect(c.original()).toEqual(original);
+    expect(c.running).toBe(false);
+  });
+});
+
+test('schema7 wrapper uses the production split, full and compact, with atomic multi-tick yield refusal', async () => {
+  const s = createGame(418),
+    ids = s.villagers.map((v) => v.id);
+  apply(s, { kind: 'order', ids, target: 'wood' });
+  while (s.resources.wood < 180 && s.tick < 180) step(s);
+  apply(s, { kind: 'order', ids, target: 'stone' });
+  while (s.resources.stone < 120 && s.tick < 300) step(s);
+  apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
+  while (!s.buildings.some((b) => b.kind === 'storehouse' && b.complete) && s.tick < 599) step(s);
+  apply(s, { kind: 'yield-day' });
+  for (const compact of [false, true]) {
+    const raw = { ...(exportRun(s, compact) as object), castSources: sources };
+    expect(() => importRun(raw)).toThrow(); // Schema7 core is closed; host must split the wrapper.
+    const c = createFileSession();
+    await c.select(file(raw));
+    expect(c.state()).toEqual(s);
+    expect(c.snapshot()?.castSources).toEqual(sources);
+    c.resume();
+    c.advance(1);
+    expect(c.state()!.tick).toBe(s.tick + 12);
+    let boundary = structuredClone(s),
+      next = structuredClone(s);
+    const encodedSize = (state: typeof s) =>
+      new TextEncoder().encode(JSON.stringify({ ...(exportRun(state) as object), castSources: sources }))
+        .byteLength;
+    while (!next.ended) {
+      boundary = structuredClone(next);
+      stepYieldBatch(next, true);
+      if (encodedSize(next) > encodedSize(boundary)) break;
+    }
+    expect(encodedSize(next)).toBeGreaterThan(encodedSize(boundary));
+    const bounded = createFileSession({ currentBytes: encodedSize(boundary) });
+    await bounded.select(file({ ...(exportRun(boundary) as object), castSources: sources }));
+    bounded.resume();
+    const before = bounded.snapshot(),
+      original = bounded.original();
+    expect(() => bounded.advance(1)).toThrow(/capacity/);
+    expect(bounded.snapshot()).toEqual(before);
+    expect(bounded.original()).toEqual(original);
+    expect(bounded.running).toBe(false);
+  }
+});
+
+test('late digest and real envelope validation completion cannot install after cancellation', async () => {
+  for (const gate of ['digest', 'validation']) {
+    let unblock!: () => void, entered!: () => void;
+    const reached = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      unblock = resolve;
+    });
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const validate = validation.validateRunEnvelopes;
+    const spy =
+      gate === 'digest'
+        ? vi.spyOn(crypto.subtle, 'digest').mockImplementation(async (...args) => {
+            const result = await digest(...args);
+            entered();
+            await blocked;
+            return result;
+          })
+        : vi.spyOn(validation, 'validateRunEnvelopes').mockImplementation(async (state) => {
+            await validate(state);
+            entered();
+            await blocked;
+          });
+    try {
+      const c = createFileSession(),
+        pending = c.select(file(exportRun(createGame(418))));
+      await reached;
+      c.invalidate();
+      unblock();
+      expect(await pending).toBe(false);
+      expect(c.state()).toBe(null);
+    } finally {
+      spy.mockRestore();
+    }
+  }
+});
+
+test('selected and streaming expanded bytes are bounded independently from UTF16 source limits', async () => {
+  const c = createFileSession();
+  const tooLarge = new File(['x'.repeat(5_000_001)], 'large.json');
+  const read = vi.spyOn(tooLarge, 'arrayBuffer');
+  await expect(c.select(tooLarge)).rejects.toThrow(/Selected/);
+  expect(read).not.toHaveBeenCalled();
+  const compressed = await new Response(
+    new Blob([' '.repeat(5_000_001)]).stream().pipeThrough(new CompressionStream('gzip')),
+  ).arrayBuffer();
+  await expect(c.select(new File([compressed], 'expanded.gz'))).rejects.toThrow(/Expanded/);
+  const raw = {
+    ...(exportRun(createGame(418)) as object),
+    castSources: [{ ...sources[0], snapshot: '界'.repeat(1_000_000) }],
+  };
+  await expect(c.select(file(raw))).rejects.toThrow(/source archive bounds/);
+  expect(c.snapshot()).toBe(null);
+});
