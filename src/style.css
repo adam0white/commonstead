@@ -1092,3 +1092,20 @@ a:focus-visible {
     max-height: none;
   }
 }
+
+/* Host diagnostics share one compact row with the privacy link. */
+.menu-footer {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.debug {
+  min-width: 0;
+}
+.debug summary {
+  cursor: pointer;
+}
+.debug input {
+  max-width: 100%;
+}

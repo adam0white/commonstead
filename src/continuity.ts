@@ -7,6 +7,7 @@ import {
   closePersonaBranch,
   createPersona,
   initialPersonaLife,
+  PERSONA_ORIGINS,
   type personaChannel,
   validatePersona,
 } from '@adam0white/lab-client';
@@ -28,8 +29,7 @@ export class Continuity {
   fileOrigin = false;
   playPaused = false;
   busy = false;
-  status =
-    'You can choose separately whether this browser saves people between games and whether the lab records your play.';
+  status = 'New chapters check saved people automatically. Recording is a separate choice.';
   runId = crypto.randomUUID();
   sources: SourceArchive[] = [];
   private key = crypto.randomUUID();
@@ -56,6 +56,18 @@ export class Continuity {
     this.lab.setPersonaRecording(this.key);
     this.changed();
   }
+  /** Start before any file read or entry confirmation, including rejected selections. */
+  beginEntry() {
+    this.invalidate();
+    return this.generation;
+  }
+  currentEntry(generation: number) {
+    return generation === this.generation;
+  }
+  private requireEntry(generation: number) {
+    if (!this.currentEntry(generation))
+      throw new Error('The game changed while the entry was loading. Try loading it again.');
+  }
   clear() {
     this.invalidate();
     this.state = null;
@@ -67,15 +79,26 @@ export class Continuity {
     localOnly = false,
     config?: SettlementConfig,
     rules: typeof PRESSURE | null = PRESSURE,
+    generation = this.beginEntry(),
   ) {
+    this.requireEntry(generation);
     if (config) localOnly = true;
     if (this.busy)
       throw new Error('A chapter is already being prepared. Wait for it to finish before starting another.');
     this.busy = true;
-    this.invalidate();
-    const generation = this.generation;
     try {
       await this.shelf.ready;
+      this.requireEntry(generation);
+      // Host policy: ordinary new chapters use the public shelf automatically.
+      // Admission, atomic ownership and the historical-edition guards remain SDK-owned.
+      if (
+        !localOnly &&
+        !this.shelf.enabled &&
+        (typeof location === 'undefined' || PERSONA_ORIGINS.has(location.origin))
+      ) {
+        this.shelf.setEnabled(true);
+        await this.shelf.ready;
+      }
       if (generation !== this.generation)
         throw new Error('The game changed before the residents could join. Try starting the chapter again.');
       const base = createGame(seed);
@@ -139,9 +162,8 @@ export class Continuity {
         ),
       );
   }
-  async loadLocal(text: string) {
-    this.invalidate();
-    const generation = this.generation;
+  async loadLocal(text: string, generation = this.beginEntry()) {
+    this.requireEntry(generation);
     const saved = JSON.parse(text);
     const state = importRun(saved.run);
     if (state.shortYield) validateYieldSources(saved.sources);
@@ -187,9 +209,8 @@ export class Continuity {
       'The local chapter has loaded with the residents and saved resident records it used before. It has not loaded newer browser histories.';
     return state;
   }
-  async importFile(text: string) {
-    this.invalidate();
-    const generation = this.generation;
+  async importFile(text: string, generation = this.beginEntry()) {
+    this.requireEntry(generation);
     const raw = JSON.parse(text);
     const { castSources: archiveSources, ...native } = raw;
     const state = importRun(raw.schema === 7 || raw.schema === 8 ? native : raw);
@@ -239,7 +260,8 @@ export class Continuity {
   }
 
   /** Legacy binding only. Recording and linkage follow the shared menu preference. */
-  async recording(_allow = false) {
+  async recording(_allow = false, generation = this.generation) {
+    if (!this.currentEntry(generation)) return;
     this.lab.setPersonaRecording(this.key);
   }
   async deny() {

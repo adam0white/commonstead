@@ -43,6 +43,9 @@ Grammar exception: an RTS needs a larger map than the 120–260px scene guidance
 
 ## Deferred
 
+- 2026-10-27, public-entry batch under independent review: no game query flag; diagnostics are a collapsed Debug beside Lab privacy; cast controls link to the central shelf. Ordinary new short chapters activate the SDK15 shelf contract automatically; Resume/import retain their pinned people. Existing longer editions remain public but still require fresh local people: `Continuity.fresh` forces local ownership for settlement configs, and settlement passport/departure support is still engineering, not owner input. No new Person adapter is fabricated in this batch. File/new/resume entry epochs reject stale reads and validation before changing active state or saving; rejected later selections cancel earlier reads. Local retests-1027b F-786 adds Back to the title page with a save before leaving. HF stays 3.0.0. Review, exact CI and clean live receipts remain required; this paragraph does not claim delivery.
+- 2026-10-27, preserving file lifecycle remains engineering: the old remaining-four plan's query-selected route conflicts with the current no-query direction. SDK15/kit17 public preservation APIs exist, but the existing native title loader still replaces the native save after validated import. An explicit preserving chooser, full-byte retention/capacity and async-session isolation are a separate coherent batch. No storage or queues are cleared.
+
 - 2026-10-27, second same-tester retest (retests-1027b, live `36e0640`, [playtest](games/commonstead-playtest-2026-10-27b.md)): **finished** under the two-iteration rule (2 keep, 11 mixed, 1 quit). Every remaining ask is deferred here:
   - F-781: whole-group rest and roof orders keep each person's work and warn before halting assembly. Target 2026-11-03. retests-1027b.
   - F-782: conversation controls outside the folded sections. Target 2026-11-03. retests-1027b.

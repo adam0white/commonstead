@@ -1,5 +1,5 @@
 import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
-import { CAST as ALLOCATION, CAST, DISCOVERIES } from './cast.ts';
+import { CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY, resumeForPlay, watchShelfPreference } from './continuity.ts';
 import { MAPS, type Place } from './paths.ts';
 import { dayClock, EDITION } from './settlement.ts';
@@ -32,7 +32,6 @@ import {
 } from './sim.ts';
 import { currentNotice, invitationReadiness, milestone, WorkObservation } from './work-observation.ts';
 
-const isLab = new URLSearchParams(location.search).get('lab') === '1';
 const root = document.getElementById('app') as HTMLElement;
 const lab = createLab({ game: 'commonstead' });
 const continuity = new Continuity(lab, personaChannel(), () => {
@@ -170,34 +169,39 @@ function title() {
   canvas = null;
   paused = false;
   lab.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a>${isLab ? '<span class="small">A Human Framework experiment</span>' : ''}</header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><details><summary>Choose a longer settlement day</summary><p>Optional: thirty minutes at Steady, with a full day and night for eight fresh local residents. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Choose a fresh day with personal replies</summary><p>Start a new local day with eight fresh residents. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Choose a fresh day with resident conversations</summary><p>Eight fresh local residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. This day does not continue your short chapter or load saved character histories.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button>${isLab ? `<details style="margin-top:14px"><summary>More ways to start</summary><p class="small">Load a saved playtest. The game replays its orders and checks the result before loading it.</p><button id="fresh-local">Start without saved character histories</button><button id="browser-people">Saved character histories</button><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details>` : ''}<p id="load-status" class="status" role="status"></p></section></main>`;
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><details><summary>Choose a longer settlement day</summary><p>Optional: thirty minutes at Steady, with a full day and night for eight fresh local residents. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Choose a fresh day with personal replies</summary><p>Start a new local day with eight fresh residents. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Choose a fresh day with resident conversations</summary><p>Eight fresh local residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. This day does not continue your short chapter or load saved character histories.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><p class="small">Load a saved playtest. The game replays its orders and checks the result before loading it. Loading replaces this device's saved game after validation.</p><input id="load" type="file" accept="application/json,.json" aria-label="Load a playtest run"></details></div><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><p id="load-status" class="status" role="status"></p></section></main>`;
   const begin = async (
     localOnly = false,
     day: false | true | typeof REPLY_EDITION | typeof PEER_EDITION = false,
   ) => {
+    const generation = continuity.beginEntry();
     const status = document.getElementById('load-status');
     try {
       const prepared = await continuity.fresh(
         418,
         localOnly,
         day ? { edition: day === true ? EDITION : day } : undefined,
+        undefined,
+        generation,
       );
+      if (!continuity.currentEntry(generation)) return;
       closeModal();
       start(prepared);
-      await continuity.recording();
-      save();
+      await continuity.recording(false, generation);
+      if (continuity.currentEntry(generation)) save();
     } catch (error) {
+      if (!continuity.currentEntry(generation)) return;
       console.error(error);
       if (status)
-        status.textContent = isLab
-          ? String(error)
-          : 'The new game could not start. Your saved game is unchanged. Try again or choose Feedback to report the problem.';
+        status.textContent =
+          'The new game could not start. Your saved game is unchanged. Try again or choose Feedback to report the problem.';
       const message = document.getElementById('setup-status');
       if (message)
         message.textContent = 'The new game could not start. Your saved game is unchanged. Try again.';
     }
   };
   bind('new-peer', () => {
+    continuity.beginEntry();
     if (!stored(SAVE)) {
       void begin(true, PEER_EDITION);
       return;
@@ -213,6 +217,7 @@ function title() {
     });
   });
   bind('new-replies', () => {
+    continuity.beginEntry();
     if (!stored(SAVE)) {
       void begin(true, REPLY_EDITION);
       return;
@@ -228,6 +233,7 @@ function title() {
     });
   });
   bind('new-day', () => {
+    continuity.beginEntry();
     if (!stored(SAVE)) {
       void begin(true, true);
       return;
@@ -243,6 +249,7 @@ function title() {
     });
   });
   bind('new', () => {
+    continuity.beginEntry();
     if (!stored(SAVE)) {
       void begin();
       return;
@@ -258,30 +265,32 @@ function title() {
     });
     bind('cancel-new', () => document.getElementById('new-confirm')?.remove());
   });
-  bind('fresh-local', () => {
-    if (stored(SAVE)) remember('commonstead-preserved-before-fresh-local', stored(SAVE) ?? '');
-    void begin(true);
+  bind('title-feedback', () => {
+    continuity.beginEntry();
+    feedback();
   });
-  bind('browser-people', continuityMenu);
-  bind('title-feedback', feedback);
   bind('continue', () => {
+    const generation = continuity.beginEntry();
     void (async () => {
       try {
-        const loaded = await continuity.loadLocal(stored(SAVE) ?? '');
+        const loaded = await continuity.loadLocal(stored(SAVE) ?? '', generation);
+        if (!continuity.currentEntry(generation)) return;
         start(loaded);
-        await continuity.recording();
-        save();
+        await continuity.recording(false, generation);
+        if (continuity.currentEntry(generation)) save();
       } catch (error) {
+        if (!continuity.currentEntry(generation)) return;
         const el = document.getElementById('load-status');
         console.error(error);
         if (el)
-          el.textContent = isLab
-            ? String(error)
-            : 'The saved game could not open. It is unchanged. Try again or choose Feedback to report the problem.';
+          el.textContent =
+            'The saved game could not open. It is unchanged. Try again or choose Feedback to report the problem.';
       }
     })();
   });
+  document.getElementById('load')?.addEventListener('cancel', () => continuity.beginEntry());
   document.getElementById('load')?.addEventListener('change', async (e) => {
+    const generation = continuity.beginEntry();
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const status = document.getElementById('load-status');
@@ -290,12 +299,15 @@ function title() {
       return;
     }
     try {
-      const loaded = await continuity.importFile(await file.text());
+      const text = await file.text();
+      if (!continuity.currentEntry(generation)) return;
+      const loaded = await continuity.importFile(text, generation);
+      if (!continuity.currentEntry(generation)) return;
       start(loaded);
-      await continuity.recording();
-      save();
+      await continuity.recording(false, generation);
+      if (continuity.currentEntry(generation)) save();
     } catch {
-      if (status)
+      if (continuity.currentEntry(generation) && status)
         status.textContent =
           'This playtest did not match its replay, so it could not load. Your saved game is unchanged. Choose another file.';
     }
@@ -796,26 +808,31 @@ function info() {
 }
 function menu() {
   sheet(
-    `<h2>Paused</h2><p>Your game is saved on this device.</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div>${isLab ? '<button id="continuity-menu">Character histories between games</button><button id="download">Download this run</button>' : ''}`,
+    `<h2>Paused</h2><p>Your game is saved on this device.</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div><button id="menu-title">Back to the title page</button><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><button id="download">Download this run</button><div id="compact-download"></div></details></div>`,
   );
   if (state?.shortYield) save();
   document.getElementById('toggle')?.append(telemetryToggle(lab));
-  bind('continuity-menu', continuityMenu);
+  bind('menu-title', () => {
+    save();
+    closeModal();
+    title();
+  });
   bind('resume', closeModal);
   bind('download', download);
-  if (isLab && (state?.settlement || state?.shortYield)) {
+  if (state?.settlement || state?.shortYield) {
     const b = document.createElement('button');
     b.textContent = 'Download compact run';
     b.onclick = () => {
       if (state) downloadJson('commonstead-day-compact.json', exportRun(state, true));
     };
-    modal?.querySelector('.panel')?.append(b);
+    document.getElementById('compact-download')?.append(b);
   }
   bind('feedback', feedback);
   bind('fullscreen', () => {
     document.documentElement.requestFullscreen?.().catch(() => {});
   });
   bind('new-menu', () => {
+    continuity.beginEntry();
     const holder = document.getElementById('menu-confirm');
     if (!holder) return;
     holder.innerHTML =
@@ -824,20 +841,22 @@ function menu() {
       holder.innerHTML = '';
     });
     bind('replace-menu', () => {
+      const generation = continuity.beginEntry();
       void (async () => {
         try {
-          const prepared = await continuity.fresh(418);
+          const prepared = await continuity.fresh(418, false, undefined, undefined, generation);
+          if (!continuity.currentEntry(generation)) return;
           closeModal();
           start(prepared);
-          await continuity.recording();
-          save();
+          await continuity.recording(false, generation);
+          if (continuity.currentEntry(generation)) save();
         } catch (error) {
+          if (!continuity.currentEntry(generation)) return;
           console.error(error);
           const status = document.getElementById('setup-status');
           if (status)
-            status.textContent = isLab
-              ? String(error)
-              : 'The new game could not start. Your saved game is unchanged. Try again or choose Feedback to report the problem.';
+            status.textContent =
+              'The new game could not start. Your saved game is unchanged. Try again or choose Feedback to report the problem.';
         }
       })();
     });
@@ -851,7 +870,7 @@ function feedback() {
       .map(([label, text]) => `<button data-feedback-choice="${label}" aria-pressed="false">${text}</button>`)
       .join(
         '',
-      )}</div><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened? What did you want to do?</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Your name appears with this feedback and any play history you share. Play history is shared when Recording is on or you select the optional sharing checkbox.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions">${isLab ? '<button id="copy">Keep a copy of this run</button>' : ''}<button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
+      )}</div><div class="verdicts"><button data-verdict="keep">I'd keep playing</button><button data-verdict="mixed">Not sure</button><button data-verdict="quit">I'd stop here</button></div><label for="note">What happened? What did you want to do?</label><textarea id="note" rows="3" maxlength="3900"></textarea><div id="feedback-persona"></div><label for="name">Your name (optional)</label><input type="text" id="name" maxlength="100" value="${esc(stored(NAME) ?? '')}"><details><summary>What is sent</summary><p>Your note is sent even when recording is off. Your name appears with this feedback and any play history you share. Play history is shared when Recording is on or you select the optional sharing checkbox.</p><a href="${PRIVACY_URL}">Lab privacy</a></details><p id="send-status" class="status" role="status"></p></div><div class="feedback-actions"><button id="copy">Keep a copy of this run</button><button class="primary" id="send">Submit</button><button id="cancel-feedback">Back to the menu</button></div>`,
   );
   let verdict = '';
   let choiceText = '';
@@ -899,9 +918,8 @@ function feedback() {
       send.onclick = closeModal;
     } catch (error) {
       console.error(error);
-      status.textContent = isLab
-        ? String(error)
-        : 'Your feedback could not be sent. Your note is still here. Choose Submit to try again.';
+      status.textContent =
+        'Your feedback could not be sent. Your note is still here. Choose Submit to try again.';
       status.scrollIntoView({ block: 'nearest' });
       send.disabled = false;
     }
@@ -933,53 +951,11 @@ function end() {
     })
     .join(
       '',
-    )}</div><details><summary>See the tally</summary><p>${state.villagers.length} people · ${state.buildings.filter((b) => b.complete && b.kind !== 'town').length} completed buildings</p></details><div class="row"><button id="end-feedback">Feedback</button>${isLab ? '<button id="end-download">Download this run</button>' : ''}<button class="primary" id="end-title">To the title page</button></div></section></main>`;
+    )}</div><details><summary>See the tally</summary><p>${state.villagers.length} people · ${state.buildings.filter((b) => b.complete && b.kind !== 'town').length} completed buildings</p></details><div class="row"><button id="end-feedback">Feedback</button><a href="https://human.adamwhite.work/lab/people/">Continue with these people</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><button id="end-download">Download this run</button></details></div><button class="primary" id="end-title">To the title page</button></div></section></main>`;
   shellBindings();
   bind('end-feedback', feedback);
   bind('end-download', download);
   bind('end-title', title);
-}
-function continuityMenu() {
-  if (!isLab) return;
-  sheet(
-    `<h2>Character histories between games</h2><p id="continuity-status" role="status">${esc(continuity.status)}</p><p>Character histories stay in this browser. A new game checks the saved histories of all eight residents together. A loaded game keeps its saved versions of the residents. Recording and character analysis are separate choices.</p><label><input type="checkbox" id="continuity-enabled" ${continuity.shelf.enabled ? 'checked' : ''}> Keep character histories between games</label>${state ? `<p>${state.chapterPaused ? 'The game is paused. Residents must finish shared building work before you save their histories.' : state.pauseRequested ? 'The residents are finishing their current actions.' : 'Start playing before you pause to save character histories. Residents must finish their current actions first. They keep their unfinished construction work and existing responsibilities.'}</p><button id="departure">${state.chapterPaused ? 'Resume this game' : 'Pause to save character histories'}</button><details><summary>Save a character history in this browser</summary><p>An older character history cannot replace a newer one. Download an archive first. Saving a separate version preserves the older history without continuing the newer one.</p>${ALLOCATION.map((c) => `<div class="resident-checkpoint"><strong>${esc(c.name)}</strong><button data-checkpoint="${c.castId}">Save ${esc(c.name)}</button><button data-fork="${c.castId}">Save ${esc(c.name)} as a separate version</button></div>`).join('')}</details><p>Recorded play is linked across games on this device. You can switch Recording off in the game menu.</p><button id="continuity-export">Download game and character archive</button>` : ''}<a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noreferrer">View or download saved character histories</a><button id="back-continuity">Back</button>`,
-  );
-  const attempt = async (action: () => Promise<unknown>) => {
-    try {
-      await action();
-      if (state) save();
-    } catch (error) {
-      continuity.status = String(error);
-    }
-    const el = document.getElementById('continuity-status');
-    if (el) el.textContent = continuity.status;
-  };
-  document.getElementById('continuity-enabled')?.addEventListener('change', (e) => {
-    void attempt(() => continuity.setEnabled((e.target as HTMLInputElement).checked));
-  });
-  bind('departure', () => {
-    if (!state) return;
-    apply(state, {
-      kind: state.chapterPaused ? 'resume-chapter' : 'pause-chapter',
-    });
-    save();
-    closeModal();
-    update();
-    if (state.chapterPaused) continuityMenu();
-  });
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-checkpoint]'))
-    button.onclick = () => {
-      void attempt(() => continuity.checkpoint(button.dataset.checkpoint ?? ''));
-    };
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-fork]'))
-    button.onclick = () => {
-      void attempt(() => continuity.checkpoint(button.dataset.fork ?? '', true));
-    };
-  bind('continuity-export', download);
-  bind('back-continuity', () => {
-    closeModal();
-    if (state) menu();
-  });
 }
 const attemptedDeaths = new Set<string>();
 watchShelfPreference(() => continuity.invalidate());
@@ -1006,6 +982,7 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+window.addEventListener('pagehide', () => continuity.beginEntry());
 document.addEventListener('visibilitychange', () => {
   if (state?.shortYield) carry = 0;
   save();
