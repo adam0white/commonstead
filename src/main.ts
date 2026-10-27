@@ -27,6 +27,7 @@ import {
   exportRun,
   NODES,
   publicPlaceText,
+  roofBreakUnavailable,
   type State,
   step,
   stepYieldBatch,
@@ -578,7 +579,7 @@ function update() {
         ? '<button class="wide" id="cancel">Cancel placement or movement</button>'
         : town
           ? `<button class="wide primary" id="train" ${s.resources.food < 35 || s.villagers.length >= capacity || s.trainingUntil !== null ? 'disabled' : ''}>Invite helper · 35 meals</button><button class="wide" id="select-workers">Select all people</button><p class="small wide">${s.villagers.length >= capacity ? 'Choose a cabin site and prepare it with 40 boards to make room for a helper.' : s.resources.food < 35 ? 'Collect more meals before inviting a helper.' : s.trainingUntil !== null ? 'A helper is learning the light tasks and will arrive shortly.' : 'A helper arrives after 15 seconds of learning these light tasks.'}</p>`
-          : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast bags</button><p class="small wide" id="order-consequences"></p><button id="rest" ${!people.length ? 'disabled' : ''}>Rest · keep current request</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink · 2 meals each</button>${s.rules ? '<button id="rest-all">Everyone rests</button><button id="shelter-all">Everyone under a roof · stop work</button>' : ''}<p class="small wide" id="meal-why"></p><button id="move" ${!people.length ? 'disabled' : ''}>Move / add builders · choose on map</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><p class="small cabin-help">Invite helpers at the workshop hub.</p><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse · 180 boards, 120 ballast bags</button><p class="small wide" id="store-why"></p><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>${s.rules ? `<button id="shelter" ${!people.length ? 'disabled' : ''}>Go under a roof · stop work</button>` : ''}`;
+          : `<button data-resource="food" ${!people.length ? 'disabled' : ''}>Meals</button><button data-resource="wood" ${!people.length ? 'disabled' : ''}>Boards</button><button data-resource="stone" ${!people.length ? 'disabled' : ''}>Ballast bags</button><p class="small wide" id="order-consequences"></p><button id="rest" ${!people.length ? 'disabled' : ''}>Rest · keep current request</button><button id="meal" ${!people.length ? 'disabled' : ''}>Eat and drink · 2 meals each</button>${s.rules ? '<button id="rest-all">Everyone rests</button><button id="shelter-all">Everyone under a roof · stop work</button>' : ''}<button class="wide" id="roof-break-return">Roof break, then offer earlier work</button><p class="small wide" id="roof-break-why"></p><p class="small wide" id="meal-why"></p><button id="move" ${!people.length ? 'disabled' : ''}>Move / add builders · choose on map</button><button id="house" ${!people.length || s.resources.wood < 40 ? 'disabled' : ''}>Prepare cabin · 40 boards</button><p class="small cabin-help">Invite helpers at the workshop hub.</p><button id="store" ${!people.length || s.resources.wood < 180 || s.resources.stone < 120 || store ? 'disabled' : ''}>Storehouse · 180 boards, 120 ballast bags</button><p class="small wide" id="store-why"></p><button id="push" ${!people.length ? 'disabled' : ''}>Insist on work</button>${s.rules ? `<button id="shelter" ${!people.length ? 'disabled' : ''}>Go under a roof · stop work</button>` : ''}`;
     for (const b of actions.querySelectorAll<HTMLButtonElement>('[data-resource]'))
       b.onclick = () => {
         const node = NODES.find((n) => n.kind === b.dataset.resource);
@@ -586,6 +587,8 @@ function update() {
       };
     bind('rest', () => order('rest'));
     bind('shelter', () => order('shelter'));
+    // One public control for the recorded itinerary; ordinary roof/rest controls keep their rules.
+    bind('roof-break-return', () => issue({ kind: 'roof-break-return', ids: [...selected] }));
     bind('meal', () => order('meal'));
     const everyone = (target: string) => () => {
       const now = state;
@@ -633,6 +636,14 @@ function update() {
       update();
     });
   }
+  const roofWhy = roofBreakUnavailable(s, selected);
+  const roofButton = document.getElementById('roof-break-return') as HTMLButtonElement | null;
+  if (roofButton) roofButton.disabled = !!roofWhy;
+  put(
+    'roof-break-why',
+    roofWhy ||
+      'Stops selected work now. Walk to the hub roof, rest for 35 planned game seconds, then offer each person their own earlier work. A new task cancels unfinished stages. One break may not be enough; another personal activity or refusal remains possible.',
+  );
   put('order-consequences', orderConsequences(s, selected));
   put('work-route-cause', routeCause(s));
   put('work-material-flow', materialFlow(s));
@@ -907,11 +918,23 @@ function menu() {
     if (fileSession) scheduleFileFrame();
   });
   bind('download', download);
-  if (!fileSession && (state?.settlement || state?.shortYield)) {
+  if (state?.roofBreak) {
+    const reason = document.createElement('p');
+    reason.textContent =
+      'People from a recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.';
+    document.getElementById('compact-download')?.before(reason);
+  }
+  if (!fileSession && (state?.settlement || state?.shortYield || state?.roofBreak)) {
     const b = document.createElement('button');
     b.textContent = 'Download compact run';
     b.onclick = () => {
-      if (state) downloadJson('commonstead-day-compact.json', exportRun(state, true));
+      if (state)
+        downloadJson(
+          'commonstead-day-compact.json',
+          state.roofBreak
+            ? { ...(exportRun(state, true) as object), castSources: structuredClone(continuity!.sources) }
+            : exportRun(state, true),
+        );
     };
     document.getElementById('compact-download')?.append(b);
   }
@@ -1060,6 +1083,15 @@ function end() {
   bind('end-title', title);
   if (fileTools) document.querySelector('.end-card')?.append(fileTools);
   if (fileSession) document.querySelector('.end-card a[href$="/lab/people/"]')?.remove();
+  if (state.roofBreak) {
+    const link = document.querySelector('.end-card a[href$="/lab/people/"]');
+    if (link) {
+      const reason = document.createElement('p');
+      reason.textContent =
+        'People from this recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.';
+      link.replaceWith(reason);
+    }
+  }
 }
 const attemptedDeaths = new Set<string>();
 if (!fileSession) watchShelfPreference(() => continuity!.invalidate());
