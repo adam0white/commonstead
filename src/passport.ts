@@ -29,6 +29,7 @@ export type Chapter = {
   version: typeof DIALECT;
   inputs: LifePreparation[];
   claims: PersonaEnvelope[];
+  blocked?: { castId: string; reason: string }[];
   initial: Record<string, Person>;
 };
 const same = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPersona(b);
@@ -181,6 +182,18 @@ export function checkChapter(chapter: Chapter) {
     chapter.inputs.length > 8 ||
     !Array.isArray(chapter.claims) ||
     chapter.claims.length !== chapter.inputs.length ||
+    (chapter.blocked !== undefined &&
+      (!Array.isArray(chapter.blocked) ||
+        chapter.blocked.length > CAST.length ||
+        new Set(chapter.blocked.map((entry) => entry.castId)).size !== chapter.blocked.length ||
+        chapter.blocked.some(
+          (entry) =>
+            !entry ||
+            typeof entry.reason !== 'string' ||
+            entry.reason.length > 500 ||
+            !CAST.some((c) => c.castId === entry.castId) ||
+            chapter.inputs.some((input) => input.parent.castId === entry.castId),
+        ))) ||
     new Set(chapter.inputs.map((i) => i.parent.castId)).size !== chapter.inputs.length ||
     !same(Object.keys(chapter.initial).sort(), CAST.map((c) => c.castId).sort())
   )

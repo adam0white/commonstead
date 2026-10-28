@@ -7,7 +7,6 @@ import {
   closePersonaBranch,
   createPersona,
   initialPersonaLife,
-  PERSONA_ORIGINS,
   type personaChannel,
   projectPortablePerson,
   validatePersona,
@@ -90,16 +89,6 @@ export class Continuity {
     try {
       await this.shelf.ready;
       this.requireEntry(generation);
-      // Host policy: ordinary new chapters use the public shelf automatically.
-      // Admission, atomic ownership and the historical-edition guards remain SDK-owned.
-      if (
-        !localOnly &&
-        !this.shelf.enabled &&
-        (typeof location === 'undefined' || PERSONA_ORIGINS.has(location.origin))
-      ) {
-        this.shelf.setEnabled(true);
-        await this.shelf.ready;
-      }
       if (generation !== this.generation)
         throw new Error('The game changed before the residents could join. Try starting the chapter again.');
       const base = createGame(seed);
@@ -131,6 +120,7 @@ export class Continuity {
             initial: result.initial,
             inputs: result.inputs,
             claims: result.claims,
+            blocked: result.blocked,
           };
       }
       if (generation !== this.generation)
@@ -144,11 +134,14 @@ export class Continuity {
       this.sources = [];
       this.heads = chapter?.claims ?? [];
       this.fileOrigin = false;
-      this.status = chapter
-        ? `This chapter carries over ${chapter.inputs.length} supported histories. All residents were checked together. The other residents begin with their original histories.`
-        : localOnly
-          ? 'You started a fresh local chapter. Saved browser histories have not changed.'
-          : 'You started a fresh chapter with the residents’ original histories. No saved histories were carried over.';
+      const blockedNames = chapter?.blocked?.map((entry) => canonicalCast(entry.castId).name) ?? [];
+      this.status = blockedNames.length
+        ? `${blockedNames.join(', ')}: saved history is still in another game. This chapter starts with a local resident; that history cannot be saved here. Other supported histories carry over.`
+        : chapter
+          ? `This chapter carries over ${chapter.inputs.length} supported histories. All residents were checked together. The other residents begin with their original histories.`
+          : localOnly
+            ? 'You started a fresh local chapter. Saved browser histories have not changed.'
+            : 'You started a fresh chapter with the residents’ original histories. No saved histories were carried over.';
       // Caller installs the prepared state before opening any recording hook.
       return state;
     } finally {
@@ -317,6 +310,10 @@ export class Continuity {
       const villager = state.villagers.find((v) => v.person.id === castId);
       if (!villager || !CAST.some((c) => c.castId === castId))
         throw new Error('This person is not a Commonstead resident. Choose someone from the resident list.');
+      if (state.chapter?.blocked?.some((entry) => entry.castId === castId))
+        throw new Error(
+          `${villager.name}: this saved history is still in another game and cannot be saved here.`,
+        );
       const parent = this.heads.find((p) => p.castId === castId);
       let envelope: PersonaEnvelope;
       let raw: unknown;

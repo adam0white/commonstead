@@ -210,12 +210,12 @@ packages:
     engines: {node: '>=24'}
 
   '@adam0white/human-framework@file:vendor/adam0white-human-framework-4.3.0.tgz':
-    resolution: {integrity: sha512-hjEh1Z7XlfK7qWNdyqhbe3am1r+Fv1d02CDG6lNg9kTBY2YEf5JlQFqsZe2pB34D/+BNxhoqE1ocQmTo5A71GA==, tarball: file:vendor/adam0white-human-framework-4.3.0.tgz}
+    resolution: {integrity: sha512-L2YHYCiYbmFIPWsYNWlAkJIfK4TTD9BzOl3wthbJJhmthtZiEE0Tr5/ZmkAH3JqoCXD/9HGnMQKbJ7Md6qBmeg==, tarball: file:vendor/adam0white-human-framework-4.3.0.tgz}
     version: 4.3.0
     engines: {node: '>=24'}
 
   '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.0.tgz':
-    resolution: {integrity: sha512-3XoDXxploQpbqOiNuHLiGyBVJqAq06G0tj6iCOeQakNQQyh9HvszqhEKvDlqSkvtEDKx2k1uri8FjjaH2+K0jA==, tarball: file:vendor/adam0white-lab-client-0.5.0.tgz}
+    resolution: {integrity: sha512-fUW04PYryh66fYKwfMkZNYqmaH8elIMJ8qqNZGxCT9PdnRkpJDw9xqiUrFp6s/Y5mUSyuNPQseHpFx204AO1nA==, tarball: file:vendor/adam0white-lab-client-0.5.0.tgz}
     version: 0.5.0
 
   '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz':
