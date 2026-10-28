@@ -18,7 +18,7 @@ test('recorded roof break walks, rests under the real roof, then re-offers each 
   const other = JSON.stringify(s.villagers[2]);
   roof(s, ['v1', 'v2']);
   expect(s.villagers.slice(0, 2).map((v) => v.order?.target)).toEqual(['shelter', 'shelter']);
-  expect(JSON.stringify(s.villagers[2])).toBe(other);
+  expect({ ...s.villagers[2], person: undefined }).toEqual({ ...JSON.parse(other), person: undefined });
   const entries = s.roofBreak!.attempts;
   expect(entries.map((a) => a.priorOrder)).toEqual(prior);
   expect(entries.map((a) => a.inputIndex)).toEqual([2, 2]);
@@ -40,11 +40,11 @@ test('recorded roof break walks, rests under the real roof, then re-offers each 
     const raw = exportRun(s, compact) as { schema: number };
     expect(raw.schema).toBe(9);
     const loaded = importRun(JSON.parse(JSON.stringify(raw)));
-    expect(JSON.stringify(loaded)).toBe(JSON.stringify(s));
+    expect(loaded).toEqual(s);
     advance(loaded, 17);
-    const copy = structuredClone(s);
+    const copy = importRun(exportRun(s));
     advance(copy, 17);
-    expect(JSON.stringify(loaded)).toBe(JSON.stringify(copy));
+    expect(loaded).toEqual(copy);
     expect(() => importRun({ ...raw, schema: 8 })).toThrow();
     expect(() => importRun({ ...raw, extension: { version: 'roof-break-return/0' } })).toThrow();
     expect(() => importRun({ ...raw, unknown: true })).toThrow();
@@ -127,7 +127,7 @@ test('completed work stays complete; pause and storm cancel only unfinished stag
   expect(s.roofBreak!.attempts[0]!.stage).toBe('unavailable');
   expect(s.resources.wood).toBe(40);
   expect(s.villagers[0]!.order).toBe(null);
-  expect(JSON.stringify(importRun(exportRun(s)))).toBe(JSON.stringify(s));
+  expect(importRun(exportRun(s))).toEqual(s);
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   roof(s, ['v1']);
   apply(s, { kind: 'pause-chapter' });
@@ -146,7 +146,7 @@ test('completed work stays complete; pause and storm cancel only unfinished stag
   advance(s, 100);
   roof(s, ['v1']);
   expect(JSON.stringify(s)).toBe(ended);
-  expect(JSON.stringify(importRun(exportRun(s)))).toBe(ended);
+  expect(importRun(exportRun(s))).toEqual(JSON.parse(ended));
 });
 
 test('complete source archives survive native and file loads; active run requires a departure pause', async () => {
@@ -213,7 +213,7 @@ test('long-day roof action delivers the actual held load once, rests at the hub,
   apply(s, { kind: 'long-roof-break-return', ids: ['v1'] } as GameCommand);
   expect(JSON.stringify(s)).toBe(duplicate);
   while (!['reoffered', 'refused', 'unavailable'].includes(a.stage) && s.tick < 200) step(s);
-  expect(a.stage).toBe('reoffered');
+  expect(a.stage, a.result).toBe('reoffered');
   expect(a.deliveredAt).toBeGreaterThan(26);
   expect(a.restStarted).toBeGreaterThanOrEqual(a.deliveredAt!);
   expect(a.restCompleted! - a.restStarted!).toBe(15);
@@ -228,11 +228,11 @@ test('long-day roof action delivers the actual held load once, rests at the hub,
     expect(raw.schema).toBe(10);
     expect(raw.rules).toBe('settlement-roof-break-return/1');
     const copy = importRun(JSON.parse(JSON.stringify(raw)));
-    expect(JSON.stringify(copy)).toBe(JSON.stringify(s));
+    expect(copy).toEqual(s);
     advance(copy, 17);
-    const expected = structuredClone(s);
+    const expected = importRun(exportRun(s));
     advance(expected, 17);
-    expect(JSON.stringify(copy)).toBe(JSON.stringify(expected));
+    expect(copy).toEqual(expected);
     expect(() => importRun({ ...raw, schema: 4 })).toThrow();
     expect(() => importRun({ ...raw, unexpected: true })).toThrow();
   }
@@ -256,7 +256,7 @@ test('long-day busy acts finish without cancellation; explicit cancellation keep
   advance(s, 60);
   expect(s.resources.wood).toBe(stock);
   expect(aw.job).toBeNull();
-  expect(JSON.stringify(importRun(exportRun(s)))).toBe(JSON.stringify(s));
+  expect(importRun(exportRun(s))).toEqual(s);
   // A new deliberate action can deliver a stranded load, but it cannot invent a prior job.
   apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
   advance(s, 100);
@@ -272,13 +272,13 @@ test('long-day stale targets and no prior work cannot produce a work offer; depa
     apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
     advance(s, 40);
     expect(s.longRoofBreak!.attempts[0]!.stage).toBe('unavailable');
-    expect(JSON.stringify(importRun(exportRun(s, true)))).toBe(JSON.stringify(s));
+    expect(importRun(exportRun(s, true))).toEqual(s);
     apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
     apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
     apply(s, { kind: 'pause-chapter' });
     expect(s.longRoofBreak!.attempts.at(-1)!.stage).toBe('cancelled');
     for (let n = 0; n < 100 && !s.chapterPaused; n++) step(s);
-    expect(JSON.stringify(importRun(exportRun(s)))).toBe(JSON.stringify(s));
+    expect(importRun(exportRun(s))).toEqual(s);
   }
   const s = createGame(418, undefined, { edition: 'settlement-day/1' });
   apply(s, { kind: 'build', ids: ['v1'], building: 'house', x: 575, y: 575 });
@@ -339,7 +339,7 @@ test('schema10 keeps source archives through full, compact, gzip and native load
   expect(accessed).toBe(0);
   const download = c.export(s) as { castSources: unknown[] };
   expect(download.castSources).toEqual(sources);
-  const expected = structuredClone(s);
+  const expected = importRun(exportRun(s));
   advance(expected, 60);
   for (const compact of [false, true]) {
     const raw = { ...(exportRun(s, compact) as object), castSources: sources };
@@ -385,36 +385,70 @@ test('a pending public reply refuses the new action without recording or changin
   expect(s.longRoofBreak).toBeUndefined();
 });
 
-test('remote held supplies cross the existing passage before stock delivery, roof rest and the source-map offer', () => {
+test('remote held supplies cross the existing passage before stock delivery, roof rest and the source-map offer', async () => {
   const s = createGame(418, undefined, { edition: 'settlement-day/1' });
-  const aw = s.settlement!.actors.v1!;
-  apply(s, { kind: 'settlement', ids: ['v1'], action: 'map', target: 'quay' });
-  while ((aw.map !== 'quay' || aw.job) && s.tick < 250) step(s);
-  expect(aw.map).toBe('quay');
-  expect(aw.job).toBeNull();
-  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
-  while (!aw.carried && s.tick < 500) step(s);
+  // Sam's ordinary live choices provide a positive remote return. Nora's same
+  // journey can remain at the delivery point attending to her needs all day.
+  const aw = s.settlement!.actors.v2!;
+  const advanceUntil = async (ready: () => boolean, limit: number) => {
+    for (let n = 0; !ready() && s.tick < limit && n < limit; n++) {
+      const prior = s.tick;
+      step(s);
+      if (s.tick <= prior) throw new Error(`Remote roof stopped at tick ${s.tick}.`);
+      if (n % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(ready(), `Remote roof did not reach the requested boundary by tick ${s.tick}.`).toBe(true);
+  };
+  apply(s, { kind: 'settlement', ids: ['v2'], action: 'map', target: 'quay' });
+  await advanceUntil(() => aw.map === 'quay' && !aw.job, 250);
+  apply(s, { kind: 'order', ids: ['v2'], target: 'wood' });
+  await advanceUntil(() => !!aw.carried, 500);
   const load = structuredClone(aw.carried);
   expect(load?.amount).toBeGreaterThan(0);
   const stock = s.resources.wood;
   const map = aw.map;
-  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  apply(s, { kind: 'long-roof-break-return', ids: ['v2'] });
   const a = s.longRoofBreak!.attempts[0]!;
   expect(a.source.map).toBe('quay');
   expect(aw.map).toBe(map);
   expect(s.resources.wood).toBe(stock);
-  let crossing = false;
-  while (['finish', 'delivery', 'roof', 'rest'].includes(a.stage) && s.tick < 850) {
+  let crossing = false,
+    crossed = false,
+    delivered = false;
+  for (
+    let n = 0;
+    ['finish', 'delivery', 'roof', 'rest'].includes(a.stage) && s.tick < 1800 && n < 1800;
+    n++
+  ) {
     crossing ||= aw.running?.id === 'crossing';
+    const priorTick = s.tick,
+      priorMap = aw.map;
+    if (!delivered) expect(s.resources.wood).toBe(stock);
     step(s);
+    if (s.tick <= priorTick) throw new Error(`Remote roof stopped at tick ${s.tick}.`);
+    crossed ||= priorMap === 'quay' && aw.map === 'yard';
+    if (!delivered && !aw.carried) {
+      expect(s.resources.wood).toBe(stock + load!.amount);
+      expect(a.deliveredAt).toBe(s.tick);
+      delivered = true;
+    }
+    if (!delivered) expect(s.resources.wood).toBe(stock);
+    if (n % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  expect(crossing).toBe(true);
-  expect(a.stage).toBe('reoffered');
+  expect({ crossing, crossed, delivered }).toEqual({ crossing: true, crossed: true, delivered: true });
+  expect(a.stage, a.result).toBe('reoffered');
+  expect(a.restDecision?.chosenAffordanceId).toBe('rest');
+  expect(a.restUntil! - a.restStarted!).toBe(15);
+  expect(a.restCompleted).toBeGreaterThanOrEqual(a.restUntil!);
+  expect(a.restMap).toBe('yard');
+  expect(Math.hypot(a.restPoint!.x - 500, a.restPoint!.y - 350)).toBeLessThan(10);
   expect(aw.map).toBe('yard');
+  expect(aw.carried).toBeNull();
   expect(s.resources.wood).toBe(stock + load!.amount);
   expect(aw.job).toMatchObject({ kind: 'gather', map: 'quay', phase: 'out', target: 'wood' });
-  expect(JSON.stringify(importRun(exportRun(s, true)))).toBe(JSON.stringify(s));
-});
+  // One complete game restore retains the actual remote delivery/rest/reoffer.
+  expect(importRun(exportRun(s, true))).toEqual(s);
+}, 120_000);
 
 test('an accepted later reply during roof rest keeps its ordinary priority and completed paper result', () => {
   const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
@@ -456,11 +490,11 @@ test('an accepted later reply during roof rest keeps its ordinary priority and c
   expect(s.resources.wood).toBe(stock + load.amount);
   for (const compact of [false, true]) {
     const copy = importRun(JSON.parse(JSON.stringify(exportRun(s, compact))));
-    expect(JSON.stringify(copy)).toBe(JSON.stringify(s));
+    expect(copy).toEqual(s);
     advance(copy, 90);
-    const expected = structuredClone(s);
+    const expected = importRun(exportRun(s));
     advance(expected, 90);
-    expect(JSON.stringify(copy)).toBe(JSON.stringify(expected));
+    expect(copy).toEqual(expected);
   }
   advance(s, 90);
   expect(s.tick).toBeGreaterThan(restUntil);

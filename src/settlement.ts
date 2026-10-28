@@ -1,20 +1,21 @@
+import { DISCOVERIES } from './cast.ts';
 import {
   type Affordance,
   begin,
+  beginTogether,
   converse,
   decide,
-  enableFullness,
+  decideTogether,
   finish,
   perceive,
-  prayerWindows,
   promise,
   readPerson,
   releaseCommitment,
   reviewed,
   socialEvent,
+  stageOutcome,
   tick as tickPerson,
-} from '@adam0white/human-framework';
-import { DISCOVERIES } from './cast.ts';
+} from './hf4';
 import { blocked, MAPS, type Place, type Point, route } from './paths.ts';
 import {
   activePeer,
@@ -142,11 +143,6 @@ export function initSettlement(s: State, config: SettlementConfig): void {
     },
   };
   for (const v of s.villagers) {
-    enableFullness(v.person);
-    // Public HF commitment API; these are fictional times from HF's sourced schedule, not local astronomy.
-    for (const c of [...prayerWindows(0), ...prayerWindows(1).filter((c) => c.label === 'Fajr')]) {
-      if (c.until > v.person.now) promise(v.person, { ...c, recurEvery: undefined });
-    }
     v.says = 'We have a full day here. We can choose work, meals, sleep and our own responsibilities.';
   }
   s.message =
@@ -788,8 +784,14 @@ function pairStart(s: State, v: Villager): boolean {
     optsB = [{ ...request, with: [v.person.id] }, ...bodyChoices(s, other)];
   request.targetId = jobKey(v, j);
   optsB[0] = { ...request, targetId: jobKey(other, oj), with: [v.person.id] };
-  const da = decide(v.person, optsA, requestOptions(s, v, request)),
-    db = decide(other.person, optsB, requestOptions(s, other, optsB[0] as Affordance));
+  const pairDecisions = decideTogether([
+    { person: v.person, affordances: optsA, options: requestOptions(s, v, request) },
+    { person: other.person, affordances: optsB, options: requestOptions(s, other, optsB[0] as Affordance) },
+  ]);
+  const da = pairDecisions[0],
+    db = pairDecisions[1];
+  if (!da || !db) throw new Error('Missing shared decision');
+  beginTogether([v.person, other.person]);
   if (
     da.chosenAffordanceId !== action ||
     db.chosenAffordanceId !== action ||
@@ -803,7 +805,7 @@ function pairStart(s: State, v: Villager): boolean {
       cancel(s, p);
       p.says = d.suggestion?.says || d.narration;
       const selected = options.find((a) => a.id === d.chosenAffordanceId && a.id !== action);
-      if (selected) startChoice(s, p, selected, d, 'body');
+      if (selected) startChoice(s, p, selected, decide(p.person, [selected]), 'body');
     }
     event(s, 'The shared invitation did not gain both people’s assent. No shared outcome is recorded.');
     return true;
@@ -943,10 +945,85 @@ function finishJob(s: State, v: Villager, run: Running) {
   }
   aw.job = null;
 }
+function runningOutcome(s: State, v: Villager, run: Running): Parameters<typeof finish>[1] {
+  const aw = actor(s, v),
+    activity = v.person.activity!;
+  return {
+    affordanceId: activity.affordanceId,
+    action: activity.action,
+    targetId: activity.targetId,
+    at: v.person.now,
+    status:
+      run.purpose === 'travel' &&
+      !(
+        aw.job &&
+        ['move', 'map'].includes(aw.job.kind) &&
+        !aw.path.length &&
+        aw.map === aw.job.map &&
+        Math.hypot(v.x - aw.job.point.x, v.y - aw.job.point.y) < 10
+      )
+        ? 'interrupted'
+        : 'completed',
+    needs:
+      run.purpose === 'travel'
+        ? {}
+        : run.action === 'eat'
+          ? { food: 0.75, water: 0.4 }
+          : run.action === 'drink'
+            ? { water: 0.8 }
+            : run.action === 'move'
+              ? { autonomy: 0.3, competence: 0.2 }
+              : run.action === 'work'
+                ? { competence: 0.15 }
+                : run.action === 'talk'
+                  ? { belonging: 0.45 }
+                  : {},
+    summary:
+      run.purpose === 'travel' ? 'I paused on the way to the requested activity.' : `I finished ${v.task}.`,
+  };
+}
 export function stepSettlement(s: State): void {
   const w = world(s);
   if (s.ended || s.chapterPaused) return;
   s.tick++;
+  for (const v of s.villagers) {
+    const aw = actor(s, v),
+      run = aw.running;
+    if (v.person.activity && run && s.tick >= run.until) {
+      const outcome = runningOutcome(s, v, run);
+      if (run.purpose === 'job' && run.job?.partner) {
+        const partner = w.actors[run.job.partner]?.running;
+        if (
+          !partner ||
+          partner.from !== run.from ||
+          partner.until !== run.until ||
+          partner.job?.partner !== v.id ||
+          partner.job.target !== run.job.target
+        )
+          outcome.status = 'failed';
+      }
+      stageOutcome(v.person, outcome);
+    }
+    const reply = latestReply(s, v);
+    if (
+      v.person.activity &&
+      reply?.status === 'running' &&
+      reply.until !== undefined &&
+      s.tick >= reply.until &&
+      aw.map === reply.map &&
+      Math.hypot(v.x - reply.point.x, v.y - reply.point.y) <= 1 &&
+      !aw.job
+    )
+      stageOutcome(v.person, {
+        affordanceId: v.person.activity.affordanceId,
+        action: 'talk',
+        targetId: reply.id,
+        at: 480 + s.tick * DAY_MINUTES,
+        status: 'completed',
+        needs: {},
+        summary: REPLIES[reply.branch].says,
+      });
+  }
   // New edition only: catch up all actors before any shared act or hearing.
   if (w.peer) for (const v of s.villagers) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
   for (const v of s.villagers) {
@@ -976,43 +1053,7 @@ export function stepSettlement(s: State): void {
         }
       }
       const activity = v.person.activity;
-      const report = activity
-        ? finish(v.person, {
-            affordanceId: activity.affordanceId,
-            action: activity.action,
-            targetId: activity.targetId,
-            at: v.person.now,
-            status:
-              run.purpose === 'travel' &&
-              !(
-                aw.job &&
-                ['move', 'map'].includes(aw.job.kind) &&
-                !aw.path.length &&
-                aw.map === aw.job.map &&
-                Math.hypot(v.x - aw.job.point.x, v.y - aw.job.point.y) < 10
-              )
-                ? 'interrupted'
-                : 'completed',
-            needs:
-              run.purpose === 'travel'
-                ? {}
-                : run.action === 'eat'
-                  ? { food: 0.75, water: 0.4 }
-                  : run.action === 'drink'
-                    ? { water: 0.8 }
-                    : run.action === 'move'
-                      ? { autonomy: 0.3, competence: 0.2 }
-                      : run.action === 'work'
-                        ? { competence: 0.15 }
-                        : run.action === 'talk'
-                          ? { belonging: 0.45 }
-                          : {},
-            summary:
-              run.purpose === 'travel'
-                ? 'I paused on the way to the requested activity.'
-                : `I finished ${v.task}.`,
-          })
-        : undefined;
+      const report = activity ? finish(v.person, runningOutcome(s, v, run)) : undefined;
       const roof = activeLongRoof(s, v.id);
       if (roof?.stage === 'rest' && run.from === roof.restStarted) {
         if (
@@ -1027,7 +1068,7 @@ export function stepSettlement(s: State): void {
           endLongRoof(s, roof, 'cancelled', 'The planned rest did not finish. Earlier work was not offered.');
       }
       aw.running = null;
-      if (run.purpose === 'job') finishJob(s, v, run);
+      if (run.purpose === 'job' && report?.status === 'completed') finishJob(s, v, run);
       if (run.id === 'crossing' && run.purpose === 'travel' && aw.job) {
         aw.map = aw.job.map;
         v.x = PASSAGE.x;
@@ -1359,6 +1400,7 @@ function startReply(s: State, v: Villager): boolean {
     return false;
   }
   a.deliveredAt = s.tick;
+  const heardAt = v.person.now;
   const heard = perceive(v.person, [
     {
       at: v.person.now,
@@ -1375,7 +1417,7 @@ function startReply(s: State, v: Villager): boolean {
   a.attended = heard.some(
     (p) =>
       p.kind === 'workshop-reply' &&
-      p.at === v.person.now &&
+      p.at === heardAt &&
       p.actorId === 'commander' &&
       p.summary === REPLIES[a.branch].line,
   );

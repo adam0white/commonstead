@@ -1,4 +1,3 @@
-import { isContinuingCommitment, snapshot } from '@adam0white/human-framework';
 import type { Lab, LifePreparation, PersonaEnvelope, PersonaLife } from '@adam0white/lab-client';
 import {
   anchorPersonaLife,
@@ -13,6 +12,8 @@ import {
   validatePersona,
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
+import { FRAMEWORK_VERSION } from './engine';
+import { isContinuingCommitment, snapshot } from './hf4';
 import { admitResident, type Chapter, claimTransfer, DIALECT, RULES, residentTransfer } from './passport.ts';
 import { PRESSURE } from './pressure.ts';
 import { activeLongRoof, type SettlementConfig } from './settlement.ts';
@@ -28,7 +29,13 @@ import {
 } from './sim.ts';
 
 type Shelf = ReturnType<typeof personaChannel>;
-type SourceArchive = { revision: string; source: PersonaEnvelope['source']; snapshot: unknown };
+
+import {
+  retainSource,
+  type SourceArchive,
+  validateSourceArchives,
+  validateSourceReferences,
+} from './source-archives';
 export const LOCAL_KEY = 'commonstead-cast-local-v3';
 const maxArchive = 1_000_000;
 
@@ -58,7 +65,7 @@ export class Continuity {
     return {
       game: 'commonstead',
       build: String(this.lab.build().c ?? 'local'),
-      engine: '2.23.0',
+      engine: FRAMEWORK_VERSION,
       rules: RULES,
     };
   }
@@ -116,7 +123,7 @@ export class Continuity {
       this.requireEntry(generation);
       if (generation !== this.generation)
         throw new Error('The game changed before the residents could join. Try starting the chapter again.');
-      const base = createGame(seed);
+      const base = createGame(seed, undefined, config, config || !rules ? undefined : rules);
       let chapter: Chapter | undefined;
       let shelfUnavailable = false;
       if (this.shelf.enabled) {
@@ -135,9 +142,7 @@ export class Continuity {
             CAST.map((c) => c.castId),
             this.source(),
             async (inputs: LifePreparation[]) => {
-              const initial = Object.fromEntries(
-                base.villagers.map((v) => [v.person.id, structuredClone(v.person)]),
-              );
+              const initial = Object.fromEntries(base.villagers.map((v) => [v.person.id, v.person]));
               for (const input of inputs) {
                 const opening = initial[input.parent.castId];
                 if (!opening)
@@ -208,6 +213,7 @@ export class Continuity {
     const saved = JSON.parse(text);
     const state = importRun(saved.run);
     validateYieldSources(saved.sources);
+    await validateSourceArchives(saved.sources);
     await this.validateRunEnvelopes(state);
     if (
       typeof saved.runId !== 'string' ||
@@ -257,6 +263,7 @@ export class Continuity {
     const { castSources: archiveSources, ...native } = raw;
     const state = importRun(native);
     validateYieldSources(archiveSources ?? []);
+    await validateSourceArchives(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];
     if (!Array.isArray(sources) || JSON.stringify(sources).length > maxArchive)
@@ -354,7 +361,11 @@ export class Continuity {
           );
         if (parent.terminal) return;
         raw = snapshot(villager.person);
-        const closed = await closePersonaBranch(parent, this.source(), villager.person.now);
+        const closed = await closePersonaBranch(
+          parent,
+          this.source(),
+          Math.round(villager.person.now * 60_000),
+        );
         const { revision: _revision, ...body } = closed;
         envelope = await createPersona({ ...body, transfer: { ...body.transfer, hostRun: runId } });
       } else {
@@ -363,22 +374,7 @@ export class Continuity {
           throw new Error(
             'This resident still has shared building work to finish. Finish it before the resident leaves.',
           );
-        const captured =
-          castId === 'hf.cast.burak.stairwell'
-            ? {
-                raw: snapshot(villager.person),
-                transfer: projectPortablePerson({
-                  castId,
-                  game: 'commonstead',
-                  engine: '2.23.0',
-                  person: villager.person,
-                  history: [`Played a Commonstead chapter to tick ${state.tick}.`],
-                  previous: parent,
-                  hostObligations: [],
-                }),
-                limitations: ['The complete Commonstead chapter remains in the local source archive.'],
-              }
-            : await residentTransfer(villager.person);
+        const captured = await residentTransfer(villager.person);
         raw = captured.raw;
         const branchId = fork ? crypto.randomUUID() : (parent?.branchId ?? crypto.randomUUID());
         const life =
@@ -404,10 +400,13 @@ export class Continuity {
         throw new Error('The game changed before the person could be saved. Try saving the person again.');
       // Preserve full actual source before publication, including failed CAS attempts, local only.
       if (raw) {
-        const retained = [
-          ...this.sources,
-          { revision: envelope.revision, source: envelope.source, snapshot: raw },
-        ];
+        const retained = await retainSource(this.sources, {
+          revision: envelope.revision,
+          source: envelope.source,
+          snapshot: raw,
+        });
+        if (!current())
+          throw new Error('The game changed before the person could be saved. Try saving the person again.');
         // Capacity is serialized JSON UTF16 code units, as in the native loader.
         if (retained.length > 100 || JSON.stringify(retained).length > maxArchive)
           throw new Error(
@@ -487,7 +486,7 @@ export function resumeForPlay(state: State) {
     apply(state, { kind: 'resume-chapter' });
 }
 
-export function validateYieldSources(raw: unknown): void {
+export function validateYieldSources(raw: unknown): asserts raw is SourceArchive[] {
   const keys = (value: unknown, required: string[]) => {
     if (
       !value ||
@@ -520,6 +519,7 @@ export function validateYieldSources(raw: unknown): void {
     };
     safe(source.snapshot);
   }
+  validateSourceReferences(raw);
 }
 
 /** Pure validation shared by native and memory-only entries. */

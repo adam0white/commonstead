@@ -5,8 +5,8 @@ export function forecastDay() {
   const s = createGame(418, undefined, { edition: 'settlement-day/1' });
   const crew = s.villagers.slice(0, 4).map((v) => v.id);
   for (const [i, id] of crew.entries())
-    apply(s, { kind: 'order', ids: [id], target: i < 2 ? 'wood' : 'stone' });
-  return { s, crew, yielding: null as string | null };
+    apply(s, { kind: 'order', ids: [id], target: i < crew.length / 2 ? 'wood' : 'stone' });
+  return { s, crew, yielding: null as string | null, yielded: new Set<string>() };
 }
 export function advanceForecastDay(run: ReturnType<typeof forecastDay>) {
   const { s, crew } = run;
@@ -18,26 +18,31 @@ export function advanceForecastDay(run: ReturnType<typeof forecastDay>) {
       (!run.yielding || (s.tick % 20 === 0 && w.actors[run.yielding]?.job?.kind !== 'yield'))
     ) {
       run.yielding = w.dispute[0];
+      run.yielded.add(run.yielding);
       apply(s, { kind: 'settlement', ids: [run.yielding], action: 'yield' });
     }
-    if (run.yielding && !w.dispute && !w.actors[run.yielding]?.job) {
-      apply(s, {
-        kind: 'order',
-        ids: [run.yielding],
-        target: crew.indexOf(run.yielding) < 2 ? 'wood' : 'stone',
-      });
-      run.yielding = null;
+    // A later dispute can begin before an earlier yielding resident finishes.
+    // Retain each displaced request until that resident reaches a real free boundary.
+    for (const id of run.yielded) {
+      const a = w.actors[id];
+      if (w.dispute?.includes(id) || a?.job || a?.carried || (a?.running && a.running.purpose !== 'body'))
+        continue;
+      apply(s, { kind: 'order', ids: [id], target: crew.indexOf(id) < crew.length / 2 ? 'wood' : 'stone' });
+      run.yielded.delete(id);
+      if (run.yielding === id) run.yielding = null;
     }
     if (s.resources.wood >= 180 && s.resources.stone >= 120) {
       const builders = s.villagers
         .map((v) => v.id)
         .filter((id) => {
           const a = w.actors[id];
-          return !!a && !a.running && !a.carried && a.map === 'yard';
+          return !!a && (!a.running || a.running.purpose === 'body') && !a.carried && a.map === 'yard';
         });
       apply(s, { kind: 'build', ids: builders, building: 'storehouse', x: 650, y: 500 });
     }
   }
+  const before = s.tick;
   step(s);
+  if (s.tick <= before) throw new Error(`Forecast day stopped at tick ${s.tick}.`);
 }
 export const storehouse = (s: State) => s.buildings.find((b) => b.kind === 'storehouse');

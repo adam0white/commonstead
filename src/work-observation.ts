@@ -1,6 +1,6 @@
-import type { Person } from '@adam0white/human-framework';
 import { DISCOVERIES } from './cast.ts';
 import { nextTask, personStatus, residentName } from './display.ts';
+import type { Person } from './hf4';
 import { MAPS } from './paths.ts';
 import { beforeStorm, indoors, paceWords, tiredOf } from './pressure.ts';
 import { routeWorkReading } from './route-work-reading.ts';

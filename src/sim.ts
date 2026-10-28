@@ -1,17 +1,22 @@
+import { canonicalPersona } from '@adam0white/lab-client';
+import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
+import { admissionLine, assignmentText, nextTask, residentName } from './display.ts';
+import { FRAMEWORK_VERSION } from './engine';
 import {
   type Affordance,
+  archiveCommunity,
   begin,
   createPerson,
   decide,
   finish,
+  openCommunity,
   type Person,
   perceive,
   readPerson,
+  restoreCommunity,
+  stageOutcome,
   tick as tickPerson,
-} from '@adam0white/human-framework';
-import { canonicalPersona } from '@adam0white/lab-client';
-import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
-import { admissionLine, assignmentText, nextTask, residentName } from './display.ts';
+} from './hf4';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 import { openPlacementGround } from './placement.ts';
 import {
@@ -159,7 +164,7 @@ export const NODES: { id: string; kind: Resource; x: number; y: number }[] = [
 // Game deadlines and movement remain real seconds. HF alone evolves body and mind.
 const BODY_MINUTES = 0.5;
 const START_MINUTE = 8 * 60;
-function makeVillager(seed: number, n: number): Villager {
+function makeVillager(seed: number, n: number, resident?: Person): Villager {
   const id = `v${n}`;
   const entry = CAST[n - 1];
   const name = entry?.name ?? `Helper ${n}`;
@@ -176,19 +181,21 @@ function makeVillager(seed: number, n: number): Villager {
     breakStarted: -1,
     x: 450 + ((n - 1) % 3) * 42,
     y: 425 + Math.floor((n - 1) / 3) * 35,
-    person: createPerson({
-      id: entry?.castId ?? `commonstead.episode.${seed}.${n}`,
-      name,
-      seed: (seed + n * 997) >>> 0,
-      now: START_MINUTE,
-      bornAt: START_MINUTE - (entry?.age ?? 30) * 365 * 1440,
-      sex: entry?.sex ?? 'female',
-      ...(entry ? openingProfile(entry) : {}),
-      body: { satiety: 0.95, hydration: 0.98, fitness: 0.35, sleepPressure: 0.05 },
-      voices: [{ voiceId: 'commander', trust: 0.7 }],
-      enable: { suggestionReasons: true },
-      lexicon: { plainEnglish: true },
-    }),
+    person: createPerson(
+      {
+        id: entry?.castId ?? `commonstead.episode.${seed}.${n}`,
+        name,
+        seed: (seed + n * 997) >>> 0,
+        now: START_MINUTE,
+        bornAt: START_MINUTE - (entry?.age ?? 30) * 365 * 1440,
+        sex: entry?.sex ?? 'female',
+        ...(entry ? openingProfile(entry) : {}),
+        body: { satiety: 0.95, hydration: 0.98, fitness: 0.35, sleepPressure: 0.05 },
+        voices: [{ voiceId: 'commander', trust: 0.7 }],
+        lexicon: { plainEnglish: true },
+      },
+      resident,
+    ),
     task: 'idle',
     says: 'We use prepared boards, small ballast bags and hand tools. We do not use powered tools or change the building structure.',
     order: null,
@@ -205,6 +212,7 @@ export function createGame(
 ): State {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error('Invalid seed');
   if (rules !== undefined && (rules !== PRESSURE || config)) throw new Error('Invalid rules');
+  openCommunity(seed, !!config);
   const villagers = Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1));
   if (chapter) {
     checkChapter(chapter);
@@ -213,7 +221,7 @@ export function createGame(
       const expected = input ? admitResident(input, v.person) : v.person;
       if (canonicalPersona(chapter.initial[v.person.id]) !== canonicalPersona(expected))
         throw new Error('Pinned initial actor differs from semantic admission.');
-      v.person = structuredClone(expected);
+      v.person = expected;
       if (input) {
         const facts = lifeAdmission(input, 'commonstead');
         v.assignment = assignmentText(facts.assignment, residentName(v));
@@ -275,13 +283,13 @@ function offer(
 function recover(s: State, v: Villager, kind: 'rest' | 'meal', automatic = false, roof = false) {
   if (!roof) cancelRoofBreak(s, v.id);
   interrupt(v);
-  if (kind === 'meal') s.resources.food -= 2;
   const a =
     kind === 'rest'
       ? offer('rest', 35, 0, { rest: 0.65 }, ['rest'])
       : offer('eat', 8, 0, { food: 0.7, water: 0.8 }, ['rest']);
   const r = decide(v.person, [a]);
-  begin(v.person, a, r);
+  if (!begin(v.person, a, r)) return;
+  if (kind === 'meal') s.resources.food -= 2;
   v.recoveryUntil = s.tick + (kind === 'rest' ? 35 : 8);
   v.actionUntil = v.recoveryUntil;
   v.task = kind === 'rest' ? 'resting' : 'eating / drinking';
@@ -328,6 +336,8 @@ function chooseWork(s: State, v: Villager, push = false) {
         ? { suggestion: { voiceId: 'commander', action: 'work', strength: 0 } }
         : {},
   );
+  const accepted = offered.find((a) => a.id === r.chosenAffordanceId);
+  if (accepted) begin(v.person, accepted, r);
   if (push)
     perceive(v.person, [
       {
@@ -349,7 +359,6 @@ function chooseWork(s: State, v: Villager, push = false) {
     v.actionUntil = s.tick + 10;
     return;
   }
-  begin(v.person, a, r);
   if (a.action === 'eat') s.resources.food -= 2;
   const duration = a.action === 'rest' ? 35 : a.action === 'eat' ? 8 : a.action === 'drink' ? 5 : 10;
   v.actionUntil = s.tick + duration;
@@ -802,11 +811,28 @@ export function step(s: State): void {
   if (s.ended || s.chapterPaused) return;
   s.tick++;
   if (s.trainingUntil !== null && s.tick >= s.trainingUntil) {
-    const arrival = makeVillager(s.seed, s.villagers.length + 1);
+    const arrival = makeVillager(s.seed, s.villagers.length + 1, s.villagers[0]!.person);
     tickPerson(arrival.person, START_MINUTE + s.tick * BODY_MINUTES);
     s.villagers.push(arrival);
     s.trainingUntil = null;
     s.message = `${residentName(arrival)} has joined the workshop today.`;
+  }
+  for (const v of s.villagers) {
+    const activity = v.person.activity;
+    if (activity && (v.recoveryUntil ? s.tick >= v.recoveryUntil : v.order && s.tick >= v.actionUntil))
+      stageOutcome(v.person, {
+        affordanceId: activity.affordanceId,
+        action: activity.action,
+        at: START_MINUTE + s.tick * BODY_MINUTES,
+        status: 'completed',
+        needs:
+          activity.action === 'eat'
+            ? { food: 0.7, water: 0.8 }
+            : activity.action === 'drink'
+              ? { water: 0.8 }
+              : {},
+        summary: `I finished ${activity.action}.`,
+      });
   }
   for (const v of s.villagers) {
     tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
@@ -1018,11 +1044,11 @@ export function replay(
   }
   return s;
 }
-export function exportRun(s: State, compact = false): unknown {
+function gameEnvelope(s: State, compact = false): unknown {
   if (s.longRoofBreak)
     return {
       schema: 10,
-      framework: '3.0.0',
+      framework: FRAMEWORK_VERSION,
       rules: LONG_ROOF_RETURN,
       ...(s.chapter ? { chapter: structuredClone(s.chapter) } : {}),
       config: structuredClone(s.settlement!.config),
@@ -1036,7 +1062,7 @@ export function exportRun(s: State, compact = false): unknown {
   if (s.roofBreak)
     return {
       schema: 9,
-      framework: '3.0.0',
+      framework: FRAMEWORK_VERSION,
       rules: ROOF_RETURN,
       baseRules: PRESSURE,
       extension: { version: ROOF_RETURN },
@@ -1050,7 +1076,7 @@ export function exportRun(s: State, compact = false): unknown {
   if (s.rules)
     return {
       schema: 8,
-      framework: '3.0.0',
+      framework: FRAMEWORK_VERSION,
       rules: s.rules,
       chapter: structuredClone(s.chapter),
       seed: s.seed,
@@ -1062,7 +1088,7 @@ export function exportRun(s: State, compact = false): unknown {
   if (s.shortYield)
     return {
       schema: 7,
-      framework: '3.0.0',
+      framework: FRAMEWORK_VERSION,
       chapter: structuredClone(s.chapter),
       seed: s.seed,
       tick: s.tick,
@@ -1079,7 +1105,7 @@ export function exportRun(s: State, compact = false): unknown {
           : s.settlement.config.edition === REPLY_EDITION
             ? 5
             : 4,
-      framework: '3.0.0',
+      framework: FRAMEWORK_VERSION,
       ...(s.chapter ? { chapter: structuredClone(s.chapter) } : {}),
       config: structuredClone(s.settlement.config),
       seed: s.seed,
@@ -1096,7 +1122,7 @@ export function exportRun(s: State, compact = false): unknown {
     };
   return {
     schema: 3,
-    framework: '3.0.0',
+    framework: FRAMEWORK_VERSION,
     chapter: structuredClone(s.chapter),
     seed: s.seed,
     tick: s.tick,
@@ -1105,7 +1131,7 @@ export function exportRun(s: State, compact = false): unknown {
     hash: stateHash(s),
   };
 }
-export function importRun(raw: unknown): State {
+function importGameEnvelope(raw: unknown): State {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
     if ((raw as { schema?: unknown }).schema === 10) return importLongRoof(raw);
@@ -1125,7 +1151,7 @@ export function importRun(raw: unknown): State {
       hash: string;
     };
     if (
-      r.framework !== '3.0.0' ||
+      r.framework !== FRAMEWORK_VERSION ||
       ![3, 4, 5, 6].includes(r.schema) ||
       (r.schema === 4 &&
         (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== 'settlement-day/1')) ||
@@ -1281,7 +1307,8 @@ function importShortYield(raw: unknown): State {
     'extension',
     r.compact === true ? 'compact' : 'state',
   ]);
-  if (r.framework !== '3.0.0' || (r.compact !== undefined && r.compact !== true)) throw new Error('version');
+  if (r.framework !== FRAMEWORK_VERSION || (r.compact !== undefined && r.compact !== true))
+    throw new Error('version');
   exactKeys(r.extension, ['version', 'cutover']);
   if (
     r.extension.version !== 'short-yield/1' ||
@@ -1330,7 +1357,11 @@ function importPressure(raw: unknown): State {
     'hash',
     r.compact === true ? 'compact' : 'state',
   ]);
-  if (r.framework !== '3.0.0' || r.rules !== PRESSURE || (r.compact !== undefined && r.compact !== true))
+  if (
+    r.framework !== FRAMEWORK_VERSION ||
+    r.rules !== PRESSURE ||
+    (r.compact !== undefined && r.compact !== true)
+  )
     throw new Error('version');
   if (r.chapter !== null) checkChapter(r.chapter as Chapter);
   const inputs = r.inputs as Input[];
@@ -1372,7 +1403,7 @@ function importRoofBreak(raw: unknown): State {
   ]);
   exactKeys(r.extension, ['version']);
   if (
-    r.framework !== '3.0.0' ||
+    r.framework !== FRAMEWORK_VERSION ||
     r.rules !== ROOF_RETURN ||
     r.baseRules !== PRESSURE ||
     r.extension.version !== ROOF_RETURN ||
@@ -1459,7 +1490,7 @@ function importLongRoof(raw: unknown): State {
   exactKeys(r.extension, ['version']);
   exactKeys(r.config, ['edition']);
   if (
-    r.framework !== '3.0.0' ||
+    r.framework !== FRAMEWORK_VERSION ||
     r.rules !== LONG_ROOF_RETURN ||
     r.extension.version !== LONG_ROOF_RETURN ||
     (r.compact !== undefined && r.compact !== true)
@@ -1527,4 +1558,22 @@ function validateLongBaseInput(raw: unknown): void {
     exactKeys(c, ['kind', 'ids', 'branch']);
     if (!Object.hasOwn(REPLIES, c.branch)) throw new Error('reply');
   } else if (c.kind !== 'peer') throw new Error('Unknown long-day command');
+}
+
+/** Full and compact files retain HF's exact archive as well as the host input log. */
+export function exportRun(s: State, compact = false): unknown {
+  return {
+    ...(gameEnvelope(s, compact) as Record<string, unknown>),
+    hf: archiveCommunity(s.villagers[0]!.person),
+  };
+}
+export function importRun(raw: unknown): State {
+  if (!raw || typeof raw !== 'object' || !('hf' in raw))
+    throw new Error(
+      'This file was saved by an older Commonstead version. Keep the file and start a fresh game.',
+    );
+  const { hf, ...host } = raw as Record<string, unknown>;
+  const s = importGameEnvelope(host);
+  restoreCommunity(s.villagers[0]!.person, hf as Parameters<typeof restoreCommunity>[1]);
+  return s;
 }

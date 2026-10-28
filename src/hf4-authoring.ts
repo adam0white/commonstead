@@ -1,0 +1,98 @@
+import type { PersonAuthoring } from '@adam0white/human-framework';
+
+const MINUTE = 60_000;
+const DAY = 86_400_000;
+const START = 480 * MINUTE;
+export function authoredPerson(id: string, name: string, sex: 'female' | 'male' = 'female'): PersonAuthoring {
+  return {
+    id,
+    identity: { name, birthAt: START - 30 * 365 * DAY, sex },
+    biography: [],
+    origin: {
+      kind: 'authored',
+      basis: { kind: 'evidence', id: `author:${id}` },
+      traits: { kind: 'explicit-authoring', evidence: { kind: 'evidence', id: `traits:${id}` } },
+    },
+    state: {
+      traits: {
+        honesty: 0.5,
+        emotionality: 0.5,
+        extraversion: 0.5,
+        agreeableness: 0.5,
+        conscientiousness: 0.5,
+        openness: 0.5,
+      },
+      values: {
+        benevolence: 0.5,
+        universalism: 0.5,
+        tradition: 0.5,
+        conformity: 0.5,
+        security: 0.5,
+        achievement: 0.5,
+        power: 0.5,
+        hedonism: 0.5,
+        stimulation: 0.5,
+        selfDirection: 0.5,
+      },
+      body: {
+        satiety: 0.8,
+        hydration: 0.85,
+        sleepPressure: 0.2,
+        exertion: 0,
+        fitness: 0.5,
+        health: 1,
+        pain: 0,
+        sleepDebtHours: 0,
+        depletion: 0,
+        circadianPeakMs: 16 * 60 * MINUTE,
+        asleep: false,
+        since: START,
+        doze: {
+          context: { posture: 'upright', stimulation: 0.5 },
+          basis: { kind: 'authored', author: 'world', at: START },
+        },
+        bladder: { fill: 0, pending: 0 },
+        injuries: [],
+        illnesses: [],
+        exposures: [],
+      },
+      needs: {
+        safety: 0.8,
+        belonging: 0.7,
+        esteem: 0.6,
+        autonomy: 0.7,
+        competence: 0.6,
+        leisure: 0.6,
+        meaning: 0.6,
+      },
+      skills: [],
+      heldNorms: [],
+      beliefs: [],
+      consequences: [],
+      sourceTrust: [],
+      context: {
+        scarcity: { kind: 'prior', value: 0, basis: 'engineering:source-zero-context' },
+        smoking: { kind: 'unobserved' },
+      },
+      relationships: [],
+      voices: [{ voiceId: 'player', trust: 0.5 }],
+      agenda: {
+        exemptions: { traveling: { kind: 'unobserved' }, illnessSeverity: { kind: 'unobserved' } },
+        commitments: [],
+        goals: [],
+        precommitments: [],
+        owed: [],
+      },
+      family: { contactCovered: [], aptitudes: {} },
+      groups: [],
+      reserve: {},
+      retention: { trace: 32, chronicleDays: 120 },
+      habits: [],
+      expectations: [],
+      affect: { mood: { valence: 0, arousal: 0.3 }, regulation: 0.3, emotions: [] },
+      promptings: { reading: 'none', responses: [] },
+      review: { style: 'accounting', atMsOfDay: 21 * 60 * MINUTE },
+      bonds: { courtships: [], marriages: [] },
+    },
+  };
+}
