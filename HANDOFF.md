@@ -1,3 +1,15 @@
+# Long-day goal reading — review candidate, 2026-10-27
+
+Remaining: ONE independent default Codex exact-diff review, signed source with normal lane, source CI, root merge/main CI, clean deployment/live verification and cleanup. Owner feel and whole F776/Commonstead acceptance remain open. No commit, push or live receipt exists for this candidate.
+
+Latest delivered parent is `03630c9c0201cc9fc3fe9b90fa4d7b6311122dbb`: the root long-return receipt records source `9f22d001e53aa7ee0e00172207e96b6087ff6b38`, source CI `40622483990`, main CI `40622733883`, and clean live `03630c9` / `dirty:false`. Its lane passed125 tests in12 files with existing lint warnings. Older candidate language below is historical. The preliminary forecast trace produced no implementation.
+
+This candidate adds the public optional **Can we finish?** reading for longer days. It separates central materials, actual carried loads, spent site materials and unfinished assembly. After30–60 observed game seconds of real aggregate construction it conditionally estimates remaining assembly, assuming people keep choosing that work and the measured pace continues. It reads no Person state or future simulation. Unknown collection/delivery or absent current assembly stays unknown. The actual tick900 storm result remains authoritative even when construction finishes later. No world/input/save/source/projection contract changes. See [the bounded plan and evidence](docs/goal-forecast-plan.md).
+
+F765/F778 trolley/yield/earlier requests, later replies, closing voice, longer ownership/source contracts and owner feel remain separate. No broad report, playtest or owner acceptance claim is supplied. The exact frozen archive is returned for one independent review after the dirty helper is removed; root owns later restoration, same-author fixes, same-reviewer clearance and release.
+
+---
+
 # Memory-only file preservation candidate — 2026-10-27
 
 Remaining: one independent exact-diff review, signed source/PR/exact CI, director merge, clean deployment/live verification and cleanup. This is one C2/C3 unit based on be605144fa21cb79d6a75f9f2c741f14d8402aaf. The public built /file/ entry selects memory mode before ordinary Lab/Continuity/Shelf/native title and watchers. It uses the complete existing UI with staged production simulation and pure existing validators. Native startup/save/Resume and the reviewed source publication fix remain unchanged.

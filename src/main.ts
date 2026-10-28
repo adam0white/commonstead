@@ -19,6 +19,7 @@ import {
 import { eventText, residentName } from './display.ts';
 import { draw } from './draw.ts';
 import { prefillFeedbackChoice } from './feedback.ts';
+import { AssemblyObservation, goalForecast } from './goal-forecast.ts';
 import { closingLine, STORM_MEALS, stormSummary } from './pressure.ts';
 import {
   apply,
@@ -71,6 +72,8 @@ let placementFeedback = '';
 let placementPoint = { x: 650, y: 500 };
 let residentKey = '';
 let workObservation = new WorkObservation();
+const assemblyObservation = new AssemblyObservation();
+let forecastWorld = {};
 let viewedMap: Place = 'yard';
 let unitKey = '',
   actionKey = '';
@@ -202,6 +205,7 @@ function shellBindings() {
   bind('info', info);
 }
 function title() {
+  assemblyObservation.reset();
   if (fileSession) {
     fileTitle();
     return;
@@ -334,6 +338,8 @@ function title() {
   });
 }
 function start(s: State) {
+  assemblyObservation.reset();
+  forecastWorld = {};
   if (!fileSession) resumeForPlay(s);
   workObservation = new WorkObservation();
   workObservation.observeState(s);
@@ -348,7 +354,21 @@ function start(s: State) {
   carry = 0;
   last = performance.now();
   lab?.screen('play');
-  root.innerHTML = `<main class="game ${s.settlement ? 'settlement-day' : ''}">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="The map shows the workshop yard. You can use the person and resource buttons below to give orders."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry.</strong><p id="deadline" class="deadline"></p><div class="stock-plan"><span id="supply-readiness"></span><span id="storm-meals"></span></div><p class="details">A cabin prepared with 40 boards makes room for two more people. Invite helpers at the workshop hub.</p></section><section class="sheet"><h2 id="selection">Select a person or the workshop hub.</h2><p class="small selection-help">Names add or remove people. Your selection stays after an order. Clear it before choosing a different crew. Map taps replace the selection.</p><div id="units" class="unit-list" aria-label="Add or remove selected people"></div><details class="work-overview"><summary>Everyone now</summary><p class="small">Current activity and retained requests are separate. Last words may describe an earlier event. After a break, the Now line says how tired the person felt before and after it. A reason for an earlier choice may not have been recorded.</p><ol id="everyone-now"></ol></details><p id="task" class="task"></p><p id="said" class="speech"></p><details class="work-help"><summary>Dividing work and adding builders</summary><p class="small">Different groups can collect boards and ballast at the same time. Travel takes time. A person collecting supplies cannot assemble the storehouse at the same time. Residents may choose their own breaks.</p><p class="small">Select people, choose Move / add builders, then tap the unfinished storehouse to add them to assembly.</p></details><div id="resident"></div><div id="settlement-controls"></div></section><div class="notice" id="notice" role="status"></div><section id="finish-day"></section><section class="actions" id="actions"></section></aside></div></main>`;
+  root.innerHTML = `<main class="game ${s.settlement ? 'settlement-day' : ''}">${top('Commonstead')}<div class="stock" id="stock"></div><div class="layout"><div class="map-wrap"><div class="speed" aria-label="Game speed"><button data-speed="0.5">Slow</button><button data-speed="1">Steady</button><button data-speed="4">Fast</button></div><canvas id="map" aria-label="The map shows the workshop yard. You can use the person and resource buttons below to give orders."></canvas><div class="map-caption">Select people, then choose work.</div></div><aside class="side"><section class="objective"><strong id="goal">Keep the shared supplies dry.</strong>${s.settlement ? '<button id="goal-reading-open" aria-expanded="false" aria-controls="goal-reading">Can we finish?</button>' : ''}<p id="deadline" class="deadline"></p><div class="stock-plan"><span id="supply-readiness"></span><span id="storm-meals"></span></div><p class="details">A cabin prepared with 40 boards makes room for two more people. Invite helpers at the workshop hub.</p></section><section class="sheet">${s.settlement ? '<section id="goal-reading" hidden aria-label="Can we finish?"><h2>Can we finish?</h2><div id="goal-reading-text"></div><p class="small">This reading watches work while this day is open. Use Slow to read more slowly, or open the pause menu to stop the clock.</p><button id="goal-reading-close">Close this reading</button></section>' : ''}<h2 id="selection">Select a person or the workshop hub.</h2><p class="small selection-help">Names add or remove people. Your selection stays after an order. Clear it before choosing a different crew. Map taps replace the selection.</p><div id="units" class="unit-list" aria-label="Add or remove selected people"></div><details class="work-overview"><summary>Everyone now</summary><p class="small">Current activity and retained requests are separate. Last words may describe an earlier event. After a break, the Now line says how tired the person felt before and after it. A reason for an earlier choice may not have been recorded.</p><ol id="everyone-now"></ol></details><p id="task" class="task"></p><p id="said" class="speech"></p><details class="work-help"><summary>Dividing work and adding builders</summary><p class="small">Different groups can collect boards and ballast at the same time. Travel takes time. A person collecting supplies cannot assemble the storehouse at the same time. Residents may choose their own breaks.</p><p class="small">Select people, choose Move / add builders, then tap the unfinished storehouse to add them to assembly.</p></details><div id="resident"></div><div id="settlement-controls"></div></section><div class="notice" id="notice" role="status"></div><section id="finish-day"></section><section class="actions" id="actions"></section></aside></div></main>`;
+  bind('goal-reading-open', () => {
+    const reading = document.getElementById('goal-reading');
+    if (reading) {
+      reading.hidden = false;
+      document.getElementById('goal-reading-open')?.setAttribute('aria-expanded', 'true');
+      reading.scrollIntoView({ block: 'nearest' });
+    }
+  });
+  bind('goal-reading-close', () => {
+    const reading = document.getElementById('goal-reading');
+    if (reading) reading.hidden = true;
+    document.getElementById('goal-reading-open')?.setAttribute('aria-expanded', 'false');
+    document.getElementById('goal-reading-open')?.focus();
+  });
   canvas = document.getElementById('map') as HTMLCanvasElement;
   shellBindings();
   const dayHost = document.getElementById('settlement-controls');
@@ -396,6 +416,13 @@ function start(s: State) {
 function update() {
   if (!state || screen !== 'play') return;
   const s = state;
+  assemblyObservation.observe(forecastWorld, s);
+  const reading = document.getElementById('goal-reading-text');
+  if (reading) {
+    const words = goalForecast(s, assemblyObservation.pace(forecastWorld, s));
+    const text = words.map((line) => `<p>${esc(line)}</p>`).join('');
+    if (reading.innerHTML !== text) reading.innerHTML = text;
+  }
   const t = `${Math.floor(s.tick / 60)}:${String(s.tick % 60).padStart(2, '0')}`;
   const put = (id: string, text: string) => {
     const el = document.getElementById(id);
@@ -866,6 +893,7 @@ function removeModal() {
   if (fileSession) scheduleFileFrame();
 }
 function sheet(html: string, infoOnly = false) {
+  assemblyObservation.reset();
   fileTools?.remove();
   if (fileSession) cancelFileCallbacks();
   modal?.remove();
@@ -1057,6 +1085,7 @@ function feedback() {
   };
 }
 function end() {
+  assemblyObservation.reset();
   if (!state) return;
   fileTools?.remove();
   screen = 'end';
@@ -1141,6 +1170,7 @@ if (fileSession)
     paused = true;
   });
 document.addEventListener('visibilitychange', () => {
+  assemblyObservation.reset();
   if (fileSession && document.hidden) {
     fileSession.invalidate();
     cancelFileCallbacks();
@@ -1237,6 +1267,7 @@ function fileError(error: unknown) {
   if (status) status.textContent = error instanceof Error ? error.message : String(error);
 }
 function fileTitle() {
+  assemblyObservation.reset();
   fileSession!.invalidate();
   cancelFileCallbacks();
   fileTools?.remove();

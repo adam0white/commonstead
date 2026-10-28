@@ -1230,3 +1230,13 @@ a:focus-visible {
     gap: 4px 12px;
   }
 }
+
+/* The optional long-day reading joins the existing side scroll, beside the goal in reading order. */
+.game:not(.placing) #goal-reading {
+  order: 1;
+  padding: 8px 12px;
+  border: 1px solid #b8ad98;
+}
+#goal-reading-open {
+  margin: 4px 12px;
+}
