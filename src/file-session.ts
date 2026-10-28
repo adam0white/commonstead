@@ -116,7 +116,7 @@ export function createFileSession(
           throw new Error(
             'This replies edition cannot export a nonempty source archive. Keep the original file.',
           );
-        const state = importRun([5, 6, 7, 8, 9].includes(Number(source.schema)) ? native : source);
+        const state = importRun([5, 6, 7, 8, 9, 10].includes(Number(source.schema)) ? native : source);
         if (!current()) return false;
         await validateRunEnvelopes(state);
         if (!current()) return false;

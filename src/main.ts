@@ -3,7 +3,7 @@ import { CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY, resumeForPlay, watchShelfPreference } from './continuity.ts';
 import { createFileSession } from './file-session.ts';
 import { MAPS, type Place } from './paths.ts';
-import { dayClock, EDITION } from './settlement.ts';
+import { dayClock, EDITION, longRoofUnavailable } from './settlement.ts';
 import { PEER_EDITION } from './settlement-dialogue.ts';
 import { REPLY_EDITION } from './settlement-scenes.ts';
 import { mountSettlementControls, updateSettlementControls } from './settlement-ui.ts';
@@ -131,7 +131,9 @@ function download() {
   if (state)
     downloadJson(
       'commonstead-run.json',
-      state.settlement?.config.edition === PEER_EDITION ? exportRun(state) : continuity!.export(state),
+      state.settlement?.config.edition === PEER_EDITION && !state.longRoofBreak
+        ? exportRun(state)
+        : continuity!.export(state),
     );
 }
 /** A display-only note that stays until the recorded game message changes. */
@@ -146,6 +148,7 @@ function returnLoadsFirst(
 ): { kind: 'settlement'; ids: string[]; action: string; target: string } | null {
   const w = state?.settlement;
   if (!state || !w || !('ids' in cmd)) return null;
+  if (cmd.kind === 'long-roof-break-return') return null;
   if (cmd.kind === 'reply' || cmd.kind === 'peer' || cmd.kind === 'build') return null;
   if (cmd.kind === 'settlement' && ['map', 'cancel'].includes(cmd.action)) return null;
   if (cmd.kind === 'order' && ['rest', 'meal', 'push'].includes(cmd.target)) return null;
@@ -588,7 +591,9 @@ function update() {
     bind('rest', () => order('rest'));
     bind('shelter', () => order('shelter'));
     // One public control for the recorded itinerary; ordinary roof/rest controls keep their rules.
-    bind('roof-break-return', () => issue({ kind: 'roof-break-return', ids: [...selected] }));
+    bind('roof-break-return', () =>
+      issue({ kind: state?.settlement ? 'long-roof-break-return' : 'roof-break-return', ids: [...selected] }),
+    );
     bind('meal', () => order('meal'));
     const everyone = (target: string) => () => {
       const now = state;
@@ -636,13 +641,15 @@ function update() {
       update();
     });
   }
-  const roofWhy = roofBreakUnavailable(s, selected);
+  const roofWhy = s.settlement ? longRoofUnavailable(s, selected) : roofBreakUnavailable(s, selected);
   const roofButton = document.getElementById('roof-break-return') as HTMLButtonElement | null;
   if (roofButton) roofButton.disabled = !!roofWhy;
   put(
     'roof-break-why',
     roofWhy ||
-      'Stops selected work now. Walk to the hub roof, rest for 35 planned game seconds, then offer each person their own earlier work. A new task cancels unfinished stages. One break may not be enough; another personal activity or refusal remains possible.',
+      (s.settlement
+        ? 'Finish current acts and deliver carried supplies first. Then consider walking to the hub roof, the existing 15-game-second rest and earlier work. Each request can be refused. A new accepted task or departure pause interrupts unfinished stages.'
+        : 'Stops selected work now. Walk to the hub roof, rest for 35 planned game seconds, then offer each person their own earlier work. A new task cancels unfinished stages. One break may not be enough; another personal activity or refusal remains possible.'),
   );
   put('order-consequences', orderConsequences(s, selected));
   put('work-route-cause', routeCause(s));
@@ -918,7 +925,7 @@ function menu() {
     if (fileSession) scheduleFileFrame();
   });
   bind('download', download);
-  if (state?.roofBreak) {
+  if (state?.roofBreak || state?.longRoofBreak) {
     const reason = document.createElement('p');
     reason.textContent =
       'People from a recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.';
@@ -931,7 +938,7 @@ function menu() {
       if (state)
         downloadJson(
           'commonstead-day-compact.json',
-          state.roofBreak
+          state.roofBreak || state.longRoofBreak
             ? { ...(exportRun(state, true) as object), castSources: structuredClone(continuity!.sources) }
             : exportRun(state, true),
         );
@@ -1083,7 +1090,7 @@ function end() {
   bind('end-title', title);
   if (fileTools) document.querySelector('.end-card')?.append(fileTools);
   if (fileSession) document.querySelector('.end-card a[href$="/lab/people/"]')?.remove();
-  if (state.roofBreak) {
+  if (state.roofBreak || state.longRoofBreak) {
     const link = document.querySelector('.end-card a[href$="/lab/people/"]');
     if (link) {
       const reason = document.createElement('p');

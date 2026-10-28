@@ -190,3 +190,285 @@ test('complete source archives survive native and file loads; new extension cann
   const tiny = createFileSession({ currentBytes: 10 });
   await expect(tiny.select(new File([JSON.stringify(full)], 'roof.json'))).rejects.toThrow('capacity');
 });
+
+// Long-day faculty control: removing the new deliberate input must fail the recorded-capture assertion.
+test('long-day roof action delivers the actual held load once, rests at the hub, then offers the source job', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  advance(s, 26);
+  const aw = s.settlement!.actors.v1!;
+  expect(aw.carried?.amount).toBeGreaterThan(0);
+  const actor = structuredClone(aw);
+  const stock = s.resources.wood;
+  const index = s.inputs.length;
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] } as GameCommand);
+  const a = s.longRoofBreak?.attempts[0];
+  if (!a) throw new Error('Missing deliberate long-day action');
+  expect(a?.priorActor).toEqual(actor);
+  expect(a.capturedAt).toBe(26);
+  expect(a.inputIndex).toBe(index);
+  expect(aw.carried).toEqual(actor.carried);
+  expect(s.resources.wood).toBe(stock);
+  const duplicate = JSON.stringify(s);
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] } as GameCommand);
+  expect(JSON.stringify(s)).toBe(duplicate);
+  while (!['reoffered', 'refused', 'unavailable'].includes(a.stage) && s.tick < 200) step(s);
+  expect(a.stage).toBe('reoffered');
+  expect(a.deliveredAt).toBeGreaterThan(26);
+  expect(a.restStarted).toBeGreaterThanOrEqual(a.deliveredAt!);
+  expect(a.restCompleted! - a.restStarted!).toBe(15);
+  expect(a.restMap).toBe('yard');
+  expect(Math.hypot(a.restPoint!.x - s.buildings[0]!.x, a.restPoint!.y - s.buildings[0]!.y)).toBeLessThan(10);
+  expect(s.resources.wood).toBe(stock + actor.carried!.amount);
+  expect(aw.carried).toBeNull();
+  expect(aw.job).toMatchObject({ kind: 'gather', target: 'wood', map: 'yard', phase: 'out' });
+  expect(aw.pendingRequest).not.toBe('insist');
+  for (const compact of [false, true]) {
+    const raw = exportRun(s, compact) as { schema: number; rules: string };
+    expect(raw.schema).toBe(10);
+    expect(raw.rules).toBe('settlement-roof-break-return/1');
+    const copy = importRun(JSON.parse(JSON.stringify(raw)));
+    expect(JSON.stringify(copy)).toBe(JSON.stringify(s));
+    advance(copy, 17);
+    const expected = structuredClone(s);
+    advance(expected, 17);
+    expect(JSON.stringify(copy)).toBe(JSON.stringify(expected));
+    expect(() => importRun({ ...raw, schema: 4 })).toThrow();
+    expect(() => importRun({ ...raw, unexpected: true })).toThrow();
+  }
+});
+
+test('long-day busy acts finish without cancellation; explicit cancellation keeps the load and never restores work', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  advance(s, 20);
+  const aw = s.settlement!.actors.v1!;
+  expect(aw.running?.purpose).toBe('job');
+  const before = structuredClone(aw);
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  expect(aw).toEqual(before);
+  advance(s, 6);
+  expect(aw.carried?.amount).toBeGreaterThan(0);
+  const stock = s.resources.wood;
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
+  expect(s.longRoofBreak!.attempts[0]!.stage).toBe('cancelled');
+  expect(aw.carried).not.toBeNull();
+  advance(s, 60);
+  expect(s.resources.wood).toBe(stock);
+  expect(aw.job).toBeNull();
+  expect(JSON.stringify(importRun(exportRun(s)))).toBe(JSON.stringify(s));
+  // A new deliberate action can deliver a stranded load, but it cannot invent a prior job.
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  advance(s, 100);
+  expect(aw.carried).toBeNull();
+  expect(s.resources.wood).toBeGreaterThan(stock);
+  expect(s.longRoofBreak!.attempts.at(-1)!.stage).toBe('unavailable');
+  expect(s.longRoofBreak!.attempts.at(-1)!.priorActor.job).toBeNull();
+});
+
+test('long-day stale targets and no prior work cannot produce a work offer; departure pause interrupts the sequence', () => {
+  for (const edition of ['settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] as const) {
+    const s = createGame(418, undefined, { edition });
+    apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+    advance(s, 40);
+    expect(s.longRoofBreak!.attempts[0]!.stage).toBe('unavailable');
+    expect(JSON.stringify(importRun(exportRun(s, true)))).toBe(JSON.stringify(s));
+    apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+    apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+    apply(s, { kind: 'pause-chapter' });
+    expect(s.longRoofBreak!.attempts.at(-1)!.stage).toBe('cancelled');
+    for (let n = 0; n < 100 && !s.chapterPaused; n++) step(s);
+    expect(JSON.stringify(importRun(exportRun(s)))).toBe(JSON.stringify(s));
+  }
+  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  apply(s, { kind: 'build', ids: ['v1'], building: 'house', x: 575, y: 575 });
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  // Counterfactual host removal only tests a stale target, never represented as a replayable source.
+  s.buildings.pop();
+  advance(s, 80);
+  expect(s.longRoofBreak!.attempts[0]!.stage).toBe('unavailable');
+  expect(s.resources.wood).toBe(40);
+  expect(s.settlement!.actors.v1!.job).toBeNull();
+});
+
+test('schemas3–9 retain literal raw exports and complete legal continuations without the new action', () => {
+  const dir = process.env.COMMONSTEAD_LONG_ROOF_BASELINE;
+  if (!dir) return;
+  for (let schema = 3; schema <= 9; schema++) {
+    const b = JSON.parse(readFileSync(`${dir}/schema-${schema}.json`, 'utf8'));
+    for (const compact of [false, true]) {
+      const raw = compact ? b.compact : b.full;
+      const s = importRun(JSON.parse(raw));
+      expect(JSON.stringify(exportRun(s, compact))).toBe(raw);
+      advance(s, 17);
+      expect(JSON.stringify(s)).toBe(b.continuation);
+    }
+  }
+});
+
+test('schema10 keeps source archives through full, compact, gzip and native loads, and refuses publication before shelf access', async () => {
+  const { gzipSync } = await import('node:zlib');
+  const { Continuity } = await import('../src/continuity.ts');
+  const { createFileSession } = await import('../src/file-session.ts');
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  advance(s, 26);
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  advance(s, 18);
+  const sources = [
+    {
+      revision: 'synthetic-archive',
+      source: { game: 'commonstead', build: 'control', engine: '2.23.0', rules: 'commonstead-3' },
+      snapshot: { untouched: ['complete', 'source', 7] },
+    },
+  ];
+  let accessed = 0;
+  const c = new Continuity(
+    { setPersonaRecording() {} } as never,
+    {
+      get ready() {
+        accessed++;
+        throw new Error('Shelf must not be read');
+      },
+    } as never,
+  );
+  await c.loadLocal(
+    JSON.stringify({ run: exportRun(s), runId: 'synthetic-long', fileOrigin: false, heads: [], sources }),
+  );
+  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow('cannot move to another game yet');
+  expect(accessed).toBe(0);
+  const download = c.export(s) as { castSources: unknown[] };
+  expect(download.castSources).toEqual(sources);
+  const expected = structuredClone(s);
+  advance(expected, 60);
+  for (const compact of [false, true]) {
+    const raw = { ...(exportRun(s, compact) as object), castSources: sources };
+    for (const gzip of [false, true]) {
+      const text = JSON.stringify(raw);
+      const file = new File(
+        [gzip ? new Uint8Array(gzipSync(text)) : text],
+        gzip ? 'long.json.gz' : 'long.json',
+      );
+      const f = createFileSession();
+      expect(await f.select(file)).toBe(true);
+      expect(f.snapshot()!.castSources).toEqual(sources);
+      expect(JSON.stringify(f.state())).toBe(JSON.stringify(s));
+      f.resume();
+      f.advance(60);
+      expect(JSON.stringify(f.state())).toBe(JSON.stringify(expected));
+      expect(f.snapshot()!.castSources).toEqual(sources);
+      f.invalidate();
+      const frozen = JSON.stringify(f.snapshot());
+      f.advance(100);
+      expect(JSON.stringify(f.snapshot())).toBe(frozen);
+    }
+    const imported = await c.importFile(JSON.stringify(raw));
+    expect(JSON.stringify(imported)).toBe(JSON.stringify(s));
+    expect(c.sources).toEqual(sources);
+  }
+  const tiny = createFileSession({ currentBytes: 10 });
+  await expect(tiny.select(new File([JSON.stringify(download)], 'long.json'))).rejects.toThrow('capacity');
+});
+
+test('a pending public reply refuses the new action without recording or changing its actor', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
+  advance(s, 60);
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'story' });
+  advance(s, 40);
+  expect(s.settlement!.replyScenes!.v1).toBeDefined();
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
+  apply(s, { kind: 'reply', ids: ['v1'], branch: 'nora-record-question' });
+  const before = JSON.stringify(s);
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  expect(JSON.stringify(s)).toBe(before);
+  expect(s.longRoofBreak).toBeUndefined();
+});
+
+test('remote held supplies cross the existing passage before stock delivery, roof rest and the source-map offer', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const aw = s.settlement!.actors.v1!;
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'map', target: 'quay' });
+  while ((aw.map !== 'quay' || aw.job) && s.tick < 250) step(s);
+  expect(aw.map).toBe('quay');
+  expect(aw.job).toBeNull();
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  while (!aw.carried && s.tick < 500) step(s);
+  const load = structuredClone(aw.carried);
+  expect(load?.amount).toBeGreaterThan(0);
+  const stock = s.resources.wood;
+  const map = aw.map;
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  const a = s.longRoofBreak!.attempts[0]!;
+  expect(a.source.map).toBe('quay');
+  expect(aw.map).toBe(map);
+  expect(s.resources.wood).toBe(stock);
+  let crossing = false;
+  while (['finish', 'delivery', 'roof', 'rest'].includes(a.stage) && s.tick < 850) {
+    crossing ||= aw.running?.id === 'crossing';
+    step(s);
+  }
+  expect(crossing).toBe(true);
+  expect(a.stage).toBe('reoffered');
+  expect(aw.map).toBe('yard');
+  expect(s.resources.wood).toBe(stock + load!.amount);
+  expect(aw.job).toMatchObject({ kind: 'gather', map: 'quay', phase: 'out', target: 'wood' });
+  expect(JSON.stringify(importRun(exportRun(s, true)))).toBe(JSON.stringify(s));
+});
+
+test('an accepted later reply during roof rest keeps its ordinary priority and completed paper result', () => {
+  const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
+  advance(s, 60);
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'story' });
+  advance(s, 40);
+  const scene = s.settlement!.replyScenes!.v1!;
+  expect(scene.disclosure.at).toBe(69);
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  const aw = s.settlement!.actors.v1!;
+  while (!aw.carried && s.tick < 300) step(s);
+  const load = structuredClone(aw.carried)!;
+  const stock = s.resources.wood;
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  const roof = s.longRoofBreak!.attempts[0]!;
+  while (roof.stage !== 'rest' && s.tick < 500) step(s);
+  expect(roof.deliveredAt).toBeDefined();
+  expect(s.resources.wood).toBe(stock + load.amount);
+  expect(aw.carried).toBeNull();
+  expect(roof.restUntil! - roof.restStarted!).toBe(15);
+  const running = structuredClone(aw.running);
+  const restStarted = roof.restStarted;
+  const restUntil = roof.restUntil!;
+  advance(s, 9);
+  const beforeRejected = JSON.stringify(s);
+  expect(() => apply(s, { kind: 'reply', ids: ['v2'], branch: 'nora-record-question' })).toThrow();
+  expect(JSON.stringify(s)).toBe(beforeRejected);
+  expect(roof.stage).toBe('rest');
+  apply(s, { kind: 'reply', ids: ['v1'], branch: 'nora-record-question' });
+  const reply = scene.attempts.at(-1)!;
+  expect(reply.status).toBe('requested');
+  expect(reply.requestedAt).toBe(s.tick);
+  expect(reply.point).toEqual({ x: 500, y: 350 });
+  expect(roof.stage).toBe('cancelled');
+  expect(aw.running).toEqual(running);
+  expect(roof.restStarted).toBe(restStarted);
+  expect(s.resources.wood).toBe(stock + load.amount);
+  for (const compact of [false, true]) {
+    const copy = importRun(JSON.parse(JSON.stringify(exportRun(s, compact))));
+    expect(JSON.stringify(copy)).toBe(JSON.stringify(s));
+    advance(copy, 90);
+    const expected = structuredClone(s);
+    advance(expected, 90);
+    expect(JSON.stringify(copy)).toBe(JSON.stringify(expected));
+  }
+  advance(s, 90);
+  expect(s.tick).toBeGreaterThan(restUntil);
+  expect(reply.status).toBe('completed');
+  expect(reply.paperSpent).toBe(1);
+  expect(reply.deliveredAt).toBeGreaterThanOrEqual(restUntil);
+  expect(scene.completedBranch).toBe('nora-record-question');
+  expect(s.settlement!.replyResults!.some((r) => r.attemptId === reply.id)).toBe(true);
+  expect(aw.job?.kind).not.toBe('gather');
+  expect(s.resources.wood).toBe(stock + load.amount);
+});

@@ -26,6 +26,10 @@ import {
 import {
   applySettlement,
   initSettlement,
+  LONG_ROOF_RETURN,
+  type LongRoofAttempt,
+  longRoofUnavailable,
+  requestLongRoof,
   type Settlement,
   type SettlementConfig,
   stepSettlement,
@@ -56,6 +60,7 @@ export function taskLabel(target: string): string {
 export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
   | { kind: 'roof-break-return'; ids: string[] }
+  | { kind: 'long-roof-break-return'; ids: string[] }
   | { kind: 'reply'; ids: string[]; branch: ReplyBranch }
   | PeerCommand
   | { kind: 'order'; ids: string[]; target: string; x?: number; y?: number }
@@ -115,6 +120,7 @@ export type RoofBreak = {
 };
 export const ROOF_RETURN = 'roof-break-return/1';
 export type State = {
+  longRoofBreak?: { version: typeof LONG_ROOF_RETURN; attempts: LongRoofAttempt[] };
   /** Created only by the separately named public action, never an implicit saved default. */
   roofBreak?: { version: typeof ROOF_RETURN; attempts: RoofBreak[] };
   /** Present only for `pressure/1` (schema 8); absent keeps legacy schema bytes. */
@@ -510,6 +516,15 @@ export function publicPlaceText(text: string): string {
 }
 
 export function apply(s: State, c: GameCommand): void {
+  if (c.kind === 'long-roof-break-return') {
+    validateRoofCommand({ ...c, kind: 'roof-break-return' });
+    if (longRoofUnavailable(s, c.ids)) return;
+    const inputIndex = s.inputs.length;
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    requestLongRoof(s, c.ids, inputIndex);
+    return;
+  }
+  if (s.longRoofBreak && s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
   if (c.kind === 'roof-break-return') {
     startRoofBreak(s, c);
     return;
@@ -940,10 +955,13 @@ export function replay(
   allowYield = false,
   rules?: typeof PRESSURE,
   allowRoof = false,
+  allowLongRoof = false,
 ): State {
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
+  if (!allowLongRoof && inputs.some((i) => i?.command?.kind === 'long-roof-break-return'))
+    throw new Error('Long roof command requires its native extension');
   if (!allowRoof && inputs.some((i) => i?.command?.kind === 'roof-break-return'))
     throw new Error('Roof command requires its native extension');
   if (!allowYield && inputs.some((i) => i?.command?.kind === 'yield-day'))
@@ -955,6 +973,12 @@ export function replay(
   const s = createGame(seed, chapter, config, rules);
   let previous = -1;
   for (const input of inputs) {
+    if (allowLongRoof) {
+      exactKeys(input, ['tick', 'command']);
+      if (input.command.kind === 'long-roof-break-return')
+        validateRoofCommand({ ...input.command, kind: 'roof-break-return' });
+      else validateLongBaseInput(input.command);
+    }
     if (allowYield || rules) {
       exactKeys(input, ['tick', 'command']);
       validateShortInput(input.command, allowRoof);
@@ -986,6 +1010,19 @@ export function replay(
   return s;
 }
 export function exportRun(s: State, compact = false): unknown {
+  if (s.longRoofBreak)
+    return {
+      schema: 10,
+      framework: '3.0.0',
+      rules: LONG_ROOF_RETURN,
+      config: structuredClone(s.settlement!.config),
+      extension: { version: LONG_ROOF_RETURN },
+      seed: s.seed,
+      tick: s.tick,
+      inputs: structuredClone(s.inputs),
+      hash: stateHash(s),
+      ...(compact ? { compact: true } : { state: JSON.parse(JSON.stringify(s)) }),
+    };
   if (s.roofBreak)
     return {
       schema: 9,
@@ -1060,6 +1097,7 @@ export function exportRun(s: State, compact = false): unknown {
 export function importRun(raw: unknown): State {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
+    if ((raw as { schema?: unknown }).schema === 10) return importLongRoof(raw);
     if ((raw as { schema?: unknown }).schema === 9) return importRoofBreak(raw);
     if ((raw as { schema?: unknown }).schema === 7) return importShortYield(raw);
     if ((raw as { schema?: unknown }).schema === 8) return importPressure(raw);
@@ -1385,4 +1423,94 @@ function validateShortInput(raw: unknown, allowRoof = false): void {
     if (!['house', 'storehouse'].includes(c.building) || !Number.isFinite(c.x) || !Number.isFinite(c.y))
       throw new Error('build');
   } else throw new Error('Unknown short command');
+}
+
+/** Closed schema10, independently named from pressure/1 and the old supported passports. */
+function importLongRoof(raw: unknown): State {
+  requireShortJson(raw);
+  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
+  const r = raw as Record<string, unknown>;
+  exactKeys(r, [
+    'schema',
+    'framework',
+    'rules',
+    'config',
+    'extension',
+    'seed',
+    'tick',
+    'inputs',
+    'hash',
+    r.compact === true ? 'compact' : 'state',
+  ]);
+  exactKeys(r.extension, ['version']);
+  exactKeys(r.config, ['edition']);
+  if (
+    r.framework !== '3.0.0' ||
+    r.rules !== LONG_ROOF_RETURN ||
+    r.extension.version !== LONG_ROOF_RETURN ||
+    (r.compact !== undefined && r.compact !== true)
+  )
+    throw new Error('version');
+  const s = replay(
+    r.seed as number,
+    r.inputs as Input[],
+    r.tick as number,
+    undefined,
+    r.config as SettlementConfig,
+    false,
+    undefined,
+    false,
+    true,
+  );
+  if (
+    !s.longRoofBreak ||
+    stable(s.inputs) !== stable(r.inputs) ||
+    stateHash(s) !== r.hash ||
+    (r.compact !== true && stable(s) !== stable(r.state))
+  )
+    throw new Error('state mismatch');
+  return s;
+}
+
+/** Shape validation only: base-day targets can already be complete or refused. Their ordinary
+ * apply contract decides that at the recorded tick, after replay advances to that tick. */
+function validateLongBaseInput(raw: unknown): void {
+  const c = raw as Command;
+  if (['train', 'pause-chapter', 'resume-chapter'].includes(c?.kind)) {
+    exactKeys(raw, ['kind']);
+    return;
+  }
+  exactKeys(raw, ['kind', 'ids'], ['target', 'x', 'y', 'action', 'building', 'branch', 'map', 'disputeAt']);
+  if (
+    !('ids' in c) ||
+    !Array.isArray(c.ids) ||
+    c.ids.length > 20 ||
+    new Set(c.ids).size !== c.ids.length ||
+    c.ids.some((id) => !/^v[1-8]$/.test(id))
+  )
+    throw new Error('ids');
+  if (c.kind === 'order') {
+    exactKeys(c, ['kind', 'ids', 'target'], ['x', 'y']);
+    if (
+      typeof c.target !== 'string' ||
+      c.target.length > 100 ||
+      ('x' in c && !Number.isFinite(c.x)) ||
+      ('y' in c && !Number.isFinite(c.y))
+    )
+      throw new Error('order');
+  } else if (c.kind === 'build') {
+    exactKeys(c, ['kind', 'ids', 'building', 'x', 'y']);
+    if (!['house', 'storehouse'].includes(c.building) || !Number.isFinite(c.x) || !Number.isFinite(c.y))
+      throw new Error('build');
+  } else if (c.kind === 'settlement') {
+    exactKeys(c, ['kind', 'ids', 'action'], ['target']);
+    if (
+      !['cancel', 'talk', 'spar', 'story', 'yield', 'map', 'inspect', 'scene'].includes(c.action) ||
+      ('target' in c && (typeof c.target !== 'string' || c.target.length > 100))
+    )
+      throw new Error('action');
+  } else if (c.kind === 'reply') {
+    exactKeys(c, ['kind', 'ids', 'branch']);
+    if (!Object.hasOwn(REPLIES, c.branch)) throw new Error('reply');
+  } else if (c.kind !== 'peer') throw new Error('Unknown long-day command');
 }

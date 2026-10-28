@@ -16,6 +16,22 @@ export function orderConsequences(s: State, ids: readonly string[]): string {
 }
 
 export function returnTiming(s: State, v: Villager): string {
+  const long = s.longRoofBreak?.attempts.findLast((a) => a.id === v.id);
+  if (long) {
+    const job = long.priorActor.job;
+    const earlier = job ? `${job.kind} ${taskLabel(job.target)} in ${long.source.map}` : 'none';
+    const stage =
+      long.stage === 'finish'
+        ? 'Waiting for the current act to finish. No earlier job has been replaced.'
+        : long.stage === 'delivery'
+          ? 'Delivering the actual held supplies through the existing route. They are not yet counted stock.'
+          : long.stage === 'roof'
+            ? 'Considering the walk to the hub roof. Arrival time is unknown.'
+            : long.stage === 'rest'
+              ? `Resting under the hub roof. ${Math.max(0, (long.restUntil ?? s.tick) - s.tick)} planned game seconds remain. Recovery and later assent are unknown.`
+              : (long.result ?? '');
+    return `Roof break recorded at ${clock(long.capturedAt)}. Earlier work: ${earlier}. ${stage}`;
+  }
   const roof = s.roofBreak?.attempts.findLast((a) => a.id === v.id);
   if (roof) {
     const target = roof.priorOrder?.target;

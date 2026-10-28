@@ -975,6 +975,9 @@ test('admits played Days Burak and claims the admitted Commonstead actor with pr
   expect(current.source.engine).toBe('2.23.0');
   expect(current.history).toEqual(prior.history);
   expect(current.state).toEqual(prior.state);
+  const beforeUnsupportedLongAction = JSON.stringify(game);
+  apply(game, { kind: 'long-roof-break-return', ids: ['v6'] });
+  expect(JSON.stringify(game)).toBe(beforeUnsupportedLongAction);
   expect(importRun(exportRun(game))).toEqual(game);
   playedPause(game);
   await c.checkpoint(envelope.castId);
@@ -1029,6 +1032,9 @@ test('a foreign locked Burak is reported and cannot be checkpointed while anothe
   const game = await c.fresh(418);
   expect(game.chapter?.inputs.map((i) => i.parent.castId)).toEqual([CAST[0]!.castId]);
   expect(c.status).toMatch(/Burak/);
+  const beforeUnsupportedLongAction = JSON.stringify(game);
+  apply(game, { kind: 'long-roof-break-return', ids: ['v6'] });
+  expect(JSON.stringify(game)).toBe(beforeUnsupportedLongAction);
   playedPause(game);
   await expect(c.checkpoint(locked.castId)).rejects.toThrow(/Burak|another|saved/i);
   await expect(c.checkpoint(locked.castId, true)).rejects.toThrow(/Burak|another|saved/i);
