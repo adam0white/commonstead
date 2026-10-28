@@ -3,6 +3,7 @@ import { DISCOVERIES } from './cast.ts';
 import { nextTask, personStatus, residentName } from './display.ts';
 import { MAPS } from './paths.ts';
 import { beforeStorm, indoors, paceWords, tiredOf } from './pressure.ts';
+import { routeWorkReading } from './route-work-reading.ts';
 import type { Job } from './settlement.ts';
 import type { State, Villager } from './sim.ts';
 import { orderNotice, returnTiming } from './work-orders.ts';
@@ -111,11 +112,7 @@ export class WorkObservation {
     const carrying = aw.carried
       ? `Carrying: about ${Math.floor(aw.carried.amount * 10) / 10} ${material(aw.carried.resource)}, not yet in the shared store.`
       : 'No supplies are being carried.';
-    const route =
-      aw.job?.kind === 'gather' && s.settlement?.dispute
-        ? 'The shared trolley route is disputed; gathering waits for an accepted yield.'
-        : '';
-    return `${now} Location: ${MAPS[aw.map].name}. ${request} ${carrying} ${route} ${returnTiming(s, v)}${details ? ` Last words: “${v.says || 'No words recorded.'}” ${recovery}` : ''}`;
+    return `${now} Location: ${MAPS[aw.map].name}. ${request} ${carrying} ${routeWorkReading(s, v)} ${returnTiming(s, v)}${details ? ` Last words: “${v.says || 'No words recorded.'}” ${recovery}` : ''}`;
   }
 
   line(v: Worker, tick: number, buildings: readonly Site[]): string {

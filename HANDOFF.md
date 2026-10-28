@@ -1,3 +1,15 @@
+# Route/work reading candidate — 2026-10-28
+
+Remaining: root's one independent exact-source review, same-author/same-reviewer corrections, fresh normal lane/signing/exact source CI, root matched merge/main CI, clean live delivery and cleanup. This source candidate adds read-only current pair/holder/work-stage facts beside Now. It does not implement yield-and-earlier-work, change simulation/contracts or close whole F765/F778/F776/Commonstead. See [the bounded plan](docs/route-work-plan.md). Adam's feel/readiness and human accessibility remain paused through2026-11-03.
+
+Composition base is origin/main `5cf2c5b8056ad87878ad1ca231afb767f3b12fca`: native HF3 carryover was delivered at `aa63fdff04533e775bb881906f0afb5aaeaadf8c`, and the subsequent docs-only HF4 audit records G3's missing public sourced worship-calendar projection. The released game remains HF3; recheck G3 on2026-11-03. Fresh eight-actor projection is bounded evidence and does not establish HF4 played long-roof/native adapters, whole-game replay or deployment. The foreign native carryover and audit are preserved. See [the audit](docs/hf4-port-audit.md) and [native contracts](docs/cast-adoption.md).
+
+Forecast technical delivery is parent-verified at9899c3e914f45c542d661d9090bf0e5b518bb1ca: foreign composed source29929577, source CI40631235645/main CI40631367334, clean live9899, five public files byte-exact,23 archived members fully read, actual two-size Chrome checks and cleanup. Root receipt: ~/code/.lab-scratch/games-deferred/resume-commonstead-goal-forecast-delivery-parent-receipt.json. The original f26 forecast main-CI5000ms timeout and the foreign merge's missing final trailer remain recorded exceptions. No future CI or completion is guaranteed. Current forecast and long-roof-return logic stay unchanged. Actor HF3.0.0/engine2.23.0 and scoped HF4.3 portable/client0.5.0/kit0.5.17 pins stay literal.
+
+The older author snapshots below preserve historical states; their pending-delivery prose is not today's forecast status.
+
+---
+
 # Long-day goal reading — review candidate, 2026-10-27
 
 Remaining: ONE independent default Codex exact-diff review, signed source with normal lane, source CI, root merge/main CI, clean deployment/live verification and cleanup. Owner feel and whole F776/Commonstead acceptance remain open. No commit, push or live receipt exists for this candidate.

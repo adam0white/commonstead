@@ -50,7 +50,7 @@ All retain existing input behavior when new inputs are absent. Any changed simul
 - F752, by2026-10-30: expose observed work after a break alongside already approximate tiredness; any causal physiology claim needs actual evidence. No new private meter.
 - F698, by2026-10-30: keep current selection semantics and make retained selection explicit before changing orders; altered auto-clear is a separate interaction choice. This slice adds a clear retained-selection instruction.
 - F780, by2026-10-30: audit all literal reply-day prose against plain-English policy. This slice changes control labels only; attention meanings remain exact.
-- Longer-edition ownership/cast, by2026-11-03: use actual public SDK map, define supported settlement calendar/passport transitions and archive/capacity/cancellation proof before enabling ownership. This is engineering, not an owner-input blocker.
+- Longer-edition ownership/cast: this original plan preceded native HF3 carryover at aa63fdf. Its supported boundaries are documented in cast-adoption.md. HF4 new-pin adapters and the G3 public sourced calendar remain separate engineering due2026-11-03; fresh-actor projection does not prove played long-roof admission.
 
 The 30 local entries remain individually scoped. Existing historical114 qualifications and original stop/return conditions remain intact. No human acceptance or entire Commonstead completion is claimed.
 
@@ -68,3 +68,8 @@ Ruling: a multi-selection shows a short Now summary and points to the existing E
 ## Independent review correction (same reviewer58061)
 
 Revision1 was blocked: actual gathering changed the wrapping stock facts above the phone map from three lines to four and moved the map19.03125px. The enhanced same actual-App sequence reproduced this failure before the fix. Move the changing stock facts into the existing objective in the one side scroll; restore three app rows. Keep central counted stocks above the map, every fact readable, and all clocks/native inputs unchanged. The control now issues real Boards for everyone, waits for the actual enough transition, and requires identical map bounds before/after that transition and reading. No second scroll or clipping workaround.
+
+
+## 2026-10-28 route/work reading follow-through
+
+The eight-path [read-only route/work candidate](route-work-plan.md) was originally based on9899c3e and is now composed on5cf2c5b with the native HF3 carryover and G3 HF4 audit preserved. It proves legal public request/personal activity/underway/completed yield and a distinct next pair before changing words. Current work targets, route holder and real unfinished delivery are projected beside Now; source contents and personal causes remain unknown where unrecorded. Existing stable-map/natural-height controls stay literal. Forecast technical delivery is parent-verified9899 with source/main CI40631235645/40631367334 and retained f26-timeout/foreign-trailer exceptions; the new route reading still needs root independent review and later delivery. F765/F778 recorded yield-and-earlier-work remains due2026-10-30; the separate replies/next-night/closing/source contracts and paused Adam feel review remain due2026-11-03. Original compound asks and return qualifications above are preserved. No whole-report closure.
