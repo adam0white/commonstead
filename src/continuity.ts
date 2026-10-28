@@ -156,7 +156,7 @@ export class Continuity {
     this.requireEntry(generation);
     const saved = JSON.parse(text);
     const state = importRun(saved.run);
-    if (state.shortYield || state.roofBreak) validateYieldSources(saved.sources);
+    if (state.shortYield || state.roofBreak || state.longRoofBreak) validateYieldSources(saved.sources);
     await this.validateRunEnvelopes(state);
     if (
       typeof saved.runId !== 'string' ||
@@ -203,8 +203,8 @@ export class Continuity {
     this.requireEntry(generation);
     const raw = JSON.parse(text);
     const { castSources: archiveSources, ...native } = raw;
-    const state = importRun([7, 8, 9].includes(raw.schema) ? native : raw);
-    if (raw.schema === 7 || raw.schema === 9) validateYieldSources(archiveSources ?? []);
+    const state = importRun([7, 8, 9, 10].includes(raw.schema) ? native : raw);
+    if (raw.schema === 7 || raw.schema === 9 || raw.schema === 10) validateYieldSources(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];
     if (!Array.isArray(sources) || JSON.stringify(sources).length > maxArchive)
@@ -235,8 +235,9 @@ export class Continuity {
   }
   export(state: State) {
     if (
-      state.settlement?.config.edition === 'settlement-replies/1' ||
-      state.settlement?.config.edition === 'settlement-replies/2'
+      !state.longRoofBreak &&
+      (state.settlement?.config.edition === 'settlement-replies/1' ||
+        state.settlement?.config.edition === 'settlement-replies/2')
     )
       return exportRun(state) as object;
     return { ...(exportRun(state) as object), castSources: structuredClone(this.sources) };
@@ -270,7 +271,7 @@ export class Continuity {
       state = this.state,
       runId = this.runId;
     const task = this.operation.then(async () => {
-      if (state?.roofBreak)
+      if (state?.roofBreak || state?.longRoofBreak)
         throw new Error(
           'People from this recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.',
         );
@@ -281,6 +282,7 @@ export class Continuity {
       const current = () =>
         !state?.shortYield &&
         !state?.roofBreak &&
+        !state?.longRoofBreak &&
         generation === this.generation &&
         state === this.state &&
         runId === this.runId;

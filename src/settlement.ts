@@ -38,7 +38,7 @@ import {
   sceneAllowed,
   sceneOutcome,
 } from './settlement-scenes.ts';
-import type { Command, Resource, State, Villager } from './sim.ts';
+import type { Building, Command, Resource, State, Villager } from './sim.ts';
 
 /** Authored settlement-day/1 world only: finite stores, trips, geometry and timed scenes.
  * HF3 owns bodies, duties, attention, testimony, assent and social responses. No generic planner,
@@ -386,6 +386,7 @@ function go(s: State, v: Villager, point: Point): boolean {
   return true;
 }
 function cancel(s: State, v: Villager) {
+  cancelLongRoof(s, v.id);
   interruptPeer(s, v.id, 'A participant explicitly stopped the unfinished route conversation.');
   interruptReply(s, v, 'The conversation stopped before it finished.');
   const aw = actor(s, v);
@@ -408,7 +409,7 @@ function cancel(s: State, v: Villager) {
   v.task = 'waiting';
   v.status = 'waiting';
 }
-function setJob(s: State, v: Villager, job: Job): void {
+function setJob(s: State, v: Villager, job: Job, roof = false): void {
   const aw = actor(s, v);
   if (
     aw.job &&
@@ -430,6 +431,7 @@ function setJob(s: State, v: Villager, job: Job): void {
     return;
   }
   if (!go(s, v, aw.map === job.map ? job.point : PASSAGE)) return;
+  if (!roof) cancelLongRoof(s, v.id);
   if (aw.commitment) releaseCommitment(v.person, aw.commitment);
   aw.commitment = null;
   aw.pendingRequest = 'ordinary';
@@ -462,6 +464,7 @@ export function applySettlement(s: State, c: Command): void {
     return;
   }
   if (c.kind === 'pause-chapter') {
+    cancelLongRoof(s);
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
     return;
@@ -533,6 +536,7 @@ export function applySettlement(s: State, c: Command): void {
           s.message = 'There is no selected work to insist on.';
           continue;
         }
+        cancelLongRoof(s, v.id);
         aw.pendingRequest = 'insist';
         s.message = `You asked ${v.name} to keep working. The request will be heard once at the next action boundary. It can be refused.`;
         continue;
@@ -550,6 +554,7 @@ export function applySettlement(s: State, c: Command): void {
           s.message = 'There are no shared meals available.';
           continue;
         }
+        cancelLongRoof(s, v.id);
         aw.pendingRequest = 'ordinary';
         choose(s, v, a);
         continue;
@@ -975,42 +980,56 @@ export function stepSettlement(s: State): void {
         }
       }
       const activity = v.person.activity;
-      if (activity)
-        finish(v.person, {
-          affordanceId: activity.affordanceId,
-          action: activity.action,
-          targetId: activity.targetId,
-          at: v.person.now,
-          status:
-            run.purpose === 'travel' &&
-            !(
-              aw.job &&
-              ['move', 'map'].includes(aw.job.kind) &&
-              !aw.path.length &&
-              aw.map === aw.job.map &&
-              Math.hypot(v.x - aw.job.point.x, v.y - aw.job.point.y) < 10
-            )
-              ? 'interrupted'
-              : 'completed',
-          needs:
-            run.purpose === 'travel'
-              ? {}
-              : run.action === 'eat'
-                ? { food: 0.75, water: 0.4 }
-                : run.action === 'drink'
-                  ? { water: 0.8 }
-                  : run.action === 'move'
-                    ? { autonomy: 0.3, competence: 0.2 }
-                    : run.action === 'work'
-                      ? { competence: 0.15 }
-                      : run.action === 'talk'
-                        ? { belonging: 0.45 }
-                        : {},
-          summary:
-            run.purpose === 'travel'
-              ? 'I paused on the way to the requested activity.'
-              : `I finished ${v.task}.`,
-        });
+      const report = activity
+        ? finish(v.person, {
+            affordanceId: activity.affordanceId,
+            action: activity.action,
+            targetId: activity.targetId,
+            at: v.person.now,
+            status:
+              run.purpose === 'travel' &&
+              !(
+                aw.job &&
+                ['move', 'map'].includes(aw.job.kind) &&
+                !aw.path.length &&
+                aw.map === aw.job.map &&
+                Math.hypot(v.x - aw.job.point.x, v.y - aw.job.point.y) < 10
+              )
+                ? 'interrupted'
+                : 'completed',
+            needs:
+              run.purpose === 'travel'
+                ? {}
+                : run.action === 'eat'
+                  ? { food: 0.75, water: 0.4 }
+                  : run.action === 'drink'
+                    ? { water: 0.8 }
+                    : run.action === 'move'
+                      ? { autonomy: 0.3, competence: 0.2 }
+                      : run.action === 'work'
+                        ? { competence: 0.15 }
+                        : run.action === 'talk'
+                          ? { belonging: 0.45 }
+                          : {},
+            summary:
+              run.purpose === 'travel'
+                ? 'I paused on the way to the requested activity.'
+                : `I finished ${v.task}.`,
+          })
+        : undefined;
+      const roof = activeLongRoof(s, v.id);
+      if (roof?.stage === 'rest' && run.from === roof.restStarted) {
+        if (
+          activity?.action === 'rest' &&
+          activity.affordanceId === roof.restActivity?.affordanceId &&
+          activity.startedAt === roof.restActivity?.startedAt &&
+          v.person.now >= activity.endsAt &&
+          report?.status === 'completed'
+        )
+          roof.restCompleted = s.tick;
+        else
+          endLongRoof(s, roof, 'cancelled', 'The planned rest did not finish. Earlier work was not offered.');
+      }
       aw.running = null;
       if (run.purpose === 'job') finishJob(s, v, run);
       if (run.id === 'crossing' && run.purpose === 'travel' && aw.job) {
@@ -1021,6 +1040,7 @@ export function stepSettlement(s: State): void {
       }
     }
     if (s.pauseRequested) continue;
+    if (stepLongRoof(s, v)) continue;
     if (aw.running) {
       if (aw.running.purpose === 'travel') {
         let budget = 30 * readPerson(v.person).body.capacity;
@@ -1060,6 +1080,13 @@ export function stepSettlement(s: State): void {
     if (aw.carried && aw.map === 'yard' && Math.hypot(v.x - HOME.x, v.y - HOME.y) < 10) {
       s.resources[aw.carried.resource] += aw.carried.amount;
       aw.carried = null;
+      const roof = activeLongRoof(s, v.id);
+      if (roof) {
+        roof.deliveredAt = s.tick;
+        roof.stage = 'roof';
+        v.says = 'I delivered the carried materials to the counted shared store.';
+        continue;
+      }
       const origin = aw.job?.sourceMap;
       if (aw.job?.kind === 'gather' && origin && w.caches[origin][aw.job.target as Resource] > 0) {
         aw.job = { ...aw.job, map: origin, point: CACHE_POINT, phase: 'out' };
@@ -1268,6 +1295,8 @@ function requestReply(s: State, c: Extract<Command, { kind: 'reply' }>) {
     paperSpent: 0,
     status: 'requested',
   });
+  // A validated, recorded reply has priority over unfinished earlier-work re-offers.
+  cancelLongRoof(s, v.id);
   event(
     s,
     `You offered a reply to ${v.name}. The current body action will finish first. No words have been delivered yet.`,
@@ -1465,3 +1494,297 @@ function stepReply(s: State, v: Villager): boolean {
 }
 
 const peerHost = { bodyChoices, startChoice, setJob, cancel, event };
+
+export const LONG_ROOF_RETURN = 'settlement-roof-break-return/1';
+export type LongRoofAttempt = {
+  id: string;
+  capturedAt: number;
+  inputIndex: number;
+  priorActor: ActorWorld;
+  priorTask: string;
+  priorStatus: string;
+  priorTarget: Building | null;
+  source: {
+    config: SettlementConfig;
+    hub: Building;
+    map: Place;
+    resource: Resource | null;
+    cache: number | null;
+    trolley: string | null;
+    dispute: [string, string] | null;
+    routeAgreements: string[];
+    commitments: Villager['person']['agenda']['commitments'];
+  };
+  stage: 'finish' | 'delivery' | 'roof' | 'rest' | 'reoffered' | 'unavailable' | 'cancelled' | 'refused';
+  roofRequested?: number;
+  deliveredAt?: number;
+  restStarted?: number;
+  restUntil?: number;
+  restCompleted?: number;
+  restMap?: Place;
+  restPoint?: Point;
+  restActivity?: { affordanceId: string; startedAt: number };
+  restDecision?: { chosenAffordanceId?: string; verdict?: string };
+  endedAt?: number;
+  result?: string;
+};
+const LONG_ACTIVE = ['finish', 'delivery', 'roof', 'rest'];
+export function activeLongRoof(s: State, id: string): LongRoofAttempt | undefined {
+  return s.longRoofBreak?.attempts.findLast((a) => a.id === id && LONG_ACTIVE.includes(a.stage));
+}
+function endLongRoof(s: State, a: LongRoofAttempt, stage: LongRoofAttempt['stage'], result: string) {
+  a.stage = stage;
+  a.endedAt = s.tick;
+  a.result = result;
+}
+function cancelLongRoof(s: State, id?: string) {
+  for (const a of s.longRoofBreak?.attempts ?? [])
+    if ((!id || a.id === id) && LONG_ACTIVE.includes(a.stage))
+      endLongRoof(
+        s,
+        a,
+        'cancelled',
+        'A later task or pause interrupted this sequence. Earlier work will not be offered.',
+      );
+}
+export function longRoofUnavailable(s: State, ids: readonly string[]): string {
+  if (!s.settlement) return 'Choose a longer settlement day for this action.';
+  if (s.ended || s.pauseRequested || s.chapterPaused) return 'Resume an unfinished day first.';
+  if (!ids.length || ids.some((id) => !s.settlement?.actors[id]))
+    return 'Select residents for the roof break.';
+  if (ids.some((id) => activeLongRoof(s, id)))
+    return 'A selected resident already has a roof break in progress.';
+  if (s.inputs.length >= 10000 || (s.longRoofBreak?.attempts.length ?? 0) + ids.length > 10000)
+    return 'The recorded roof-break limit has been reached.';
+  if (!s.buildings.some((b) => b.kind === 'town' && b.complete))
+    return 'The workshop hub roof is unavailable.';
+  if (
+    ids.some((id) => {
+      const v = s.villagers.find((v) => v.id === id);
+      return (
+        !v ||
+        !v.person.body.alive ||
+        v.availableAt > s.tick ||
+        activePeer(s, id) ||
+        ['requested', 'running'].includes(s.settlement?.replyScenes?.[id]?.attempts.at(-1)?.status ?? '')
+      );
+    })
+  )
+    return 'A selected resident is unavailable or has an unfinished conversation. Finish it or cancel it explicitly first.';
+  return '';
+}
+/** Scope: one opt-in long-day Job/delivery/roof/rest/re-offer sequence. Existing native world
+ * travel, stock delivery and released HF choices/commitments remain authoritative. No planner,
+ * physiology, private mind, assent guarantee, new calendar or portable passport is introduced.
+ */
+export function requestLongRoof(s: State, ids: readonly string[], inputIndex: number) {
+  const w = world(s);
+  s.longRoofBreak ??= { version: LONG_ROOF_RETURN, attempts: [] };
+  for (const v of s.villagers.filter((v) => ids.includes(v.id))) {
+    const aw = actor(s, v),
+      j = aw.job;
+    const map = j?.sourceMap ?? j?.map ?? aw.map;
+    const resource = j?.kind === 'gather' ? (j.target as Resource) : null;
+    s.longRoofBreak.attempts.push({
+      id: v.id,
+      capturedAt: s.tick,
+      inputIndex,
+      priorActor: structuredClone(aw),
+      priorTask: v.task,
+      priorStatus: v.status,
+      priorTarget: structuredClone(s.buildings.find((b) => b.id === j?.target) ?? null),
+      source: structuredClone({
+        config: w.config,
+        hub: s.buildings.find((b) => b.kind === 'town' && b.complete)!,
+        map,
+        resource,
+        cache: resource ? w.caches[map][resource] : null,
+        trolley: w.trolley,
+        dispute: w.dispute,
+        routeAgreements: w.routeAgreements,
+        commitments: v.person.agenda.commitments,
+      }),
+      stage: 'finish',
+    });
+  }
+  event(
+    s,
+    'Roof breaks recorded. Current acts and carried deliveries finish first. Each resident can then consider walking to the hub, a 15-second rest and their earlier work. Another task interrupts the sequence.',
+  );
+}
+function sameLongWork(s: State, a: LongRoofAttempt): Job | null {
+  const j = a.priorActor.job;
+  if (!j || !['gather', 'build'].includes(j.kind) || j.partner) return null;
+  if (j.kind === 'gather') {
+    if (!a.source.resource || world(s).caches[a.source.map][a.source.resource] <= 0) return null;
+    return { ...structuredClone(j), map: a.source.map, point: CACHE_POINT, phase: 'out' };
+  }
+  const b = s.buildings.find((b) => b.id === j.target);
+  if (
+    !b ||
+    b.complete ||
+    !a.priorTarget ||
+    b.kind !== a.priorTarget.kind ||
+    b.x !== a.priorTarget.x ||
+    b.y !== a.priorTarget.y
+  )
+    return null;
+  return { ...structuredClone(j), point: b, phase: 'out' };
+}
+function stepLongRoof(s: State, v: Villager): boolean {
+  const a = activeLongRoof(s, v.id);
+  if (!a) return false;
+  const w = world(s),
+    aw = actor(s, v);
+  const hub = s.buildings.find((b) => b.kind === 'town' && b.complete);
+  if (
+    !hub ||
+    hub.id !== a.source.hub.id ||
+    hub.x !== a.source.hub.x ||
+    hub.y !== a.source.hub.y ||
+    v.availableAt > s.tick ||
+    s.ended ||
+    s.pauseRequested ||
+    w.config.edition !== a.source.config.edition
+  ) {
+    endLongRoof(
+      s,
+      a,
+      'unavailable',
+      'The roof, resident or source day is unavailable. Earlier work was not offered.',
+    );
+    return false;
+  }
+  // Do not drop a running act, a held load, a trolley reservation or an unfulfilled appointment.
+  if (aw.running) return false;
+  if (a.stage === 'rest') {
+    if (
+      !a.restCompleted ||
+      aw.map !== 'yard' ||
+      Math.hypot(v.x - hub.x, v.y - hub.y) >= 10 ||
+      aw.carried ||
+      aw.job ||
+      aw.path.length
+    ) {
+      endLongRoof(s, a, 'cancelled', 'The rest or shared place changed. Earlier work was not offered.');
+      return false;
+    }
+    const j = sameLongWork(s, a);
+    if (!j) {
+      endLongRoof(
+        s,
+        a,
+        'unavailable',
+        'The earlier work target is complete, empty, missing or was not work. No work was offered.',
+      );
+      return false;
+    }
+    setJob(s, v, j, true);
+    if (aw.job === j)
+      endLongRoof(
+        s,
+        a,
+        'reoffered',
+        'The earlier work was offered through ordinary choices. Further rest or refusal remains possible.',
+      );
+    else endLongRoof(s, a, 'unavailable', 'The earlier work request could not be installed.');
+    return true;
+  }
+  if (aw.carried) {
+    a.stage = 'delivery';
+    // An existing gathering return keeps its exact path and commitment until real delivery.
+    if (aw.job && (aw.job.phase === 'return' || (aw.job.kind === 'map' && aw.job.map === 'yard')))
+      return false;
+    if (
+      aw.commitment &&
+      v.person.agenda.commitments.some((c) => c.id === aw.commitment && c.status === 'pending')
+    ) {
+      endLongRoof(
+        s,
+        a,
+        'unavailable',
+        'An unfinished commitment prevents changing the current delivery request.',
+      );
+      return false;
+    }
+    setJob(s, v, { kind: 'map', target: 'yard', map: 'yard', point: HOME, phase: 'out' }, true);
+    return false;
+  }
+  if (
+    w.trolley === v.id ||
+    (aw.commitment &&
+      v.person.agenda.commitments.some((c) => c.id === aw.commitment && c.status === 'pending'))
+  ) {
+    endLongRoof(
+      s,
+      a,
+      'unavailable',
+      'An unfinished work commitment or trolley reservation remains. Earlier work was not replaced.',
+    );
+    return false;
+  }
+  if (['gather', 'build'].includes(a.priorActor.job?.kind ?? '') && !sameLongWork(s, a)) {
+    endLongRoof(
+      s,
+      a,
+      'unavailable',
+      'The earlier work target changed or has no work left. No later stage was offered.',
+    );
+    return false;
+  }
+  if (!a.roofRequested) {
+    setJob(
+      s,
+      v,
+      { kind: 'map', target: 'yard', map: 'yard', point: { x: hub.x, y: hub.y }, phase: 'out' },
+      true,
+    );
+    if (aw.job?.kind !== 'map' || aw.job.map !== 'yard') {
+      endLongRoof(s, a, 'unavailable', 'The route to the hub is unavailable.');
+      return false;
+    }
+    a.roofRequested = s.tick;
+    a.stage = 'roof';
+    return false;
+  }
+  if (aw.job || aw.path.length || aw.map !== 'yard' || Math.hypot(v.x - hub.x, v.y - hub.y) >= 10)
+    return false;
+  const rest = affordance('rest', 'rest', 15, { rest: 0.55 });
+  aw.pendingRequest = 'ordinary';
+  // The live HF choice includes current needs and duties, rather than the captured historical agenda.
+  const options = [rest, ...bodyChoices(s, v)];
+  const decision = decide(v.person, options, requestOptions(s, v, rest));
+  const selected = options.find((o) => o.id === decision.chosenAffordanceId);
+  a.restDecision = {
+    ...(decision.chosenAffordanceId ? { chosenAffordanceId: decision.chosenAffordanceId } : {}),
+    ...(decision.suggestion ? { verdict: decision.suggestion.verdict } : {}),
+  };
+  if (selected) startChoice(s, v, selected, decision, 'body');
+  if (!selected || selected.id !== rest.id || decision.suggestion?.verdict === 'refused') {
+    endLongRoof(
+      s,
+      a,
+      'refused',
+      'The resident did not accept the offered roof rest. Earlier work was not offered.',
+    );
+    return true;
+  }
+  const run = actor(s, v).running,
+    activity = v.person.activity;
+  if (!run || run.action !== 'rest' || !activity || activity.action !== 'rest') {
+    endLongRoof(
+      s,
+      a,
+      'refused',
+      'The resident did not begin the offered roof rest. Earlier work was not offered.',
+    );
+    return true;
+  }
+  a.stage = 'rest';
+  a.restStarted = run.from;
+  a.restUntil = run.until;
+  a.restMap = aw.map;
+  a.restPoint = { x: v.x, y: v.y };
+  a.restActivity = { affordanceId: activity.affordanceId, startedAt: activity.startedAt };
+  return true;
+}

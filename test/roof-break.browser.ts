@@ -1,6 +1,6 @@
 // One actual-App synthetic sequence. Isolated storage, local network only, no owner browser state.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import type { Browser } from '@playwright/test';
 import { PRESSURE } from '../src/pressure.ts';
 import { createGame, exportRun, importRun, step } from '../src/sim.ts';
@@ -150,6 +150,7 @@ export async function control(browser: Browser, url: string) {
     assert.equal(metrics.nestedScroll.length, 0);
     assert.deepEqual(errors, []);
     return {
+      longDay: await longControl(browser, url),
       phoneMap,
       wideMap,
       tick: run.tick,
@@ -158,6 +159,157 @@ export async function control(browser: Browser, url: string) {
       pageErrors: errors,
       externalRequests: 'blocked',
       screenshots: 0,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function longControl(browser: Browser, url: string) {
+  const context = await browser.newContext({ viewport: { width: 360, height: 690 }, acceptDownloads: true });
+  await context.route('**/*', (r) => (r.request().url().startsWith(url) ? r.continue() : r.abort()));
+  await context.addInitScript(
+    (run) => {
+      localStorage.setItem('hf-lab-recording-off', '1');
+      localStorage.setItem(
+        'commonstead-cast-local-v3',
+        JSON.stringify({ run, runId: 'synthetic-long-roof', fileOrigin: false, heads: [], sources: [] }),
+      );
+      const callbacks = new Map<number, FrameRequestCallback>();
+      let id = 0,
+        now = 0;
+      window.requestAnimationFrame = (cb) => {
+        callbacks.set(++id, cb);
+        return id;
+      };
+      window.cancelAnimationFrame = (id) => {
+        callbacks.delete(id);
+      };
+      (window as unknown as { advance: (ms: number) => void }).advance = (ms) => {
+        if (!now) now = performance.now();
+        for (let n = 0; n < ms; n += 250) {
+          now += 250;
+          const pending = [...callbacks.values()];
+          callbacks.clear();
+          for (const cb of pending) cb(now);
+        }
+      };
+    },
+    exportRun(createGame(418, undefined, { edition: 'settlement-day/1' })),
+  );
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const advance = (ms: number) =>
+    page.evaluate((ms) => (window as unknown as { advance: (ms: number) => void }).advance(ms), ms);
+  const saved = async () =>
+    importRun(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('commonstead-cast-local-v3') ?? '{}').run),
+    );
+  const box = async () => {
+    const b = await page.locator('#map').boundingBox();
+    assert(b);
+    return b;
+  };
+  try {
+    await page.goto(url);
+    await page.locator('#continue').click();
+    await page.locator('#map').waitFor();
+    await page.locator('#clear').click();
+    await page.getByRole('button', { name: 'Nora', exact: true }).click();
+    const phoneMap = await box();
+    await page.locator('[data-resource="wood"]').click();
+    await advance(30000);
+    let run = await saved();
+    const carried = run.settlement!.actors.v1!.carried;
+    assert(
+      carried && carried.amount > 0,
+      JSON.stringify({ tick: run.tick, actor: run.settlement!.actors.v1 }),
+    );
+    const stock = run.resources.wood;
+    await page.locator('#roof-break-return').click();
+    assert(await page.locator('#roof-break-return').isDisabled());
+    run = await saved();
+    assert.deepEqual(run.longRoofBreak!.attempts[0]!.priorActor.carried, carried);
+    for (let n = 0; n < 80 && run.longRoofBreak!.attempts[0]!.stage !== 'rest'; n++) {
+      await advance(1000);
+      run = await saved();
+    }
+    assert.equal(run.longRoofBreak!.attempts[0]!.stage, 'rest');
+    assert.equal(run.resources.wood, stock + carried.amount);
+    assert.equal(run.settlement!.actors.v1!.carried, null);
+    assert.deepEqual(await box(), phoneMap);
+    const downloadRun = async (compact: boolean) => {
+      const pending = page.waitForEvent('download');
+      await page.locator(compact ? '#compact-download button' : '#download').click();
+      const path = await (await pending).path();
+      assert(path);
+      return await readFile(path, 'utf8');
+    };
+    await page.locator('#menu').click();
+    await page.locator('.debug summary').click();
+    const full = await downloadRun(false),
+      compact = await downloadRun(true);
+    const fileProof = await page.evaluate(
+      async ({ full, compact }) => {
+        const modulePath = '/src/file-session.ts';
+        const { createFileSession } = await import(modulePath);
+        const result = [];
+        for (const text of [full, compact]) {
+          const session = createFileSession();
+          if (!(await session.select(new File([text], 'long-roof.json'))))
+            throw new Error('Long file refused');
+          const paused = session.state();
+          session.resume();
+          session.advance(60);
+          result.push({ paused, continued: session.state(), snapshot: session.snapshot() });
+        }
+        return result;
+      },
+      { full, compact },
+    );
+    if (process.env.COMMONSTEAD_LONG_ROOF_EVIDENCE) {
+      const prefix = process.env.COMMONSTEAD_LONG_ROOF_EVIDENCE;
+      await writeFile(`${prefix}/app-native-full.json`, full);
+      await writeFile(`${prefix}/app-native-compact.json`, compact);
+      await writeFile(`${prefix}/app-file-load-continue.json`, JSON.stringify(fileProof));
+    }
+    assert.deepEqual(fileProof[0], fileProof[1]);
+    assert.equal(fileProof[0]!.continued.longRoofBreak.attempts[0].stage, 'reoffered');
+    const { castSources: fullSources, ...nativeFull } = JSON.parse(full);
+    assert.deepEqual(fullSources, []);
+    assert.deepEqual(importRun(nativeFull), fileProof[0]!.paused);
+    const pausedTick = (await saved()).tick;
+    await advance(5000);
+    assert.equal((await saved()).tick, pausedTick, 'Menu pauses the actual world');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.locator('#resume').click();
+    const wideMap = await box();
+    await advance(60000);
+    run = await saved();
+    assert.equal(run.longRoofBreak!.attempts[0]!.stage, 'reoffered');
+    await page.locator('#roof-break-return').scrollIntoViewIfNeeded();
+    assert.deepEqual(await box(), wideMap);
+    const metrics = await page.evaluate(() => ({
+      pageScroll: document.documentElement.scrollHeight > innerHeight,
+      nestedScroll: [...document.querySelectorAll('.side *')].filter(
+        (e) => ['auto', 'scroll'].includes(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight,
+      ).length,
+    }));
+    assert.equal(metrics.pageScroll, false);
+    assert.equal(metrics.nestedScroll, 0);
+    assert.deepEqual(errors, []);
+    return {
+      phoneMap,
+      wideMap,
+      metrics,
+      capturedLoad: carried.amount,
+      deliveredStock: stock + carried.amount,
+      rest: run.longRoofBreak!.attempts[0],
+      fileReplay: 'full and compact identical',
+      pageErrors: errors,
+      screenshots: 0,
+      externalRequests: 'blocked',
     };
   } finally {
     await context.close();

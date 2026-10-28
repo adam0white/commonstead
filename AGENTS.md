@@ -2,7 +2,7 @@
 
 Authority: docs/concept.md. Done means the deployable vertical slice and evidence listed there; owner accepts after playing. Do not change human-framework or the lab index. Keep the actor engine at HF 3.0.0 and lab-kit at 0.5.17. Signed commits with Co-Authored-By: Codex <noreply@openai.com>. Run pnpm run ci before commits. No secrets in source or output. One browser. Stop under 5 GB free. Native simulation owns world only; HF owns people. Deferred work has a date in concept.md.
 
-The 2026-10-27 reciprocal Burak/Days task supersedes the former immutable lab-client 0.4.15 pin for this carryover. It authorizes lab-client 0.5.0 and the HF 4.3.0 pure portable bridge while Commonstead's actor engine stays at HF 3.0.0. The prepublication artifacts are in a draft PR; adoption and publication remain held until the coordinator's Opus verdict and shared release publication. See [human-framework PR 38](https://github.com/adam0white/human-framework/pull/38) and `~/code/.lab-scratch/codex/carryover.md` for the release hold and evidence.
+Commonstead uses the published immutable lab-client 0.5.0 artifact and its scoped HF 4.3.0 pure portable bridge. The actor engine stays at HF 3.0.0 / engine 2.23.0; lab-kit stays at 0.5.17. Human-framework PR38 merged in e22bca58; the v4.3.0 and lab-client-v0.5.0 GitHub release assets are published. Commonstead coordinator publication f93b3b8 is live with dirty:false. This is the scoped reciprocal Burak/Days source contract, not an actor upgrade or admission for every world. See [the source publication](https://github.com/adam0white/human-framework/pull/38) and `~/code/.lab-scratch/codex/carryover.md` for the receipts.
 
 Use [the plain-English policy](docs/lab/plain-english.md) for player text.
 
