@@ -14,9 +14,9 @@ allowBuilds:
   workerd@1.20261019.1: true
   fsevents: false
 overrides:
-  "@adam0white/lab-client>@adam0white/human-framework": "file:vendor/adam0white-human-framework-4.3.0.tgz"
+  "@adam0white/lab-client>@adam0white/human-framework": "4.6.0"
   sharp: 0.35.5
   miniflare>undici: 7.30.1
 peerDependencyRules:
   allowedVersions:
-    "@adam0white/lab-kit>@adam0white/lab-client": "0.5.0"
+    "@adam0white/lab-kit>@adam0white/lab-client": "0.5.2"

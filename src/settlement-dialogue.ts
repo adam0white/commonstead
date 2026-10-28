@@ -1,11 +1,13 @@
 import {
   type Affordance,
+  beginTogether,
   decide,
+  decideTogether,
   finish,
   type Percept,
   perceive,
   reviewed,
-} from '@adam0white/human-framework';
+} from './hf4';
 import type { Place } from './paths.ts';
 import type { Job } from './settlement.ts';
 import { REPLY_EDITION } from './settlement-scenes.ts';
@@ -329,14 +331,23 @@ export function startPeerPair(s: State, v: Villager, other: Villager, h: PeerHos
     return false;
   if (a.status !== 'requested') return true;
   if (!same(s, a)) return true;
-  const chosen = [v, other].map((p, i) => {
-    const opts = options(s, p, offer(a, p, i === 0 ? other : v, false), h);
-    const d = decide(p.person, opts, {
-      suggestion: { voiceId: 'commander', action: 'talk', strength: 0.35 },
-    });
-    a.decisions[p.id] = decision(d);
-    return { p, opts, d, selected: opts.find((o) => o.id === d.chosenAffordanceId) };
+  const choices = [v, other].map((p, i) => ({
+    p,
+    opts: options(s, p, offer(a, p, i === 0 ? other : v, false), h),
+  }));
+  const decisions = decideTogether(
+    choices.map((x) => ({
+      person: x.p.person,
+      affordances: x.opts,
+      options: { suggestion: { voiceId: 'commander', action: 'talk', strength: 0.35 } },
+    })),
+  );
+  const chosen = choices.map((x, i) => {
+    const d = requiredPeerValue(decisions[i]);
+    a.decisions[x.p.id] = decision(d);
+    return { ...x, d, selected: x.opts.find((o) => o.id === d.chosenAffordanceId) };
   });
+  beginTogether(chosen.map((x) => x.p.person));
   if (chosen.some((x) => x.selected !== x.opts[0] || x.d.suggestion?.verdict === 'refused')) {
     a.status = 'withheld';
     a.endedAt = s.tick;
@@ -344,7 +355,8 @@ export function startPeerPair(s: State, v: Villager, other: Villager, h: PeerHos
     for (const x of chosen) {
       h.cancel(s, x.p);
       x.p.says = requiredPeerValue(a.decisions[x.p.id]).publicSays;
-      if (x.selected && x.selected !== x.opts[0]) h.startChoice(s, x.p, x.selected, x.d, 'body');
+      if (x.selected && x.selected !== x.opts[0])
+        h.startChoice(s, x.p, x.selected, decide(x.p.person, [x.selected]), 'body');
     }
     h.event(s, a.reason);
     return true;
@@ -528,9 +540,8 @@ export function stepPeer(s: State, v: Villager, h: PeerHost): boolean {
       continue;
     }
     // Ordinary driver catch-up happens for all residents before peer processing. Never backdate hearing.
-    const now = 480 + s.tick * 0.8;
-    if (speaker.person.now !== now || listener.person.now !== now)
-      throw new Error('Peer hearing clock mismatch');
+    const now = speaker.person.now;
+    if (listener.person.now !== now) throw new Error('Peer hearing clock mismatch');
     p.text = words(s, a, index);
     if (speaker.person.body.asleep || !p.text || !finishAct(s, speaker, p.act, p.text)) {
       interruptPeer(s, v.id, 'The speaking act did not complete.');

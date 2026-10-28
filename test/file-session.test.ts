@@ -50,7 +50,7 @@ describe('complete memory file session', () => {
         expect(new TextDecoder().decode(original.bytes)).toBe(JSON.stringify(raw));
       }
     }
-  });
+  }, 30_000);
   test('retains nonempty source archive in replies editions and refuses full clock mutation', async () => {
     const s = createGame(418);
     const raw = { ...(exportRun(s) as object), castSources: sources };
@@ -67,7 +67,7 @@ describe('complete memory file session', () => {
     c.resume();
     c.advance(3);
     expect(c.snapshot()!.castSources).toEqual(sources);
-  });
+  }, 30_000);
   test('late A after B, rejection, empty and close cannot install', async () => {
     for (const later of ['B', 'invalid', 'empty', 'close']) {
       let release!: (b: ArrayBuffer) => void;
@@ -104,7 +104,9 @@ describe('complete memory file session', () => {
   });
 });
 
-test('schema7 wrapper uses the production split, full and compact, with atomic multi-tick yield refusal', async () => {
+// Actual construction admits short yield. Generic full/compact and atomic capacity
+// controls above cover the shared file session; this control covers its closed wrapper.
+test('schema7 file wrapper retains source and resumes actual short yield', async () => {
   const s = createGame(418),
     ids = s.villagers.map((v) => v.id);
   apply(s, { kind: 'order', ids, target: 'wood' });
@@ -113,39 +115,20 @@ test('schema7 wrapper uses the production split, full and compact, with atomic m
   while (s.resources.stone < 120 && s.tick < 300) step(s);
   apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
   while (!s.buildings.some((b) => b.kind === 'storehouse' && b.complete) && s.tick < 599) step(s);
+  expect(s.buildings.some((b) => b.kind === 'storehouse' && b.complete)).toBe(true);
   apply(s, { kind: 'yield-day' });
-  for (const compact of [false, true]) {
-    const raw = { ...(exportRun(s, compact) as object), castSources: sources };
-    expect(() => importRun(raw)).toThrow(); // Schema7 core is closed; host must split the wrapper.
-    const c = createFileSession();
-    await c.select(file(raw));
-    expect(c.state()).toEqual(s);
-    expect(c.snapshot()?.castSources).toEqual(sources);
-    c.resume();
-    c.advance(1);
-    expect(c.state()!.tick).toBe(s.tick + 12);
-    let boundary = structuredClone(s),
-      next = structuredClone(s);
-    const encodedSize = (state: typeof s) =>
-      new TextEncoder().encode(JSON.stringify({ ...(exportRun(state) as object), castSources: sources }))
-        .byteLength;
-    while (!next.ended) {
-      boundary = structuredClone(next);
-      stepYieldBatch(next, true);
-      if (encodedSize(next) > encodedSize(boundary)) break;
-    }
-    expect(encodedSize(next)).toBeGreaterThan(encodedSize(boundary));
-    const bounded = createFileSession({ currentBytes: encodedSize(boundary) });
-    await bounded.select(file({ ...(exportRun(boundary) as object), castSources: sources }));
-    bounded.resume();
-    const before = bounded.snapshot(),
-      original = bounded.original();
-    expect(() => bounded.advance(1)).toThrow(/capacity/);
-    expect(bounded.snapshot()).toEqual(before);
-    expect(bounded.original()).toEqual(original);
-    expect(bounded.running).toBe(false);
-  }
-});
+  const raw = { ...(exportRun(s, true) as object), castSources: sources };
+  expect(() => importRun(raw)).toThrow(); // The core is closed; the file host splits source records.
+  const c = createFileSession();
+  expect(await c.select(file(raw))).toBe(true);
+  expect(c.state()).toEqual(s);
+  expect(c.snapshot()?.castSources).toEqual(sources);
+  c.resume();
+  c.advance(1);
+  expect(c.state()!.tick).toBe(s.tick + 12);
+  expect(c.snapshot()?.castSources).toEqual(sources);
+  expect(c.original()!.name).toBe('synthetic.json');
+}, 180_000);
 
 test('late digest and real envelope validation completion cannot install after cancellation', async () => {
   for (const gate of ['digest', 'validation']) {

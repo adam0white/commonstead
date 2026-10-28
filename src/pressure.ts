@@ -5,8 +5,9 @@
  * resident's reaction from what actually happened to them (`State.record`, written only by
  * accepted commands). Legacy schemas 3–7 never read this module. Reads HF state through readPerson.
  */
-import { type Person, readPerson } from '@adam0white/human-framework';
+
 import { residentName } from './display.ts';
+import { type Person, readPerson } from './hf4';
 import type { State, Villager } from './sim.ts';
 
 export const PRESSURE = 'pressure/1';

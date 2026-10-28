@@ -1,3 +1,15 @@
+# HF4 port candidate — 2026-10-28
+
+Remaining: final normal lane, the same PR's exact source CI, matched merge, exact merged CI and a clean deployment. [PR14](https://github.com/adam0white/commonstead/pull/14) carries this port and the coordinator's menu cleanup. Technical delivery ends with that merged PR and a live release manifest on its merged commit with `dirty:false`. Adam accepts the game by playing; that acceptance stays separate.
+
+Current source pins published HF4.6.0 directly and through the immutable client override. The shared eight-person Run owns decisions, action starts, actual outcomes, retained history and sourced worship duties. Host rules retain materials, routes, physical work and authored conversation boundaries. Full-source files preserve exact game and HF history; native receiving validates the supported source and engine before admission. No acceptance of worship is computed.
+
+The first complete local lane passed141 tests plus lint, types and build. Its hosted CI reached the ten-minute job budget without an assertion failure; the workflow now allows twenty minutes. The final lane must validate the same PR's menu changes. Focused actual full-day controls cover eating, sleeping, prayer duties and exact restored continuation. Headless Chrome checks cover phone/desktop startup, ordinary file/download controls and plain file-page wording. These do not establish a human cross-game journey, recording receipt or owner acceptance.
+
+The source composes the delivered route reader at `cd7fba3`. Broader game-design work remains with games-deferred after technical handback. Older handoff sections below are historical and do not describe this HF4 candidate's runtime or delivery status.
+
+---
+
 # Route/work reading candidate — 2026-10-28
 
 Remaining: root's one independent exact-source review, same-author/same-reviewer corrections, fresh normal lane/signing/exact source CI, root matched merge/main CI, clean live delivery and cleanup. This source candidate adds read-only current pair/holder/work-stage facts beside Now. It does not implement yield-and-earlier-work, change simulation/contracts or close whole F765/F778/F776/Commonstead. See [the bounded plan](docs/route-work-plan.md). Adam's feel/readiness and human accessibility remain paused through2026-11-03.

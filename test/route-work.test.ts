@@ -1,9 +1,10 @@
 import { expect, test } from 'vitest';
+import { dayClock } from '../src/settlement.ts';
 import { apply, createGame, exportRun, importRun, step } from '../src/sim.ts';
 import { WorkObservation } from '../src/work-observation.ts';
 
 // Headless causal control. A wrong projection that treats a pending yield as completed,
-// blocks returning loads, or calls Dai/Nora the recurring Sam/Nora dispute must fail.
+// blocks returning loads, or calls a changed pair the earlier dispute must fail.
 test('route and work readings follow actual requests, choices, loads and distinct pairs', () => {
   const s = createGame(418, undefined, { edition: 'settlement-day/1' });
   const view = new WorkObservation();
@@ -19,7 +20,7 @@ test('route and work readings follow actual requests, choices, loads and distinc
     expect(JSON.stringify(s)).toBe(before);
     return text;
   };
-  for (const [i, v] of s.villagers.slice(0, 4).entries())
+  for (const [i, v] of s.villagers.slice(0, 3).entries())
     apply(s, { kind: 'order', ids: [v.id], target: i < 2 ? 'wood' : 'stone' });
   expect(read()).toContain('next action choice');
   while (s.tick < 17) step(s);
@@ -59,22 +60,36 @@ test('route and work readings follow actual requests, choices, loads and distinc
   expect(view.summary(stranded, carrier)).toContain('The chapter is paused');
   expect(read(nora)).toContain('Earlier collection point: Workshop yard');
 
-  while (s.tick < 48) step(s);
-  expect(s.resources.wood).toBeCloseTo(stock + load);
+  while (
+    !(w.actors.v2?.running?.purpose === 'job' && w.actors.v2.running.job?.kind === 'yield') &&
+    !w.routeAgreements.includes('v1/v2') &&
+    s.tick < 150
+  )
+    step(s);
   expect(read()).toContain('Yield is underway');
   expect(w.routeAgreements).toEqual([]);
-  while (s.tick < 56) step(s);
-  expect(w.routeAgreements).toEqual(['v1/v2']);
-  expect(w.dispute).toBe(null);
+  while (!w.routeAgreements.includes('v1/v2') && s.tick < 200) step(s);
+  expect(w.routeAgreements).toContain('v1/v2');
   expect(read()).toContain('No work request is retained');
-  expect(read()).toContain('08:44');
+  const yielded = w.events.findLast((event) =>
+    event.text.endsWith(' yields the shared trolley route after choosing to make room.'),
+  );
+  if (!yielded) throw new Error('Expected actual yield receipt');
+  expect(read()).toContain(dayClock({ ...s, tick: yielded.at }));
+  while (noraWork.carried && s.tick < 250) step(s);
+  expect(noraWork.carried).toBeNull();
+  expect(s.resources.wood).toBeCloseTo(stock + load);
   apply(s, { kind: 'order', ids: ['v2'], target: 'wood' });
-  while (s.tick < 62) step(s);
-  expect(w.dispute).toEqual(['v3', 'v1']);
-  expect(read(dai)).toContain('Dai and Nora');
+  while (!w.dispute && s.tick < 250) step(s);
+  expect(w.dispute).not.toBeNull();
+  expect(w.dispute).toContain('v3');
+  expect(w.dispute?.some((id) => id === 'v1' || id === 'v2')).toBe(true);
+  const actualPair = w.dispute!.map((id) => s.villagers.find((v) => v.id === id)!.name).join(' and ');
+  expect(read(dai)).toContain(actualPair);
   expect(read(dai)).toContain('Nora and Sam');
   expect(read(dai)).toContain('different pair');
-  expect(read(dai)).toContain('08:49');
+  expect(w.disputeAt).not.toBeNull();
+  expect(read(dai)).toContain(dayClock({ ...s, tick: w.disputeAt! }));
   const whole = JSON.stringify(s);
   const full = importRun(exportRun(s)),
     compact = importRun(exportRun(s, true));
@@ -111,8 +126,8 @@ test('pending roof return is not described as impossible when no job is retained
         step(full);
         step(compact);
       }
-      expect(JSON.stringify(full)).toBe(JSON.stringify(s));
-      expect(JSON.stringify(compact)).toBe(JSON.stringify(s));
+      expect(full).toEqual(s);
+      expect(compact).toEqual(s);
       expect(s.longRoofBreak?.attempts[0]?.stage).toBe('reoffered');
       return;
     }

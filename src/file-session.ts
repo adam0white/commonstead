@@ -1,6 +1,7 @@
 /** Complete memory-only session. No native storage, ownership or browser Shelf effects. */
 import { validateRunEnvelopes, validateYieldSources } from './continuity.ts';
 import { apply, exportRun, type GameCommand, importRun, type State, step, stepYieldBatch } from './sim.ts';
+import { validateSourceArchives } from './source-archives';
 
 const encoder = new TextEncoder();
 type Original = {
@@ -47,10 +48,17 @@ export function createFileSession(
   }
   function stage(change: (state: State) => void) {
     if (!held) throw new Error('Choose a run first.');
-    const next = structuredClone(held);
-    change(next.state);
-    capacity(next);
-    held = next;
+    // Keep the live Run on success. A failed action restores the exact prior game
+    // and Run before the error escapes; source bytes and ownership stay unchanged.
+    const before = exportRun(held.state);
+    const source = held.source;
+    try {
+      change(held.state);
+      capacity(held);
+    } catch (error) {
+      held = { state: importRun(before), source };
+      throw error;
+    }
   }
   return {
     invalidate,
@@ -110,7 +118,10 @@ export function createFileSession(
         );
         const { castSources, ...native } = source;
         // Same production archive validator; its count and UTF16-unit limits are not byte limits.
-        validateYieldSources(castSources ?? []);
+        const sourceArchives = castSources ?? [];
+        validateYieldSources(sourceArchives);
+        await validateSourceArchives(sourceArchives);
+        if (!current()) return false;
         const state = importRun(native);
         if (!current()) return false;
         await validateRunEnvelopes(state);

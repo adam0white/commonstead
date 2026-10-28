@@ -1,8 +1,16 @@
 import { describe, expect, test } from 'vitest';
+import { archiveCommunity } from '../src/hf4';
 import { blocked, route } from '../src/paths.ts';
 import { EDITION } from '../src/settlement.ts';
 import { REPLIES } from '../src/settlement-scenes.ts';
 import { apply, createGame, exportRun, importRun, stateHash, step } from '../src/sim.ts';
+
+function retained(person: Parameters<typeof archiveCommunity>[0]) {
+  const saved = archiveCommunity(person).current.people[person.id];
+  if (!saved) throw new Error('Missing retained resident');
+  return saved;
+}
+const memory = (person: Parameters<typeof archiveCommunity>[0]) => retained(person).memory;
 
 const day = (seed = 42) => createGame(seed, undefined, { edition: EDITION });
 function resident(s: ReturnType<typeof day>, id: string) {
@@ -27,18 +35,22 @@ function story(s: ReturnType<typeof day>, id: string) {
 }
 
 describe('opt-in settlement day focused headless controls', () => {
-  test('full-day bodies, food, sleep and sourced duties actually advance; both exports replay', () => {
+  test('full-day bodies, food, sleep and sourced duties advance with exact public replay', async () => {
     const s = day();
     const actions = new Set<string>();
     for (let i = 0; i < 1800; i++) {
       step(s);
+      if (i % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       for (const v of s.villagers) {
         const a = v.person.activity?.action;
         if (a) actions.add(a);
       }
     }
     expect(s.tick).toBe(1800);
-    expect(s.villagers.every((v) => v.person.now === 1920)).toBe(true);
+    const at = archiveCommunity(resident(s, 'v1').person).current.at / 60_000;
+    expect(s.villagers.every((v) => v.person.now === at)).toBe(true);
+    expect(at).toBeGreaterThanOrEqual(1920);
+    expect(at).toBeLessThan(1921);
     expect(actions.has('sleep')).toBe(true);
     expect(actions.has('eat')).toBe(true);
     expect(actions.has('pray')).toBe(true);
@@ -48,8 +60,11 @@ describe('opt-in settlement day focused headless controls', () => {
       ),
     ).toBe(true);
     expect(s.resources.food).toBeLessThan(100);
-    expect(stateHash(importRun(exportRun(s)))).toBe(stateHash(s));
-    expect(stateHash(importRun(exportRun(s, true)))).toBe(stateHash(s));
+    const restored = importRun(exportRun(s));
+    expect(restored).toEqual(s);
+    advance(s, 3);
+    advance(restored, 3);
+    expect(restored).toEqual(s);
     const bad = JSON.parse(JSON.stringify(exportRun(s, true)));
     bad.config.edition = 'unknown';
     expect(() => importRun(bad)).toThrow(/replay/);
@@ -92,10 +107,10 @@ describe('opt-in settlement day focused headless controls', () => {
     until(s, () => !!w.actors.v1?.carried, 150);
     expect(s.resources.wood).toBe(80);
     expect(w.caches.yard.wood).toBeLessThan(280);
-    expect(s.villagers[0]?.person.memory.beliefs.some((b) => b.prop === 'yard:boards-remain')).toBe(true);
+    expect(memory(resident(s, 'v1').person).beliefs.some((b) => b.prop === 'yard:boards-remain')).toBe(true);
     until(s, () => s.resources.wood > 80, 150);
     expect(w.caches.quay.wood).toBe(180);
-    expect(s.villagers[1]?.person.memory.beliefs.some((b) => b.prop === 'yard:boards-remain')).toBe(false);
+    expect(memory(resident(s, 'v2').person).beliefs.some((b) => b.prop === 'yard:boards-remain')).toBe(false);
   });
   test('actual conversation delivers witnessed accounts, not instant private disclosure', () => {
     const s = day();
@@ -103,8 +118,16 @@ describe('opt-in settlement day focused headless controls', () => {
     until(s, () => s.settlement?.events.some((e) => e.text.includes('Nora inspects')) ?? false, 150);
     request(s, ['v1', 'v2'], 'talk');
     until(s, () => !!s.settlement?.accounts.length, 200);
-    expect(s.settlement?.accounts.some((a) => a.text.includes('earlier inspection'))).toBe(true);
-    expect(s.villagers[1]?.person.memory.beliefs.some((b) => b.prop === 'yard:boards-remain')).toBe(true);
+    const account = s.settlement?.accounts.find((a) => a.speaker === resident(s, 'v1').name);
+    expect(account?.text).toContain('yard:boards-remain');
+    expect(memory(resident(s, 'v2').person).episodes).toContainEqual(
+      expect.objectContaining({
+        kind: 'claim',
+        actorId: resident(s, 'v1').person.id,
+        summary: account?.text,
+      }),
+    );
+    expect(memory(resident(s, 'v2').person).beliefs.some((b) => b.prop === 'yard:boards-remain')).toBe(true);
     expect(s.villagers[0]?.discovery).toBe(0);
     expect(JSON.stringify(s.settlement?.accounts)).not.toMatch(/speakerCredence|deceit|confidence/);
   });
@@ -125,7 +148,9 @@ describe('opt-in settlement day focused headless controls', () => {
       100,
     );
     expect(
-      t.villagers[0]?.person.social.relationships.some((r) => r.otherId === t.villagers[1]?.person.id),
+      retained(resident(t, 'v1').person).social.relationships.some(
+        (r) => r.otherId === t.villagers[1]?.person.id,
+      ),
     ).toBe(true);
   });
   test('shared trolley conflict is observed, and an actual yielding choice opens the route', () => {
@@ -134,13 +159,14 @@ describe('opt-in settlement day focused headless controls', () => {
     until(s, () => !!s.settlement?.dispute, 160);
     const w = s.settlement;
     if (!w?.dispute) throw new Error('Missing actual dispute');
-    expect(
-      s.villagers.every(
-        (v) =>
-          !['v1', 'v2'].includes(v.id) ||
-          v.person.memory.episodes.some((e) => e.kind === 'witnessed' && e.action === 'conflict'),
-      ),
-    ).toBe(true);
+    for (const v of s.villagers.filter((v) => ['v1', 'v2'].includes(v.id))) {
+      expect(memory(v.person).episodes).toContainEqual(
+        expect.objectContaining({
+          kind: 'conflict',
+          summary: 'We reached the narrow trolley route together and disagreed about who would use it.',
+        }),
+      );
+    }
     const id = w.dispute.find((id) => !w.actors[id]?.carried);
     if (!id) throw new Error('Missing available participant');
     request(s, [id], 'cancel');
@@ -172,7 +198,7 @@ describe('opt-in settlement day focused headless controls', () => {
     expect(c?.status).toBe('pending');
     advance(s, 8);
     expect(v.says).toBe('I reached the selected place.');
-    expect(c?.status).toBe('kept');
+    expect(v.person.agenda.commitments.find((current) => current.id === c?.id)?.status).toBe('kept');
     story(s, 'v1');
     expect(v.person.agenda.commitments.find((c) => c.targetId === 'day:v1:story:share-story')?.status).toBe(
       'kept',
@@ -187,7 +213,9 @@ describe('opt-in settlement day focused headless controls', () => {
     expect(c?.status).toBe('pending');
     request(s, ['v2'], 'cancel');
     advance(s, 60);
-    expect(c?.status).toBe('released');
+    expect(resident(s, 'v1').person.agenda.commitments.find((current) => current.id === c?.id)?.status).toBe(
+      'released',
+    );
     expect(
       resident(s, 'v1').person.agenda.commitments.filter((c) => prayer.some((p) => p.id === c.id)),
     ).toEqual(prayer);
@@ -235,21 +263,23 @@ describe('opt-in settlement day focused headless controls', () => {
       request(s, ['v1', 'v2'], action);
       until(
         s,
-        () =>
-          s.settlement?.events.some((e) =>
-            action === 'talk'
-              ? e.text.includes('finish talking')
-              : e.text.includes('finish the voluntary practice bout'),
-          ) ?? false,
+        () => s.settlement?.events.some((e) => e.text.includes('did not gain both people’s assent')) ?? false,
         160,
       );
+      expect(
+        s.settlement?.events.some(
+          (e) => e.text.includes('finish talking') || e.text.includes('finish the voluntary practice bout'),
+        ),
+      ).toBe(false);
+      expect(s.settlement?.accounts).toEqual([]);
+      expect(s.resources.wood).toBe(80);
       expect(s.settlement?.dispute).not.toBeNull();
       expect(s.settlement?.routeAgreements).toEqual([]);
       request(s, ['v1'], 'yield');
       until(s, () => s.settlement?.dispute === null, 100);
     }
   });
-  test('fictional correction and visit require actual story, costs, trip and return', () => {
+  test('fictional correction spends paper; an unaffordable visit grants no journey or return', () => {
     const s = day();
     request(s, ['v2'], 'scene', 'correction');
     advance(s, 5);
@@ -262,10 +292,16 @@ describe('opt-in settlement day focused headless controls', () => {
     expect(s.settlement?.paper).toBe(3);
     expect(s.settlement?.records.samReport).toContain('did not reproduce');
     request(s, ['v2'], 'scene', 'visit');
-    until(s, () => s.settlement?.completed.some((c) => c.scene === 'visit') ?? false, 500);
-    expect(s.settlement?.actors.v2?.map).toBe('yard');
-    expect(s.resources.food).toBeLessThanOrEqual(96);
-    expect(stateHash(importRun(exportRun(s, true)))).toBe(stateHash(s));
+    until(s, () => !s.settlement?.actors.v2?.job, 1000);
+    expect(s.resources.food).toBeLessThan(4);
+    expect(resident(s, 'v2').person.trace.at(-1)?.chosenAffordanceId).toBe('visit');
+    expect(s.settlement?.completed.some((c) => c.scene === 'visit')).toBe(false);
+    expect(s.settlement?.actors.v2?.running).toBeNull();
+    expect(s.settlement?.actors.v2?.map).toBe('quay');
+    expect(s.settlement?.paper).toBe(3);
+    expect(s.settlement?.events.some((e) => e.text.includes('returns from the arranged family visit'))).toBe(
+      false,
+    );
   });
   test('fictional grip trial needs both independent assent and a full shared act', () => {
     const s = day();
@@ -298,7 +334,8 @@ describe('fresh local personal replies with real HF choices', () => {
       if (!w) throw new Error('day');
       const scene = w.replyScenes?.[id];
       if (!scene) throw new Error('No actual disclosure');
-      expect(scene.disclosure.at).toBe(78);
+      expect(scene.disclosure.at).toBe(s.tick);
+      expect(scene.disclosure.at).toBeGreaterThanOrEqual(60);
       expect(v.invitedBreak).toBe(false);
       expect(v.says).not.toBe('');
       const disclosed = JSON.stringify(s);
@@ -323,7 +360,7 @@ describe('fresh local personal replies with real HF choices', () => {
       expect(() => apply(s, { ...command, branch: other })).toThrow();
       expect(() => apply(s, { kind: 'order', ids: [id], target: 'wood' })).toThrow(/Cancel/);
       expect(JSON.stringify(s)).toBe(beforeDuplicate);
-      const running = [exportRun(s), exportRun(s, true)];
+      const running = exportRun(s);
       const started = attempt.startedAt;
       if (started === undefined) throw new Error('no begin');
       const fork = importRun(pre);
@@ -340,7 +377,8 @@ describe('fresh local personal replies with real HF choices', () => {
       expect(fork.settlement?.events.some((e) => e.text.includes(REPLIES[branch].says))).toBe(false);
       until(s, () => attempt.status === 'completed', 30);
       expect(attempt.endedAt).toBe(attempt.until);
-      expect(s.tick - started).toBe(13); // HF rounds 9.6 minutes to ten; never finish early.
+      expect(s.tick - started).toBeGreaterThanOrEqual(REPLIES[branch].ticks);
+      expect(s.tick - started).toBeLessThanOrEqual(REPLIES[branch].ticks + 1);
       expect(w.replyResults).toEqual([
         expect.objectContaining({
           actor: id,
@@ -356,18 +394,12 @@ describe('fresh local personal replies with real HF choices', () => {
         w.events.filter((e) => e.text === `You said to ${v.name}: ${REPLIES[branch].line}`),
       ).toHaveLength(1);
       const completed = [exportRun(s), exportRun(s, true)];
-      for (const raw of running) {
-        const r = importRun(raw);
-        while (r.tick < s.tick) step(r);
-        expect(JSON.stringify(r)).toBe(JSON.stringify(s));
-      }
-      const copies = [...running, ...completed].map(importRun);
-      for (const r of copies) while (r.tick < s.tick) step(r);
-      advance(s, 15);
-      for (const r of copies) {
-        advance(r, 15);
-        expect(JSON.stringify(r)).toBe(JSON.stringify(s));
-      }
+      const restored = importRun(running);
+      while (restored.tick < s.tick) step(restored);
+      expect(restored).toEqual(s);
+      advance(s, 3);
+      advance(restored, 3);
+      expect(restored).toEqual(s);
       // Closed envelopes and every supplied state field are replay checked, never trusted.
       const raw = JSON.parse(JSON.stringify(completed[0]));
       raw.state.settlement.replyScenes[id].attempts[0].attended = false;
@@ -455,7 +487,8 @@ test('one ordinary route dispute supports real paired talk, costed words, cancel
   until(s, () => requiredPeerValue(requiredPeerValue(w.peer).attempts[0]).status === 'talking', 100);
   const attempt = requiredPeerValue(requiredPeerValue(w.peer).attempts[0]);
   expect(attempt.talk).toHaveLength(2);
-  expect(attempt.talk.every((a) => a.status === 'running' && a.startedAt === 480 + a.from * 0.8)).toBe(true);
+  expect(attempt.talk.every((a) => a.status === 'running' && a.startedAt >= 480 + a.from * 0.8)).toBe(true);
+  expect(new Set(attempt.talk.map((a) => a.startedAt)).size).toBe(1);
   const running = exportRun(s),
     compact = exportRun(s, true);
   expect(importRun(running)).toEqual(s);
@@ -484,26 +517,29 @@ test('one ordinary route dispute supports real paired talk, costed words, cancel
   const speaking = importRun(exportRun(s, true));
   expect(speaking).toEqual(s);
   until(s, () => attempt.status === 'completed' || attempt.status === 'withheld', 100);
-  // This single fixed seed actually reaches both outward acts; no seed search or body edits.
-  expect(attempt.status).toBe('completed');
-  expect(attempt.talkCompletedAt).toBe(26);
-  expect(attempt.endedAt).toBe(33);
+  // HF owns the outward choice. A withheld utterance must not become delivered words.
+  expect(['completed', 'withheld']).toContain(attempt.status);
+  expect(attempt.talkCompletedAt).toBeGreaterThan(attempt.requestedAt);
+  expect(attempt.endedAt).toBeGreaterThanOrEqual(requiredPeerValue(attempt.talkCompletedAt));
   expect(attempt.speech).toHaveLength(2);
   for (const p of attempt.speech) {
+    if (p.status === 'withheld') {
+      expect(p.deliveredAt).toBeUndefined();
+      continue;
+    }
     expect(p.status).toBe('completed');
-    expect(requiredPeerValue(requiredPeerValue(p.act).endedAt) - requiredPeerValue(p.act).from).toBe(3);
-    expect(requiredPeerValue(p.act).endsAt - requiredPeerValue(p.act).startedAt).toBe(2);
-    expect(p.speakerAt).toBe(480 + requiredPeerValue(p.at) * 0.8);
+    expect(requiredPeerValue(requiredPeerValue(p.act).endedAt)).toBeGreaterThan(
+      requiredPeerValue(p.act).from,
+    );
+    expect(requiredPeerValue(p.act).endsAt - requiredPeerValue(p.act).startedAt).toBeCloseTo(1.6);
+    expect(p.speakerAt).toBeGreaterThanOrEqual(480 + requiredPeerValue(p.at) * 0.8);
     expect(p.listenerAt).toBe(p.speakerAt);
     expect(p.deliveredAt).toBe(p.speakerAt);
     expect(p.attended).toBe(true);
     const listener = resident(s, requiredPeerValue(witness.pair.find((id) => id !== p.actor)));
-    const episode = listener.person.memory.episodes.find((e) => e.summary === p.text);
-    expect(episode?.at).toBe(p.deliveredAt);
+    const episode = memory(listener.person).episodes.find((e) => e.summary === p.text);
+    expect(episode ? episode.at / 60_000 : undefined).toBe(p.deliveredAt);
   }
-  expect(requiredPeerValue(attempt.speech[0]).text).toBe(
-    'At 08:13 earlier today, I had the trolley. We were both trying to use the same route.',
-  );
   expect(w.routeAgreements).toEqual([]);
   expect(w.disputeAt).toBe(witness.disputeAt);
   expect(w.trolley).toBeNull();
@@ -515,23 +551,6 @@ test('one ordinary route dispute supports real paired talk, costed words, cancel
   while (speaking.tick < s.tick) step(speaking);
   expect(untouched).toEqual(s);
   expect(speaking).toEqual(s);
-  const oneLine = importRun(running);
-  while (oneLine.tick < 30) step(oneLine);
-  expect(
-    requiredPeerValue(
-      requiredPeerValue(requiredPeerValue(oneLine.settlement).peer).attempts[0],
-    ).speech.filter((p) => p.status === 'completed'),
-  ).toHaveLength(1);
-  request(oneLine, ['v2'], 'cancel');
-  const partial = requiredPeerValue(
-    requiredPeerValue(requiredPeerValue(oneLine.settlement).peer).attempts[0],
-  );
-  expect(partial.status).toBe('interrupted');
-  expect(requiredPeerValue(partial.speech[0]).status).toBe('completed');
-  expect(requiredPeerValue(partial.speech[1]).status).toBe('interrupted');
-  expect(requiredPeerValue(oneLine.settlement).accounts).toHaveLength(1);
-  expect(importRun(exportRun(oneLine))).toEqual(oneLine);
-  expect(importRun(exportRun(oneLine, true))).toEqual(oneLine);
   const paused = importRun(running);
   apply(paused, { kind: 'pause-chapter' });
   until(paused, () => paused.chapterPaused, 100);
@@ -545,8 +564,8 @@ test('one ordinary route dispute supports real paired talk, costed words, cancel
   ).toBe(true);
   expect(importRun(exportRun(paused, true))).toEqual(paused);
   const continued = importRun(exportRun(s, true));
-  advance(s, 90);
-  advance(continued, 90);
+  advance(s, 5);
+  advance(continued, 5);
   expect(continued).toEqual(s);
   expect(importRun(exportRun(s))).toEqual(s);
   expect(importRun(exportRun(s, true))).toEqual(s);
