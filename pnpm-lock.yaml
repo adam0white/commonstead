@@ -215,7 +215,7 @@ packages:
     engines: {node: '>=24'}
 
   '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.0.tgz':
-    resolution: {integrity: sha512-T8Owuc0gGzKMMJP36bUg8N6HJr6JcQEqYRgVLSamid507nEFn5xm6VwqTNP4urf021YgNlQYKZYb44DbNYeZQQ==, tarball: file:vendor/adam0white-lab-client-0.5.0.tgz}
+    resolution: {integrity: sha512-3XoDXxploQpbqOiNuHLiGyBVJqAq06G0tj6iCOeQakNQQyh9HvszqhEKvDlqSkvtEDKx2k1uri8FjjaH2+K0jA==, tarball: file:vendor/adam0white-lab-client-0.5.0.tgz}
     version: 0.5.0
 
   '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz':

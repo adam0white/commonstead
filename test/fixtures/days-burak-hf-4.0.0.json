@@ -177,19 +177,22 @@
           }
         ],
         "skipped": 0
+      },
+      "portableClaim": {
+        "game": "days"
       }
     },
     "limitations": [
       "The complete Commonstead chapter remains in the local source archive."
     ],
-    "revision": "c343843aa925ce26784b07d4a9a54557df3a7c4e2ca6c5d355d47aaf7f6a63f1"
+    "revision": "e966ecd04630eeb3fbcf513ca29a400781cc0dadd0c9d70291a65853f8096ca7"
   },
   {
     "format": "hf-persona/1",
     "castId": "hf.cast.burak.stairwell",
     "castRevision": "1",
     "branchId": "6eb53c0a-1d5b-485a-94ce-0d89dcd08435",
-    "parentRevision": "c343843aa925ce26784b07d4a9a54557df3a7c4e2ca6c5d355d47aaf7f6a63f1",
+    "parentRevision": "e966ecd04630eeb3fbcf513ca29a400781cc0dadd0c9d70291a65853f8096ca7",
     "source": {
       "game": "days",
       "build": "three-days-3",
@@ -281,6 +284,6 @@
     "limitations": [
       "The complete Commonstead chapter remains in the local source archive."
     ],
-    "revision": "80d12a831799485d2e8c42481eafd9184e46b257546c559fd0d37f5c4f4aa6c7"
+    "revision": "68f5293413c1b5b658af324026aba2b12f04c8b179076ad34ab517fe139a3203"
   }
 ]
