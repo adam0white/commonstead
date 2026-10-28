@@ -17,6 +17,7 @@ import {
   type PersonaEnvelope,
   portablePassport,
   preparePersonaLife,
+  projectCastClaimTransfer,
   projectPortablePerson,
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
@@ -197,7 +198,15 @@ export function checkChapter(chapter: Chapter) {
       claim.source.game !== 'commonstead' ||
       claim.source.engine !== '2.23.0' ||
       claim.source.rules !== RULES ||
-      !same(claim.transfer, claimTransfer(chapter.initial, input))
+      !same(
+        claim.transfer,
+        projectCastClaimTransfer(
+          input.parent,
+          claim.source,
+          claimTransfer(chapter.initial, input),
+          input.life,
+        ),
+      )
     )
       throw new Error(
         'The chapter’s saved resident record is invalid. Load a different save or start a fresh local chapter.',

@@ -25,6 +25,7 @@ import { createPerson } from '@adam0white/human-framework';
 import {
   acceptPersona,
   acceptPersonaBatch,
+  admitPortablePerson,
   canonicalCast,
   createPersona,
   initialPersonaLife,
@@ -966,6 +967,9 @@ test('admits played Days Burak and claims the admitted Commonstead actor with pr
   const game = await c.fresh(418);
   const claim = game.chapter?.claims[0];
   if (!claim) throw new Error('Missing Burak claim');
+  const opening = createGame(418).villagers.find((v) => v.person.id === envelope.castId)?.person;
+  if (!opening) throw new Error('Missing Burak opening');
+  expect(() => admitPortablePerson(claim, 'days', opening)).toThrow();
   const prior = validatePortablePerson(envelope.transfer.portable);
   const current = validatePortablePerson(claim.transfer.portable);
   expect(current.source.game).toBe('commonstead');
@@ -977,8 +981,38 @@ test('admits played Days Burak and claims the admitted Commonstead actor with pr
   await c.checkpoint(envelope.castId);
   const checkpoint = h.data.revisions.find((p) => p.revision === h.data.heads[envelope.castId]);
   if (!checkpoint) throw new Error('Missing Burak checkpoint');
+  expect(admitPortablePerson(checkpoint, 'days', opening).id).toBe(envelope.castId);
   expect(validatePortablePerson(checkpoint.transfer.portable).history.slice(0, prior.history.length)).toEqual(
     prior.history,
   );
+  expect(importRun(exportRun(game))).toEqual(game);
+});
+
+test('an arriving Burak with unfinished building work cannot depart through his claim', async () => {
+  const ancestry = JSON.parse(
+    readFileSync(new URL('./fixtures/days-burak-hf-4.0.0.json', import.meta.url), 'utf8'),
+  ) as PersonaEnvelope[];
+  const envelope = ancestry[ancestry.length - 1];
+  if (!envelope) throw new Error('Missing Days checkpoint');
+  const life = envelope.transfer.life as { clock: { watermark: number } };
+  const h = harness(ancestry, life.clock.watermark * 3_600_000);
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418, false, undefined, null);
+  const burak = game.villagers.find((v) => v.person.id === envelope.castId);
+  const claim = game.chapter?.claims[0];
+  if (!burak || !claim) throw new Error('Missing Burak');
+  while (game.tick < 30) step(game);
+  apply(game, { kind: 'build', ids: [burak.id], building: 'house', x: 600, y: 450 });
+  expect(game.buildings.some((b) => b.kind === 'house' && !b.complete && b.id === burak.order?.target)).toBe(
+    true,
+  );
+  apply(game, { kind: 'pause-chapter' });
+  for (let i = 0; i < 50 && !game.chapterPaused; i++) step(game);
+  expect(game.chapterPaused).toBe(true);
+  await expect(c.checkpoint(envelope.castId)).rejects.toThrow(/building work/);
+  const opening = createGame(418).villagers.find((v) => v.person.id === envelope.castId)?.person;
+  if (!opening) throw new Error('Missing Burak opening');
+  expect(() => admitPortablePerson(claim, 'days', opening)).toThrow();
+  expect(h.data.heads[envelope.castId]).toBe(claim.revision);
   expect(importRun(exportRun(game))).toEqual(game);
 });
