@@ -98,7 +98,7 @@
     "source": {
       "game": "days",
       "build": "three-days-3",
-      "engine": "4.3.0",
+      "engine": "4.0.0",
       "rules": "three-days-3"
     },
     "transfer": {
@@ -110,7 +110,7 @@
         "castRevision": "1",
         "source": {
           "game": "days",
-          "engine": "4.3.0",
+          "engine": "4.0.0",
           "personId": "hf.cast.burak.stairwell"
         },
         "state": {
@@ -162,32 +162,38 @@
         "version": "hf-coarse-life/1",
         "clock": {
           "version": "hf-chapter-clock/1",
-          "watermark": 498095,
+          "watermark": 498096,
           "seed": 2813809041
         },
-        "assignment": 0,
+        "assignment": 1,
         "work": "own-routine",
         "place": "home",
         "notices": [],
-        "events": [],
+        "events": [
+          {
+            "slot": 498096,
+            "kind": "work",
+            "detail": "invoice reconciliation"
+          }
+        ],
         "skipped": 0
       }
     },
     "limitations": [
       "The complete Commonstead chapter remains in the local source archive."
     ],
-    "revision": "764477ecf040b2efa8d4d861cf025b1904c937720b26a4e19f44a4a562b502ee"
+    "revision": "c343843aa925ce26784b07d4a9a54557df3a7c4e2ca6c5d355d47aaf7f6a63f1"
   },
   {
     "format": "hf-persona/1",
     "castId": "hf.cast.burak.stairwell",
     "castRevision": "1",
     "branchId": "6eb53c0a-1d5b-485a-94ce-0d89dcd08435",
-    "parentRevision": "764477ecf040b2efa8d4d861cf025b1904c937720b26a4e19f44a4a562b502ee",
+    "parentRevision": "c343843aa925ce26784b07d4a9a54557df3a7c4e2ca6c5d355d47aaf7f6a63f1",
     "source": {
       "game": "days",
       "build": "three-days-3",
-      "engine": "4.3.0",
+      "engine": "4.0.0",
       "rules": "three-days-3"
     },
     "transfer": {
@@ -199,7 +205,7 @@
         "castRevision": "1",
         "source": {
           "game": "days",
-          "engine": "4.3.0",
+          "engine": "4.0.0",
           "personId": "hf.cast.burak.stairwell"
         },
         "state": {
@@ -255,20 +261,26 @@
         "version": "hf-coarse-life/1",
         "clock": {
           "version": "hf-chapter-clock/1",
-          "watermark": 498095,
+          "watermark": 498096,
           "seed": 2813809041
         },
-        "assignment": 0,
+        "assignment": 1,
         "work": "own-routine",
         "place": "home",
         "notices": [],
-        "events": [],
+        "events": [
+          {
+            "slot": 498096,
+            "kind": "work",
+            "detail": "invoice reconciliation"
+          }
+        ],
         "skipped": 0
       }
     },
     "limitations": [
       "The complete Commonstead chapter remains in the local source archive."
     ],
-    "revision": "ef43fc5b1c46d70c61dfffbe96a5dfb196e15e4ef447ae9a8971807cda7e6afe"
+    "revision": "80d12a831799485d2e8c42481eafd9184e46b257546c559fd0d37f5c4f4aa6c7"
   }
 ]

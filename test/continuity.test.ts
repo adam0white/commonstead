@@ -955,10 +955,11 @@ test('a played Burak checkpoint publishes portable state and survives admission 
 // Actual Days play and quiet checkpoint, including paid bill and confirmed visit.
 test('admits played Days Burak and claims the admitted Commonstead actor with prior history', async () => {
   const ancestry = JSON.parse(
-    readFileSync(new URL('./fixtures/days-burak-hf-4.3.0.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('./fixtures/days-burak-hf-4.0.0.json', import.meta.url), 'utf8'),
   ) as PersonaEnvelope[];
   const envelope = ancestry[ancestry.length - 1];
   if (!envelope) throw new Error('Missing Days checkpoint');
+  expect(envelope.source.engine).toBe('4.0.0');
   const life = envelope.transfer.life as { clock: { watermark: number } };
   const h = harness(ancestry, life.clock.watermark * 3_600_000);
   const c = new Continuity(h.lab, h.shelf);
