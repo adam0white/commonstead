@@ -9,12 +9,16 @@ import {
   validateCalendarPersona,
 } from '@adam0white/human-framework';
 import {
+  admitPortablePerson,
   canonicalCast,
   canonicalPersona,
   type LifePreparation,
   lifeAdmission,
   type PersonaEnvelope,
+  portablePassport,
   preparePersonaLife,
+  projectCastClaimTransfer,
+  projectPortablePerson,
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
 
@@ -25,12 +29,14 @@ export type Chapter = {
   version: typeof DIALECT;
   inputs: LifePreparation[];
   claims: PersonaEnvelope[];
+  blocked?: { castId: string; reason: string }[];
   initial: Record<string, Person>;
 };
 const same = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPersona(b);
 const identity = (keys: string[]) => Object.fromEntries(keys.map((key) => [key, key]));
 // Only these released engines share the finite calendar dialects below.
 const supportedEngine = (engine: string) => engine === '2.17.0' || engine === '2.21.0' || engine === '2.23.0';
+const BURAK = 'hf.cast.burak.stairwell';
 const supportedActions = new Set(['rest', 'eat', 'drink']);
 
 /** Finite Small Works Nora/Sam, native Commonstead and exact native/forwarded Glance Nerys maps. No clinical or duty waiver. */
@@ -42,7 +48,7 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     p.castId !== opening.id ||
     p.castRevision !== cast.revision ||
     p.terminal ||
-    !supportedEngine(p.source.engine)
+    (!portablePassport(p) && !supportedEngine(p.source.engine))
   )
     throw new Error(
       'This resident history has an unsupported identity or version, or it has ended. Start a fresh local chapter.',
@@ -51,6 +57,10 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     throw new Error(
       'This resident’s saved life history does not match the expected history. Start a fresh local chapter.',
     );
+  if (portablePassport(p)) {
+    if (p.castId !== BURAK) throw new Error('This resident has no supported portable chapter here.');
+    return admitPortablePerson(p, 'commonstead', opening);
+  }
   const peerRole =
     p.castId === 'hf.cast.nora.smallworks' ? 'nora' : p.castId === 'hf.cast.sam.smallworks' ? 'sam' : null;
   const peer =
@@ -172,6 +182,18 @@ export function checkChapter(chapter: Chapter) {
     chapter.inputs.length > 8 ||
     !Array.isArray(chapter.claims) ||
     chapter.claims.length !== chapter.inputs.length ||
+    (chapter.blocked !== undefined &&
+      (!Array.isArray(chapter.blocked) ||
+        chapter.blocked.length > CAST.length ||
+        new Set(chapter.blocked.map((entry) => entry.castId)).size !== chapter.blocked.length ||
+        chapter.blocked.some(
+          (entry) =>
+            !entry ||
+            typeof entry.reason !== 'string' ||
+            entry.reason.length > 500 ||
+            !CAST.some((c) => c.castId === entry.castId) ||
+            chapter.inputs.some((input) => input.parent.castId === entry.castId),
+        ))) ||
     new Set(chapter.inputs.map((i) => i.parent.castId)).size !== chapter.inputs.length ||
     !same(Object.keys(chapter.initial).sort(), CAST.map((c) => c.castId).sort())
   )
@@ -189,12 +211,39 @@ export function checkChapter(chapter: Chapter) {
       claim.source.game !== 'commonstead' ||
       claim.source.engine !== '2.23.0' ||
       claim.source.rules !== RULES ||
-      !same(claim.transfer, { ...input.parent.transfer, life: input.life })
+      !same(
+        claim.transfer,
+        projectCastClaimTransfer(
+          input.parent,
+          claim.source,
+          claimTransfer(chapter.initial, input),
+          input.life,
+        ),
+      )
     )
       throw new Error(
         'The chapter’s saved resident record is invalid. Load a different save or start a fresh local chapter.',
       );
   }
+}
+
+/** Project the admitted actor, so a claim never repeats a stale source state. */
+export function claimTransfer(initial: Record<string, Person>, input: LifePreparation) {
+  if (!portablePassport(input.parent)) return { ...input.parent.transfer, life: input.life };
+  const person = initial[input.parent.castId];
+  if (!person || person.id !== BURAK)
+    throw new Error('This resident has no supported portable chapter here.');
+  return {
+    ...projectPortablePerson({
+      castId: person.id,
+      game: 'commonstead',
+      engine: '2.23.0',
+      person,
+      history: [],
+      previous: input.parent,
+    }),
+    life: input.life,
+  };
 }
 
 /** Capture an actual idle boundary. Full source stays local; shelf carries only finite projection. */

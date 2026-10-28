@@ -25,6 +25,7 @@ import { createPerson } from '@adam0white/human-framework';
 import {
   acceptPersona,
   acceptPersonaBatch,
+  admitPortablePerson,
   canonicalCast,
   createPersona,
   initialPersonaLife,
@@ -34,6 +35,7 @@ import {
   type PersonaRequest,
   type PersonaShelfState,
   preparePersonaLife,
+  validatePortablePerson,
 } from '@adam0white/lab-client';
 import { CAST } from '../src/cast.ts';
 import { Continuity, resumeForPlay, watchShelfPreference } from '../src/continuity.ts';
@@ -203,9 +205,8 @@ describe('finite source, batch ownership and recording controls', () => {
       vi.unstubAllGlobals();
     }
   });
-  test('ordinary new chapters automatically admit available browser people without a host opt-in', async () => {
+  test('ordinary new chapters admit available browser people when the shelf is enabled', async () => {
     const h = harness([await source()]);
-    h.shelf.enabled = false;
     const continuity = new Continuity(h.lab, h.shelf);
     const state = await continuity.fresh(418);
     expect(h.shelf.enabled).toBe(true);
@@ -923,4 +924,147 @@ test('a changed callback cancelling source staging prevents public put', async (
   expect(h.requests.some((r) => r.action === 'put')).toBe(false);
   expect(c.sources).toEqual([]);
   expect(c.heads).toEqual([]);
+});
+
+test('a played Burak checkpoint publishes portable state and survives admission and replay', async () => {
+  const h = harness();
+  const first = new Continuity(h.lab, h.shelf);
+  const played = await first.fresh(418);
+  playedPause(played);
+  expect(played.chapterPaused).toBe(true);
+  const burak = CAST.find((c) => c.name === 'Burak')!;
+  await first.checkpoint(burak.castId);
+  const saved = h.data.revisions.find((p) => p.revision === h.data.heads[burak.castId])!;
+  expect(saved.transfer.castPassport).toBe('hf-portable-person/1');
+  const second = await new Continuity(h.lab, h.shelf).fresh(418);
+  const claim = second.chapter?.claims[0];
+  if (!claim || !second.chapter) throw new Error('Missing Burak claim');
+  expect(claim.transfer.castPassport).toBe('hf-portable-person/1');
+  expect(validatePortablePerson(claim.transfer.portable).source.game).toBe('commonstead');
+  expect(validatePortablePerson(claim.transfer.portable).history).toEqual(
+    validatePortablePerson(saved.transfer.portable).history,
+  );
+  expect(importRun(exportRun(second))).toEqual(second);
+  const damaged = structuredClone(second.chapter);
+  const portable = validatePortablePerson(damaged.claims[0]!.transfer.portable);
+  portable.state.traits.honesty = portable.state.traits.honesty === 0 ? 1 : 0;
+  damaged.claims[0]!.transfer.portable = portable;
+  expect(() => createGame(418, damaged)).toThrow();
+});
+
+// Actual Days play and quiet checkpoint, including paid bill and confirmed visit.
+test('admits played Days Burak and claims the admitted Commonstead actor with prior history', async () => {
+  const ancestry = JSON.parse(
+    readFileSync(new URL('./fixtures/days-burak-hf-4.0.0.json', import.meta.url), 'utf8'),
+  ) as PersonaEnvelope[];
+  const envelope = ancestry[ancestry.length - 1];
+  if (!envelope) throw new Error('Missing Days checkpoint');
+  expect(envelope.source.engine).toBe('4.0.0');
+  const life = envelope.transfer.life as { clock: { watermark: number } };
+  const h = harness(ancestry, life.clock.watermark * 3_600_000);
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418);
+  const claim = game.chapter?.claims[0];
+  if (!claim) throw new Error('Missing Burak claim');
+  const opening = createGame(418).villagers.find((v) => v.person.id === envelope.castId)?.person;
+  if (!opening) throw new Error('Missing Burak opening');
+  expect(() => admitPortablePerson(claim, 'days', opening)).toThrow();
+  const prior = validatePortablePerson(envelope.transfer.portable);
+  const current = validatePortablePerson(claim.transfer.portable);
+  expect(current.source.game).toBe('commonstead');
+  expect(current.source.engine).toBe('2.23.0');
+  expect(current.history).toEqual(prior.history);
+  expect(current.state).toEqual(prior.state);
+  expect(importRun(exportRun(game))).toEqual(game);
+  playedPause(game);
+  await c.checkpoint(envelope.castId);
+  const checkpoint = h.data.revisions.find((p) => p.revision === h.data.heads[envelope.castId]);
+  if (!checkpoint) throw new Error('Missing Burak checkpoint');
+  expect(admitPortablePerson(checkpoint, 'days', opening).id).toBe(envelope.castId);
+  expect(validatePortablePerson(checkpoint.transfer.portable).history.slice(0, prior.history.length)).toEqual(
+    prior.history,
+  );
+  expect(importRun(exportRun(game))).toEqual(game);
+});
+
+test('an arriving Burak with unfinished building work cannot depart through his claim', async () => {
+  const ancestry = JSON.parse(
+    readFileSync(new URL('./fixtures/days-burak-hf-4.0.0.json', import.meta.url), 'utf8'),
+  ) as PersonaEnvelope[];
+  const envelope = ancestry[ancestry.length - 1];
+  if (!envelope) throw new Error('Missing Days checkpoint');
+  const life = envelope.transfer.life as { clock: { watermark: number } };
+  const h = harness(ancestry, life.clock.watermark * 3_600_000);
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418, false, undefined, null);
+  const burak = game.villagers.find((v) => v.person.id === envelope.castId);
+  const claim = game.chapter?.claims[0];
+  if (!burak || !claim) throw new Error('Missing Burak');
+  while (game.tick < 30) step(game);
+  apply(game, { kind: 'build', ids: [burak.id], building: 'house', x: 600, y: 450 });
+  expect(game.buildings.some((b) => b.kind === 'house' && !b.complete && b.id === burak.order?.target)).toBe(
+    true,
+  );
+  apply(game, { kind: 'pause-chapter' });
+  for (let i = 0; i < 50 && !game.chapterPaused; i++) step(game);
+  expect(game.chapterPaused).toBe(true);
+  await expect(c.checkpoint(envelope.castId)).rejects.toThrow(/building work/);
+  const opening = createGame(418).villagers.find((v) => v.person.id === envelope.castId)?.person;
+  if (!opening) throw new Error('Missing Burak opening');
+  expect(() => admitPortablePerson(claim, 'days', opening)).toThrow();
+  expect(() => admitPortablePerson(claim, 'commonstead', opening)).toThrow();
+  expect(h.data.heads[envelope.castId]).toBe(claim.revision);
+  expect(importRun(exportRun(game))).toEqual(game);
+});
+
+test('a foreign locked Burak is reported and cannot be checkpointed while another resident carries over', async () => {
+  const ancestry = JSON.parse(
+    readFileSync(new URL('./fixtures/days-burak-hf-4.0.0.json', import.meta.url), 'utf8'),
+  ) as PersonaEnvelope[];
+  const locked = ancestry[1];
+  if (!locked) throw new Error('Missing Days arrival claim');
+  const life = locked.transfer.life as { clock: { watermark: number } };
+  const h = harness([...ancestry.slice(0, 2), await source()], life.clock.watermark * 3_600_000);
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418);
+  expect(game.chapter?.inputs.map((i) => i.parent.castId)).toEqual([CAST[0]!.castId]);
+  expect(c.status).toMatch(/Burak/);
+  playedPause(game);
+  await expect(c.checkpoint(locked.castId)).rejects.toThrow(/Burak|another|saved/i);
+  await expect(c.checkpoint(locked.castId, true)).rejects.toThrow(/Burak|another|saved/i);
+  expect(h.data.heads[locked.castId]).toBe(locked.revision);
+  const reloaded = new Continuity(h.lab, h.shelf);
+  await reloaded.loadLocal(c.localSave(game));
+  await expect(reloaded.checkpoint(locked.castId, true)).rejects.toThrow(/Burak|another|saved/i);
+  expect(importRun(exportRun(game))).toEqual(game);
+});
+
+test('fresh play respects an explicitly disabled shelf', async () => {
+  const h = harness([await source()]);
+  h.shelf.enabled = false;
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418);
+  expect(h.shelf.enabled).toBe(false);
+  expect(game.chapter).toBeNull();
+  expect(h.requests).toHaveLength(0);
+});
+
+test('a foreign locked person alone remains protected after local save and reload', async () => {
+  const ancestry = JSON.parse(
+    readFileSync(new URL('./fixtures/days-burak-hf-4.0.0.json', import.meta.url), 'utf8'),
+  ) as PersonaEnvelope[];
+  const locked = ancestry[1];
+  if (!locked) throw new Error('Missing Days arrival claim');
+  const life = locked.transfer.life as { clock: { watermark: number } };
+  const h = harness(ancestry.slice(0, 2), life.clock.watermark * 3_600_000);
+  const c = new Continuity(h.lab, h.shelf);
+  const game = await c.fresh(418);
+  expect(game.chapter?.inputs).toEqual([]);
+  expect(c.status).toMatch(/Burak/);
+  playedPause(game);
+  const loaded = new Continuity(h.lab, h.shelf);
+  await loaded.loadLocal(c.localSave(game));
+  await expect(loaded.checkpoint(locked.castId, true)).rejects.toThrow(/another game/);
+  expect(h.data.heads[locked.castId]).toBe(locked.revision);
+  expect(importRun(exportRun(game))).toEqual(game);
 });

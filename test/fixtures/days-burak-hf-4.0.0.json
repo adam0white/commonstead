@@ -1,0 +1,289 @@
+[
+  {
+    "format": "hf-persona/1",
+    "castId": "hf.cast.burak.stairwell",
+    "castRevision": "1",
+    "branchId": "6eb53c0a-1d5b-485a-94ce-0d89dcd08435",
+    "parentRevision": null,
+    "source": {
+      "game": "commonstead",
+      "build": "synthetic-control",
+      "engine": "2.23.0",
+      "rules": "commonstead-3"
+    },
+    "transfer": {
+      "castPassport": "hf-portable-person/1",
+      "portable": {
+        "format": "hf-portable-person",
+        "version": 1,
+        "castId": "hf.cast.burak.stairwell",
+        "castRevision": "1",
+        "source": {
+          "game": "commonstead",
+          "engine": "2.23.0",
+          "personId": "hf.cast.burak.stairwell"
+        },
+        "state": {
+          "traits": {
+            "honesty": 0.8,
+            "emotionality": 0.5,
+            "extraversion": 0.3,
+            "agreeableness": 0.7,
+            "conscientiousness": 0.8,
+            "openness": 0.5
+          },
+          "values": {
+            "benevolence": 0.5,
+            "universalism": 0.5,
+            "tradition": 0.5,
+            "conformity": 0.5,
+            "security": 0.5,
+            "achievement": 0.5,
+            "power": 0.5,
+            "hedonism": 0.5,
+            "stimulation": 0.5,
+            "selfDirection": 0.5
+          },
+          "body": {
+            "satiety": 0.949147575991868,
+            "hydration": 0.9791375474741252,
+            "sleepPressure": 0.051150817545434046,
+            "exertion": 0.0009212454779880114,
+            "fitness": 0.34999946516564273,
+            "health": 1,
+            "pain": 0,
+            "sleepDebtHours": 0
+          },
+          "mood": {
+            "valence": 0.0004582800921074659,
+            "arousal": 0.3
+          }
+        },
+        "history": [
+          {
+            "game": "commonstead",
+            "summary": "Played a Commonstead chapter to tick 2."
+          }
+        ],
+        "omittedHistory": 0
+      },
+      "portableLimitations": "Approximate chapter state: traits, values, body resources and mood continue. History is a bounded source summary, not new memories or proof of events. Local roles, skills, ties, beliefs, age, clocks and RNG are authored by the receiving game. Depletion is represented conservatively as sleep pressure; clinical conflicts and unresolved duties refuse entry.",
+      "life": {
+        "version": "hf-coarse-life/1",
+        "clock": {
+          "version": "hf-chapter-clock/1",
+          "watermark": 498095,
+          "seed": 2813809041
+        },
+        "assignment": 0,
+        "work": "own-routine",
+        "place": "home",
+        "notices": [],
+        "events": [],
+        "skipped": 0
+      },
+      "hostRun": "e2dfc12c-edae-43d1-b651-5a6164995268"
+    },
+    "limitations": [
+      "The complete Commonstead chapter remains in the local source archive."
+    ],
+    "revision": "3f1e7f149baba7b4e405531b4941fc9be7e6f896499cee73b69d43c33ac8afa2"
+  },
+  {
+    "format": "hf-persona/1",
+    "castId": "hf.cast.burak.stairwell",
+    "castRevision": "1",
+    "branchId": "6eb53c0a-1d5b-485a-94ce-0d89dcd08435",
+    "parentRevision": "3f1e7f149baba7b4e405531b4941fc9be7e6f896499cee73b69d43c33ac8afa2",
+    "source": {
+      "game": "days",
+      "build": "three-days-3",
+      "engine": "4.0.0",
+      "rules": "three-days-3"
+    },
+    "transfer": {
+      "castPassport": "hf-portable-person/1",
+      "portable": {
+        "format": "hf-portable-person",
+        "version": 1,
+        "castId": "hf.cast.burak.stairwell",
+        "castRevision": "1",
+        "source": {
+          "game": "days",
+          "engine": "4.0.0",
+          "personId": "hf.cast.burak.stairwell"
+        },
+        "state": {
+          "traits": {
+            "honesty": 0.8,
+            "emotionality": 0.5,
+            "extraversion": 0.3,
+            "agreeableness": 0.7,
+            "conscientiousness": 0.8,
+            "openness": 0.5
+          },
+          "values": {
+            "benevolence": 0.5,
+            "universalism": 0.5,
+            "tradition": 0.5,
+            "conformity": 0.5,
+            "security": 0.5,
+            "achievement": 0.5,
+            "power": 0.5,
+            "hedonism": 0.5,
+            "stimulation": 0.5,
+            "selfDirection": 0.5
+          },
+          "body": {
+            "satiety": 0.949147575991868,
+            "hydration": 0.9791375474741252,
+            "sleepPressure": 0.051150817545434046,
+            "exertion": 0.0009212454779880114,
+            "fitness": 0.34999946516564273,
+            "health": 1,
+            "pain": 0,
+            "sleepDebtHours": 0
+          },
+          "mood": {
+            "arousal": 0.3,
+            "valence": 0.0004582800921074659
+          }
+        },
+        "history": [
+          {
+            "game": "commonstead",
+            "summary": "Played a Commonstead chapter to tick 2."
+          }
+        ],
+        "omittedHistory": 0
+      },
+      "portableLimitations": "Approximate chapter state: traits, values, body resources and mood continue. History is a bounded source summary, not new memories or proof of events. Local roles, skills, ties, beliefs, age, clocks and RNG are authored by the receiving game. Depletion is represented conservatively as sleep pressure; clinical conflicts and unresolved duties refuse entry.",
+      "life": {
+        "version": "hf-coarse-life/1",
+        "clock": {
+          "version": "hf-chapter-clock/1",
+          "watermark": 498096,
+          "seed": 2813809041
+        },
+        "assignment": 1,
+        "work": "own-routine",
+        "place": "home",
+        "notices": [],
+        "events": [
+          {
+            "slot": 498096,
+            "kind": "work",
+            "detail": "invoice reconciliation"
+          }
+        ],
+        "skipped": 0
+      },
+      "portableClaim": {
+        "game": "days"
+      }
+    },
+    "limitations": [
+      "The complete Commonstead chapter remains in the local source archive."
+    ],
+    "revision": "e966ecd04630eeb3fbcf513ca29a400781cc0dadd0c9d70291a65853f8096ca7"
+  },
+  {
+    "format": "hf-persona/1",
+    "castId": "hf.cast.burak.stairwell",
+    "castRevision": "1",
+    "branchId": "6eb53c0a-1d5b-485a-94ce-0d89dcd08435",
+    "parentRevision": "e966ecd04630eeb3fbcf513ca29a400781cc0dadd0c9d70291a65853f8096ca7",
+    "source": {
+      "game": "days",
+      "build": "three-days-3",
+      "engine": "4.0.0",
+      "rules": "three-days-3"
+    },
+    "transfer": {
+      "castPassport": "hf-portable-person/1",
+      "portable": {
+        "format": "hf-portable-person",
+        "version": 1,
+        "castId": "hf.cast.burak.stairwell",
+        "castRevision": "1",
+        "source": {
+          "game": "days",
+          "engine": "4.0.0",
+          "personId": "hf.cast.burak.stairwell"
+        },
+        "state": {
+          "traits": {
+            "honesty": 0.8000016666666667,
+            "emotionality": 0.49999916666666666,
+            "extraversion": 0.30000055555555555,
+            "agreeableness": 0.7,
+            "conscientiousness": 0.8000011111111112,
+            "openness": 0.5
+          },
+          "values": {
+            "benevolence": 0.5000008333333333,
+            "universalism": 0.5,
+            "tradition": 0.5000008333333333,
+            "conformity": 0.5,
+            "security": 0.5,
+            "achievement": 0.49999944444444444,
+            "power": 0.49999944444444444,
+            "hedonism": 0.5,
+            "stimulation": 0.49999916666666666,
+            "selfDirection": 0.49999944444444444
+          },
+          "body": {
+            "satiety": 0.700239798306777,
+            "hydration": 0.727301442992739,
+            "sleepPressure": 0.3339861477867593,
+            "exertion": 0.05329465005080551,
+            "fitness": 0.3498434158353991,
+            "health": 1,
+            "pain": 0,
+            "sleepDebtHours": 0
+          },
+          "mood": {
+            "valence": 0.09745972427660253,
+            "arousal": 0.3
+          }
+        },
+        "history": [
+          {
+            "game": "commonstead",
+            "summary": "Played a Commonstead chapter to tick 2."
+          },
+          {
+            "game": "days",
+            "summary": "Three Days ended with won. Burak helped check the account."
+          }
+        ],
+        "omittedHistory": 0
+      },
+      "portableLimitations": "Approximate chapter state: traits, values, body resources and mood continue. History is a bounded source summary, not new memories or proof of events. Local roles, skills, ties, beliefs, age, clocks and RNG are authored by the receiving game. Depletion is represented conservatively as sleep pressure; clinical conflicts and unresolved duties refuse entry.",
+      "life": {
+        "version": "hf-coarse-life/1",
+        "clock": {
+          "version": "hf-chapter-clock/1",
+          "watermark": 498096,
+          "seed": 2813809041
+        },
+        "assignment": 1,
+        "work": "own-routine",
+        "place": "home",
+        "notices": [],
+        "events": [
+          {
+            "slot": 498096,
+            "kind": "work",
+            "detail": "invoice reconciliation"
+          }
+        ],
+        "skipped": 0
+      }
+    },
+    "limitations": [
+      "The complete Commonstead chapter remains in the local source archive."
+    ],
+    "revision": "68f5293413c1b5b658af324026aba2b12f04c8b179076ad34ab517fe139a3203"
+  }
+]
