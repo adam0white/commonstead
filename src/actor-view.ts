@@ -64,6 +64,8 @@ export type Person = Pick<
   lexicon: { plainEnglish: boolean };
   activity: Activity | null;
   trace: DecisionRecord[];
+  /** Copied public HF inspection for detached, read-only file views. */
+  bodyReadout?: BodyReadout;
 };
 export type PersonSpec = {
   id: string;

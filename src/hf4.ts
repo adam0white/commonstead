@@ -175,6 +175,7 @@ class Community {
       const body = part('body');
       p.now = this.at / MINUTE;
       p.body = { ...body.state, alive: part('summary').alive } as unknown as Old.Person['body'];
+      p.bodyReadout = structuredClone(body.readout);
       p.agenda = JSON.parse(JSON.stringify(part('agenda')));
       for (const c of p.agenda.commitments) {
         c.from /= MINUTE;
@@ -449,7 +450,12 @@ export function tick(p: Old.Person, minute: number) {
   if (until > c.at) c.serve(until);
 }
 export function readPerson(p: Old.Person): { body: Old.BodyReadout } {
-  const c = community(p),
+  const live = links.get(p);
+  if (!live) {
+    if (!p.bodyReadout) throw new Error('Detached resident view');
+    return { body: structuredClone(p.bodyReadout) };
+  }
+  const c = live,
     r = need(inspect(c.run, { perspective: { kind: 'host' }, people: [p.id], select: ['body'] }));
   const person = r.people[0];
   if (person?.kind !== 'host') throw new Error('Missing body');
