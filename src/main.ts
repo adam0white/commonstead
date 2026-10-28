@@ -131,13 +131,7 @@ function download() {
     downloadJson('commonstead-file-current.json', fileSession.snapshot());
     return;
   }
-  if (state)
-    downloadJson(
-      'commonstead-run.json',
-      state.settlement?.config.edition === PEER_EDITION && !state.longRoofBreak
-        ? exportRun(state)
-        : continuity!.export(state),
-    );
+  if (state) downloadJson('commonstead-run.json', continuity!.export(state));
 }
 /** A display-only note that stays until the recorded game message changes. */
 let hostNote = { message: '', text: '' };
@@ -198,7 +192,10 @@ function top(title: string) {
   return `<header class="top"><span>${title}</span><div class="row"><button id="info" aria-label="Controls and help">i</button><button id="menu">Pause menu</button></div></header>`;
 }
 function bind(id: string, fn: () => void) {
-  document.getElementById(id)?.addEventListener('click', fn);
+  document.getElementById(id)?.addEventListener('click', () => {
+    if (continuity?.publishing) return;
+    fn();
+  });
 }
 function shellBindings() {
   bind('menu', menu);
@@ -217,17 +214,13 @@ function title() {
   canvas = null;
   paused = false;
   lab?.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><details><summary>Choose a longer settlement day</summary><p>Optional: thirty minutes at Steady, with a full day and night for eight fresh local residents. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Choose a fresh day with personal replies</summary><p>Start a new local day with eight fresh residents. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Choose a fresh day with resident conversations</summary><p>Eight fresh local residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. This day does not continue your short chapter or load saved character histories.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><a href="/file/">Open a file session without replacing the native save</a></details></div><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><p id="load-status" class="status" role="status"></p></section></main>`;
-  const begin = async (
-    localOnly = false,
-    day: false | true | typeof REPLY_EDITION | typeof PEER_EDITION = false,
-  ) => {
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><details><summary>Choose a longer settlement day</summary><p>Thirty minutes at Steady, with a full day and night for eight residents. Supported saved histories carry over automatically. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Choose a fresh day with personal replies</summary><p>Start a new day with eight residents. Supported saved histories carry over automatically. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Choose a fresh day with resident conversations</summary><p>Eight residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. Supported saved histories carry over automatically. This day begins new conversations.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><a href="/file/">Open a file session without replacing the native save</a></details></div><a href="https://human.adamwhite.work/lab/people/">People on this browser</a><p id="load-status" class="status" role="status"></p></section></main>`;
+  const begin = async (day: false | true | typeof REPLY_EDITION | typeof PEER_EDITION = false) => {
     const generation = continuity!.beginEntry();
     const status = document.getElementById('load-status');
     try {
       const prepared = await continuity!.fresh(
         418,
-        localOnly,
         day ? { edition: day === true ? EDITION : day } : undefined,
         undefined,
         generation,
@@ -251,39 +244,39 @@ function title() {
   bind('new-peer', () => {
     continuity!.beginEntry();
     if (!stored(SAVE)) {
-      void begin(true, PEER_EDITION);
+      void begin(PEER_EDITION);
       return;
     }
     const button = document.getElementById('new-peer');
     if (!button || document.getElementById('replace-peer')) return;
     button.insertAdjacentHTML(
       'afterend',
-      '<p>Replace your saved game with this fresh local day? Earlier disclosures stay in the old game only.</p><button id="replace-peer">Replace with resident conversation day</button>',
+      '<p>Replace your saved game with this new day? Earlier disclosures stay in the old game only.</p><button id="replace-peer">Replace with resident conversation day</button>',
     );
     bind('replace-peer', () => {
-      void begin(true, PEER_EDITION);
+      void begin(PEER_EDITION);
     });
   });
   bind('new-replies', () => {
     continuity!.beginEntry();
     if (!stored(SAVE)) {
-      void begin(true, REPLY_EDITION);
+      void begin(REPLY_EDITION);
       return;
     }
     const button = document.getElementById('new-replies');
     if (!button || document.getElementById('replace-replies')) return;
     button.insertAdjacentHTML(
       'afterend',
-      '<p>Replace your saved game with this fresh local day? Earlier disclosures will stay in the old game only.</p><button id="replace-replies">Replace with fresh reply day</button>',
+      '<p>Replace your saved game with this new day? Earlier disclosures will stay in the old game only.</p><button id="replace-replies">Replace with fresh reply day</button>',
     );
     bind('replace-replies', () => {
-      void begin(true, REPLY_EDITION);
+      void begin(REPLY_EDITION);
     });
   });
   bind('new-day', () => {
     continuity!.beginEntry();
     if (!stored(SAVE)) {
-      void begin(true, true);
+      void begin(true);
       return;
     }
     const button = document.getElementById('new-day');
@@ -293,7 +286,7 @@ function title() {
       '<p>Replace your saved chapter with this longer day?</p><button id="replace-day">Replace with settlement day</button>',
     );
     bind('replace-day', () => {
-      void begin(true, true);
+      void begin(true);
     });
   });
   bind('new', () => {
@@ -953,23 +946,11 @@ function menu() {
     if (fileSession) scheduleFileFrame();
   });
   bind('download', download);
-  if (state?.roofBreak || state?.longRoofBreak) {
-    const reason = document.createElement('p');
-    reason.textContent =
-      'People from a recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.';
-    document.getElementById('compact-download')?.before(reason);
-  }
   if (!fileSession && (state?.settlement || state?.shortYield || state?.roofBreak)) {
     const b = document.createElement('button');
     b.textContent = 'Download compact run';
     b.onclick = () => {
-      if (state)
-        downloadJson(
-          'commonstead-day-compact.json',
-          state.roofBreak || state.longRoofBreak
-            ? { ...(exportRun(state, true) as object), castSources: structuredClone(continuity!.sources) }
-            : exportRun(state, true),
-        );
+      if (state) downloadJson('commonstead-day-compact.json', continuity!.export(state, true));
     };
     document.getElementById('compact-download')?.append(b);
   }
@@ -995,7 +976,7 @@ function menu() {
       const generation = continuity!.beginEntry();
       void (async () => {
         try {
-          const prepared = await continuity!.fresh(418, false, undefined, undefined, generation);
+          const prepared = await continuity!.fresh(418, undefined, undefined, generation);
           if (!continuity!.currentEntry(generation)) return;
           closeModal();
           start(prepared);
@@ -1091,8 +1072,8 @@ function end() {
   screen = 'end';
   canvas = null;
   lab?.screen('storm outcome');
-  if (!fileSession && !state.chapterPaused) {
-    apply(state, { kind: 'pause-chapter' });
+  if (!fileSession) {
+    if (!state.chapterPaused) apply(state, { kind: 'pause-chapter' });
     void continuity!.checkpointAll();
   }
   save();
@@ -1119,15 +1100,6 @@ function end() {
   bind('end-title', title);
   if (fileTools) document.querySelector('.end-card')?.append(fileTools);
   if (fileSession) document.querySelector('.end-card a[href$="/lab/people/"]')?.remove();
-  if (state.roofBreak || state.longRoofBreak) {
-    const link = document.querySelector('.end-card a[href$="/lab/people/"]');
-    if (link) {
-      const reason = document.createElement('p');
-      reason.textContent =
-        'People from this recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.';
-      link.replaceWith(reason);
-    }
-  }
 }
 const attemptedDeaths = new Set<string>();
 if (!fileSession) watchShelfPreference(() => continuity!.invalidate());
@@ -1160,7 +1132,7 @@ window.addEventListener('pagehide', () => {
     fileSession.invalidate();
     cancelFileCallbacks();
     paused = true;
-  } else continuity!.beginEntry();
+  } else continuity!.invalidate();
   // The active SDK owns asynchronous final capture; do not dispose it here.
 });
 if (fileSession)

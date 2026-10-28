@@ -250,6 +250,14 @@ export function claimTransfer(initial: Record<string, Person>, input: LifePrepar
 export async function residentTransfer(person: Person) {
   const retained = person.agenda.commitments.filter((c) => isContinuingCommitment(person.agenda, c));
   const owed = person.agenda.owed ?? [];
+  if (
+    [...retained, ...owed].some((c) =>
+      [...c.actions, ...(c.violatedBy ?? [])].some((a) => !supportedActions.has(a)),
+    )
+  )
+    throw new Error(
+      'This person has an obligation that the next Commonstead chapter cannot support. Finish it here before leaving.',
+    );
   const projection = projectCalendarPersona(person, {
     version: MAPPING,
     skills: identity(Object.keys(person.skills)),
@@ -291,7 +299,12 @@ export async function residentTransfer(person: Person) {
       },
     },
     limitations: [
-      ...projection.person.limitations,
+      ...projection.person.limitations.filter((line) => !line.startsWith('episode:')),
+      ...(projection.person.limitations.some((line) => line.startsWith('episode:'))
+        ? [
+            `${projection.person.limitations.filter((line) => line.startsWith('episode:')).length} source episodes remain in the complete local archive; they are not new memories in the next chapter.`,
+          ]
+        : []),
       'The complete source save keeps the layout, supplies, shared building work, story discoveries, social memories and temporary physical states and needs from that game. Transferring the calendar takes no simulation time. It does not count as travel, healing, payment or a qualification.',
     ],
   };

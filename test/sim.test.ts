@@ -253,7 +253,7 @@ test('reply edition is explicit, closed and cannot enter legacy notebooks', () =
   expect(full.schema).toBe(5);
   expect(importRun(full)).toEqual(s);
   expect(importRun(exportRun(s, true))).toEqual(s);
-  for (const extra of [{ chapter: null }, { surplus: true }, { compact: false }])
+  for (const extra of [{ chapter: {} }, { surplus: true }, { compact: false }])
     expect(() => importRun({ ...full, ...extra })).toThrow(/replay/);
   for (const legacy of [createGame(42), createGame(42, undefined, { edition: 'settlement-day/1' })]) {
     const before = JSON.stringify(legacy);
@@ -327,7 +327,7 @@ test('native6 is closed, rejects stale route bindings and refuses peer commands 
   const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   const before = JSON.stringify(s);
   for (const field of ['chapter', 'castSources', 'unexpected']) {
-    const raw = { ...(exportRun(s) as object), [field]: field === 'chapter' ? null : [] };
+    const raw = { ...(exportRun(s) as object), [field]: field === 'chapter' ? {} : [] };
     expect(() => importRun(raw)).toThrow(/not loaded/);
     expect(JSON.stringify(s)).toBe(before);
   }

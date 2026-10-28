@@ -101,10 +101,6 @@ export type Settlement = {
 export function initSettlement(s: State, config: SettlementConfig): void {
   if (Object.keys(config).length !== 1 || (config.edition !== EDITION && !hasReplies(config.edition)))
     throw new Error('Unknown settlement edition.');
-  if (s.chapter)
-    throw new Error(
-      'Start the settlement day with its fresh local residents. Your imported chapter is unchanged.',
-    );
   s.settlement = {
     config: { edition: config.edition },
     ...(hasReplies(config.edition) ? { replyScenes: {}, replyResults: [] } : {}),

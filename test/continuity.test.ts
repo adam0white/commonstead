@@ -197,8 +197,9 @@ describe('finite source, batch ownership and recording controls', () => {
     try {
       const h = harness([await source()]);
       h.shelf.enabled = false;
+      h.shelf.request = vi.fn().mockRejectedValue(new Error('Continuity is local to this game. Use a file.'));
       const state = await new Continuity(h.lab, h.shelf).fresh(418);
-      expect(h.shelf.enabled).toBe(false);
+      expect(h.shelf.enabled).toBe(true);
       expect(state.chapter).toBeNull();
       expect(h.requests).toHaveLength(0);
     } finally {
@@ -645,35 +646,46 @@ test('admits actual Glance4 Nerys and preserves successive own claims with stric
   }
 });
 
-test.each(['settlement-replies/1', 'settlement-replies/2'] as const)(
-  'fresh %s exports no shelf authority and refuses native departure after reload',
+test.each(['settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] as const)(
+  'native %s admits, keeps prayer duties, publishes only at a real boundary and admits its departure',
   async (edition) => {
-    const h = harness(),
+    const h = harness([await source()]),
       c = new Continuity(h.lab, h.shelf);
-    const s = await c.fresh(42, true, { edition });
-    expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
-    playedPause(s);
-    expect(s.chapterPaused).toBe(true);
-    const raw = c.export(s);
+    const s = await c.fresh(42, { edition });
+    expect(s.chapter?.inputs).toHaveLength(1);
+    expect(s.villagers[0]!.person.body.fitness).toBe(0.61);
+    step(s);
+    apply(s, { kind: 'pause-chapter' });
+    while (!s.chapterPaused && !s.ended) step(s);
+    const before = h.data.heads[CAST[0]!.castId];
+    await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/obligation/);
+    expect(h.data.heads[CAST[0]!.castId]).toBe(before);
+    apply(s, { kind: 'resume-chapter' });
+    while (!s.ended) step(s);
+    await c.checkpoint(CAST[0]!.castId);
+    const departure = c.heads.find((p) => p.castId === CAST[0]!.castId)!;
+    expect(departure.parentRevision).toBe(before);
+    expect(c.sources[0]!.snapshot).toEqual(s.villagers[0]!.person);
+    for (const compact of [false, true]) {
+      const raw = c.export(s, compact);
+      expect(await new Continuity(h.lab, h.shelf).importFile(JSON.stringify(raw))).toEqual(s);
+      const file = (await import('../src/file-session.ts')).createFileSession();
+      expect(await file.select(new File([JSON.stringify(raw)], 'day.json'))).toBe(true);
+      expect(file.snapshot()!.castSources).toEqual(c.sources);
+    }
     const loaded = new Continuity(h.lab, h.shelf);
-    const restored = await loaded.loadLocal(c.localSave(s));
-    expect(JSON.stringify(restored)).toBe(JSON.stringify(s));
-    expect(restored.settlement?.config.edition).toBe(edition);
-    await expect(loaded.checkpoint(CAST[0]!.castId)).rejects.toThrow(/cannot move to another game yet/);
-    const file = new Continuity(h.lab, h.shelf);
-    expect(JSON.stringify(await file.importFile(JSON.stringify(raw)))).toBe(JSON.stringify(s));
-    expect(Object.hasOwn(raw, 'castSources')).toBe(false);
-    expect(file.fileOrigin).toBe(true);
-    expect(file.heads).toEqual([]);
-    await expect(file.checkpoint(CAST[0]!.castId)).rejects.toThrow(/cannot move to another game yet/);
-    const old = file.runId;
-    await expect(file.importFile(JSON.stringify({ ...raw, castSources: [] }))).rejects.toThrow(/replay/);
-    expect(file.runId).toBe(old);
-    expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
+    expect(await loaded.loadLocal(c.localSave(s))).toEqual(s);
+    const next = await new Continuity(h.lab, h.shelf).fresh(43, { edition });
+    expect(next.chapter?.inputs[0]?.parent.revision).toBe(departure.revision);
+    const files = new Continuity(h.lab, h.shelf);
+    await files.importFile(JSON.stringify(c.export(s)));
+    await expect(files.checkpoint(CAST[0]!.castId)).rejects.toThrow(/File/);
+    expect(files.heads).toEqual([]);
   },
+  20_000, // A full1800-tick day plus full/compact replay on the shared host.
 );
 
-test('short yield retains actual admitted Repair Nora and run metadata and refuses every departure before Shelf access', async () => {
+test('short yield retains actual admitted Repair Nora and run metadata and publishes a real paused departure for the next native admission', async () => {
   // Actual public producer fixture; this harness is not a browser ownership receipt.
   // No joint admitted Nora/Sevim fixture is available in this repository.
   const fixture = JSON.parse(
@@ -681,7 +693,7 @@ test('short yield retains actual admitted Repair Nora and run metadata and refus
   );
   const h = harness([fixture.envelope]);
   const c = new Continuity(h.lab, h.shelf);
-  const s = await c.fresh(42, false, undefined, null);
+  const s = await c.fresh(42, undefined, null);
   expect(s.chapter?.inputs[0]?.parent.revision).toBe(fixture.envelope.revision);
   c.sources = [
     { revision: fixture.envelope.revision, source: fixture.envelope.source, snapshot: fixture.raw },
@@ -766,21 +778,12 @@ test('short yield retains actual admitted Repair Nora and run metadata and refus
       JSON.stringify({ ...(exportRun(s, true) as object), castSources: c.sources }),
     ),
   ).toEqual(s);
-  const before = structuredClone({ heads: c.heads, sources: c.sources });
+  const prior = c.heads[0]!.revision;
   h.requests.length = 0;
-  let readyReads = 0;
-  Object.defineProperty(h.shelf, 'ready', {
-    get() {
-      readyReads++;
-      return Promise.resolve(true);
-    },
-  });
-  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/yielded short day/);
-  await expect(c.checkpoint(CAST[0]!.castId, true)).rejects.toThrow(/yielded short day/);
-  await c.checkpointAll();
-  expect(readyReads).toBe(0);
-  expect(h.requests).toEqual([]);
-  expect({ heads: c.heads, sources: c.sources }).toEqual(before);
+  await c.checkpoint(CAST[0]!.castId);
+  expect(c.heads[0]!.parentRevision).toBe(prior);
+  const next = await new Continuity(h.lab, h.shelf).fresh(43);
+  expect(next.chapter?.inputs[0]?.parent.revision).toBe(c.heads[0]!.revision);
   await expect(file.importFile(JSON.stringify({ ...raw, castSources: [{ unknown: true }] }))).rejects.toThrow(
     /source/,
   );
@@ -796,7 +799,7 @@ test('short yield retains actual admitted Repair Nora and run metadata and refus
   expect(full).toEqual(resumed);
   expect(compact).toEqual(resumed);
   expect(resumed.villagers[0]?.person.id).toBe('hf.cast.nora.smallworks');
-});
+}, 20_000); // Full recorded yield and multiple native replays.
 
 // Synthetic native sources and SDK reducer only; these are not browser transfer receipts.
 test('refuses complete next source capacity before public put and preserves the whole save', async () => {
@@ -807,8 +810,8 @@ test('refuses complete next source capacity before public put and preserves the 
   playedPause(state);
   await c.checkpoint(CAST[0]!.castId);
   const prior = c.sources[0]!;
-  const extended = Object.assign(prior, { raw: '' });
-  extended.raw = '界'.repeat(1_000_000 - JSON.stringify(c.sources).length);
+  prior.snapshot = { complete: prior.snapshot, padding: '' };
+  (prior.snapshot as { padding: string }).padding = '界'.repeat(1_000_000 - JSON.stringify(c.sources).length);
   expect(JSON.stringify(c.sources).length).toBe(1_000_000);
   state = await c.loadLocal(c.localSave(state));
   const before = c.localSave(state);
@@ -859,40 +862,32 @@ test('retains complete failed CAS source while archive fits without changing hea
   expect(c.heads).toEqual(heads);
   expect(JSON.stringify(state)).toBe(world);
 });
-test('cancelled batch rejection cannot publish remaining residents or change successor save or callbacks', async () => {
-  const h = harness();
-  const changed = vi.fn();
-  const c = new Continuity(h.lab, h.shelf, changed);
+test('a rejected put releases native entry and a deferred preference change cancels the remaining batch', async () => {
+  const h = harness(),
+    c = new Continuity(h.lab, h.shelf);
   const state = await c.fresh(42);
   playedPause(state);
-  const started = Promise.withResolvers<void>();
-  let rejectPut: (error: Error) => void = () => {};
+  const started = Promise.withResolvers<void>(),
+    result = Promise.withResolvers<never>();
   const request = h.shelf.request;
   h.shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
     if (r.action !== 'put') return request<T>(r);
     h.requests.push(r);
     started.resolve();
-    return new Promise<T>((_resolve, reject) => {
-      rejectPut = reject;
-    });
+    return result.promise;
   };
   const pending = c.checkpointAll();
   await started.promise;
-  c.clear();
-  const successor = await c.fresh(43, true);
-  c.status = 'successor status';
-  const before = c.localSave(successor);
-  const world = JSON.stringify(successor);
-  const recording = vi.spyOn(h.lab, 'setPersonaRecording');
-  changed.mockClear();
-  rejectPut(new Error('old put failed'));
+  expect(() => c.clear()).toThrow(/Wait/);
+  c.invalidate();
+  result.reject(new Error('old put failed'));
   await pending;
-  expect(c.status).toBe('successor status');
-  expect(c.localSave(successor)).toBe(before);
-  expect(JSON.stringify(successor)).toBe(world);
+  expect(c.publishing).toBe(false);
   expect(h.requests.filter((r) => r.action === 'put')).toHaveLength(1);
-  expect(recording).not.toHaveBeenCalled();
-  expect(changed).not.toHaveBeenCalled();
+  expect(c.heads).toEqual([]);
+  c.clear();
+  const next = await c.fresh(43);
+  expect(next.seed).toBe(43);
 });
 test('file-origin chapters cannot publish even after played pause', async () => {
   const h = harness();
@@ -999,7 +994,7 @@ test('an arriving Burak with unfinished building work cannot depart through his 
   const life = envelope.transfer.life as { clock: { watermark: number } };
   const h = harness(ancestry, life.clock.watermark * 3_600_000);
   const c = new Continuity(h.lab, h.shelf);
-  const game = await c.fresh(418, false, undefined, null);
+  const game = await c.fresh(418, undefined, null);
   const burak = game.villagers.find((v) => v.person.id === envelope.castId);
   const claim = game.chapter?.claims[0];
   if (!burak || !claim) throw new Error('Missing Burak');
@@ -1045,14 +1040,14 @@ test('a foreign locked Burak is reported and cannot be checkpointed while anothe
   expect(importRun(exportRun(game))).toEqual(game);
 });
 
-test('fresh play respects an explicitly disabled shelf', async () => {
+test('fresh play automatically enables the shelf and admits saved people', async () => {
   const h = harness([await source()]);
   h.shelf.enabled = false;
   const c = new Continuity(h.lab, h.shelf);
   const game = await c.fresh(418);
-  expect(h.shelf.enabled).toBe(false);
-  expect(game.chapter).toBeNull();
-  expect(h.requests).toHaveLength(0);
+  expect(h.shelf.enabled).toBe(true);
+  expect(game.chapter?.inputs).toHaveLength(1);
+  expect(h.requests.some((r) => r.action === 'putBatch')).toBe(true);
 });
 
 test('a foreign locked person alone remains protected after local save and reload', async () => {
@@ -1073,4 +1068,150 @@ test('a foreign locked person alone remains protected after local save and reloa
   await expect(loaded.checkpoint(locked.castId, true)).rejects.toThrow(/another game/);
   expect(h.data.heads[locked.castId]).toBe(locked.revision);
   expect(importRun(exportRun(game))).toEqual(game);
+});
+
+test('long roof departure retains the arriving person and refuses stranded supplies until actual delivery', async () => {
+  const h = harness([await source()]),
+    c = new Continuity(h.lab, h.shelf);
+  const s = await c.fresh(42, { edition: 'settlement-replies/2' });
+  while (s.tick < 30) step(s);
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  const aw = s.settlement!.actors.v1!;
+  while (!aw.carried && s.tick < 300) step(s);
+  expect(aw.carried).not.toBeNull();
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
+  apply(s, { kind: 'pause-chapter' });
+  while (!s.chapterPaused && !s.ended) step(s);
+  const head = c.heads[0]!.revision;
+  await expect(c.checkpoint(CAST[0]!.castId)).rejects.toThrow(/unfinished/);
+  expect(c.heads[0]!.revision).toBe(head);
+  apply(s, { kind: 'resume-chapter' });
+  apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
+  while (!s.ended) step(s);
+  expect(aw.carried).toBeNull();
+  await c.checkpoint(CAST[0]!.castId);
+  for (const compact of [false, true]) {
+    expect(await new Continuity(h.lab, h.shelf).importFile(JSON.stringify(c.export(s, compact)))).toEqual(s);
+  }
+  expect(await new Continuity(h.lab, h.shelf).loadLocal(c.localSave(s))).toEqual(s);
+  const next = await new Continuity(h.lab, h.shelf).fresh(43);
+  expect(next.chapter?.inputs[0]?.parent.revision).toBe(c.heads[0]!.revision);
+}, 20_000); // Full settlement day, actual delivery and replayed next admission.
+
+test('recorded short roof work publishes a real departure and continues that actor next time', async () => {
+  const h = harness([await source()]),
+    c = new Continuity(h.lab, h.shelf);
+  const s = await c.fresh(42);
+  while (s.tick < 30) step(s);
+  apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
+  apply(s, { kind: 'roof-break-return', ids: ['v1'] });
+  while (s.roofBreak!.attempts[0]!.stage !== 'reoffered' && s.tick < 150) step(s);
+  apply(s, { kind: 'pause-chapter' });
+  while (!s.chapterPaused && !s.ended) step(s);
+  await c.checkpoint(CAST[0]!.castId);
+  for (const compact of [false, true])
+    expect(await new Continuity(h.lab, h.shelf).importFile(JSON.stringify(c.export(s, compact)))).toEqual(s);
+  expect(await new Continuity(h.lab, h.shelf).loadLocal(c.localSave(s))).toEqual(s);
+  const next = await new Continuity(h.lab, h.shelf).fresh(43);
+  expect(next.chapter?.inputs[0]?.parent.revision).toBe(c.heads[0]!.revision);
+});
+
+test('resuming during asynchronous capture cannot publish a stale departure', async () => {
+  const h = harness(),
+    c = new Continuity(h.lab, h.shelf);
+  const s = await c.fresh(42);
+  playedPause(s);
+  const ready = h.shelf.ready;
+  let release!: (value: boolean) => void;
+  h.shelf.ready = new Promise((resolve) => {
+    release = resolve;
+  });
+  const pending = c.checkpoint(CAST[0]!.castId);
+  await Promise.resolve();
+  apply(s, { kind: 'resume-chapter' });
+  release(true);
+  await expect(pending).rejects.toThrow(/changed/);
+  h.shelf.ready = ready;
+  expect(h.requests.filter((r) => r.action === 'put')).toHaveLength(0);
+});
+
+test('pending shelf put holds the native world and entry until its accepted receipt is saved', async () => {
+  const h = harness(),
+    c = new Continuity(h.lab, h.shelf);
+  const s = await c.fresh(42);
+  playedPause(s);
+  const request = h.shelf.request.bind(h.shelf);
+  let release!: () => void, writing!: () => void;
+  const written = new Promise<void>((resolve) => {
+    writing = resolve;
+  });
+  const acknowledgment = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  h.shelf.request = async <T>(message: PersonaRequest): Promise<T> => {
+    const result = await request<T>(message);
+    if (message.action === 'put') {
+      writing();
+      await acknowledgment;
+    }
+    return result;
+  };
+  const pending = c.checkpoint(CAST[0]!.castId);
+  await written;
+  const before = structuredClone(s),
+    generation = c.generation;
+  expect(c.publishing).toBe(true);
+  apply(s, { kind: 'resume-chapter' });
+  step(s);
+  expect(s).toEqual(before);
+  expect(() => c.beginEntry()).toThrow(/Wait/);
+  expect(() => c.clear()).toThrow(/Wait/);
+  c.invalidate(); // The shelf preference watcher must not discard an accepted receipt.
+  expect(c.generation).toBe(generation);
+  release();
+  await pending;
+  expect(c.heads[0]!.revision).toBe(h.data.heads[CAST[0]!.castId]);
+  expect(c.sources[0]!.revision).toBe(c.heads[0]!.revision);
+  expect(c.publishing).toBe(false);
+  expect(c.generation).toBe(generation + 1);
+  expect(await new Continuity(h.lab, h.shelf).loadLocal(c.localSave(s))).toEqual(s);
+  apply(s, { kind: 'resume-chapter' });
+  step(s);
+  expect(s.tick).toBe(before.tick + 1);
+});
+
+test('a load begun before a pending put cannot replace the run or discard its new source and receipt', async () => {
+  const h = harness(),
+    c = new Continuity(h.lab, h.shelf);
+  const s = await c.fresh(42);
+  playedPause(s);
+  const saved = c.localSave(s),
+    validation = Promise.withResolvers<void>();
+  const validate = c.validateRunEnvelopes.bind(c);
+  vi.spyOn(c, 'validateRunEnvelopes').mockImplementation(async (state) => {
+    await validate(state);
+    await validation.promise;
+  });
+  const load = c.loadLocal(saved);
+  const writing = Promise.withResolvers<void>(),
+    ack = Promise.withResolvers<void>();
+  const request = h.shelf.request.bind(h.shelf);
+  h.shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    const value = await request<T>(r);
+    if (r.action === 'put') {
+      writing.resolve();
+      await ack.promise;
+    }
+    return value;
+  };
+  const put = c.checkpoint(CAST[0]!.castId);
+  await writing.promise;
+  validation.resolve();
+  await expect(load).rejects.toThrow(/Wait/);
+  ack.resolve();
+  await put;
+  expect(c.sources).toHaveLength(1);
+  expect(c.heads[0]!.revision).toBe(h.data.heads[CAST[0]!.castId]);
+  expect(c.sources[0]!.revision).toBe(c.heads[0]!.revision);
 });

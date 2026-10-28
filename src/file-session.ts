@@ -36,7 +36,6 @@ export function createFileSession(
   function complete(next: Held) {
     const result = { ...structuredClone(next.source), ...(exportRun(next.state) as object) };
     delete result.compact;
-    if ([5, 6].includes(Number(result.schema))) delete result.castSources;
     return result;
   }
   function capacity(next: Held, size = original?.size ?? 0) {
@@ -112,11 +111,7 @@ export function createFileSession(
         const { castSources, ...native } = source;
         // Same production archive validator; its count and UTF16-unit limits are not byte limits.
         validateYieldSources(castSources ?? []);
-        if ([5, 6].includes(Number(source.schema)) && (castSources as unknown[] | undefined)?.length)
-          throw new Error(
-            'This replies edition cannot export a nonempty source archive. Keep the original file.',
-          );
-        const state = importRun([5, 6, 7, 8, 9, 10].includes(Number(source.schema)) ? native : source);
+        const state = importRun(native);
         if (!current()) return false;
         await validateRunEnvelopes(state);
         if (!current()) return false;

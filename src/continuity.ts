@@ -1,4 +1,4 @@
-import { snapshot } from '@adam0white/human-framework';
+import { isContinuingCommitment, snapshot } from '@adam0white/human-framework';
 import type { Lab, LifePreparation, PersonaEnvelope, PersonaLife } from '@adam0white/lab-client';
 import {
   anchorPersonaLife,
@@ -8,14 +8,24 @@ import {
   createPersona,
   initialPersonaLife,
   type personaChannel,
+  preparePersonaLife,
   projectPortablePerson,
   validatePersona,
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
 import { admitResident, type Chapter, claimTransfer, DIALECT, RULES, residentTransfer } from './passport.ts';
 import { PRESSURE } from './pressure.ts';
-import type { SettlementConfig } from './settlement.ts';
-import { apply, createGame, exportRun, importRun, type State } from './sim.ts';
+import { activeLongRoof, type SettlementConfig } from './settlement.ts';
+import { activePeer } from './settlement-dialogue.ts';
+import {
+  activeRoofBreak,
+  apply,
+  createGame,
+  exportRun,
+  holdPublication,
+  importRun,
+  type State,
+} from './sim.ts';
 
 type Shelf = ReturnType<typeof personaChannel>;
 type SourceArchive = { revision: string; source: PersonaEnvelope['source']; snapshot: unknown };
@@ -29,6 +39,8 @@ export class Continuity {
   fileOrigin = false;
   playPaused = false;
   busy = false;
+  publishing = false;
+  private deferredInvalidation = false;
   status = 'New chapters check saved people automatically. Recording is a separate choice.';
   runId = crypto.randomUUID();
   sources: SourceArchive[] = [];
@@ -51,6 +63,10 @@ export class Continuity {
     };
   }
   invalidate() {
+    if (this.publishing) {
+      this.deferredInvalidation = true;
+      return;
+    }
     this.generation++;
     this.key = crypto.randomUUID();
     this.lab.setPersonaRecording(this.key);
@@ -58,17 +74,23 @@ export class Continuity {
   }
   /** Start before any file read or entry confirmation, including rejected selections. */
   beginEntry() {
+    this.requireNoPublication();
     this.invalidate();
     return this.generation;
   }
   currentEntry(generation: number) {
     return generation === this.generation;
   }
+  private requireNoPublication() {
+    if (this.publishing) throw new Error('Wait for the resident save to finish before changing games.');
+  }
   private requireEntry(generation: number) {
+    this.requireNoPublication();
     if (!this.currentEntry(generation))
       throw new Error('The game changed while the entry was loading. Try loading it again.');
   }
   clear() {
+    this.requireNoPublication();
     this.invalidate();
     this.state = null;
     this.heads = [];
@@ -76,44 +98,72 @@ export class Continuity {
   }
   async fresh(
     seed: number,
-    localOnly = false,
     config?: SettlementConfig,
     rules: typeof PRESSURE | null = PRESSURE,
     generation = this.beginEntry(),
   ) {
     this.requireEntry(generation);
-    if (config) localOnly = true;
     if (this.busy)
       throw new Error('A chapter is already being prepared. Wait for it to finish before starting another.');
     this.busy = true;
     try {
       await this.shelf.ready;
+      // Fresh native chapters always check the central shelf; recording stays separate.
+      if (!this.shelf.enabled) {
+        this.shelf.setEnabled(true);
+        await this.shelf.ready;
+      }
       this.requireEntry(generation);
       if (generation !== this.generation)
         throw new Error('The game changed before the residents could join. Try starting the chapter again.');
       const base = createGame(seed);
       let chapter: Chapter | undefined;
-      if (this.shelf.enabled && !localOnly) {
-        const result = await claimCastChapterBatch(
-          this.shelf,
-          CAST.map((c) => c.castId),
-          this.source(),
-          async (inputs: LifePreparation[]) => {
-            const initial = Object.fromEntries(
-              base.villagers.map((v) => [v.person.id, structuredClone(v.person)]),
-            );
-            for (const input of inputs) {
-              const opening = initial[input.parent.castId];
-              if (!opening)
-                throw new Error(
-                  'This person is not in the Commonstead resident list. Start a fresh local chapter.',
-                );
-              initial[input.parent.castId] = admitResident(input, opening);
-            }
-            return initial;
+      let shelfUnavailable = false;
+      if (this.shelf.enabled) {
+        let prepared = false;
+        const bridge = {
+          request: async <T>(request: Parameters<Shelf['request']>[0]): Promise<T> => {
+            const reply = await this.shelf.request<T>(request);
+            if (request.action === 'prepareBatch') prepared = true;
+            return reply;
           },
-          { isCurrent: () => generation === this.generation, claimTransfer },
-        );
+        };
+        let result: Awaited<ReturnType<typeof claimCastChapterBatch<Chapter['initial']>>>;
+        try {
+          result = await claimCastChapterBatch(
+            bridge,
+            CAST.map((c) => c.castId),
+            this.source(),
+            async (inputs: LifePreparation[]) => {
+              const initial = Object.fromEntries(
+                base.villagers.map((v) => [v.person.id, structuredClone(v.person)]),
+              );
+              for (const input of inputs) {
+                const opening = initial[input.parent.castId];
+                if (!opening)
+                  throw new Error(
+                    'This person is not in the Commonstead resident list. Start a fresh local chapter.',
+                  );
+                initial[input.parent.castId] = admitResident(input, opening);
+              }
+              return initial;
+            },
+            { isCurrent: () => generation === this.generation, claimTransfer },
+          );
+        } catch (error) {
+          // Only a failed read permits local play. An unacknowledged write may own shelf people.
+          const message = error instanceof Error ? error.message : String(error);
+          if (
+            prepared ||
+            ![
+              'Continuity is local to this game. Use a file.',
+              'Shelf unavailable. Use a local file.',
+            ].includes(message)
+          )
+            throw error;
+          shelfUnavailable = true;
+          result = null;
+        }
         if (result)
           chapter = {
             version: DIALECT,
@@ -127,6 +177,7 @@ export class Continuity {
         throw new Error(
           'The game changed while the chapter was being prepared. No new chapter started. Try starting it again.',
         );
+      this.requireEntry(generation);
       // The default short chapter plays under the pressure rules; longer days keep their editions.
       const state = createGame(seed, chapter, config, config || !rules ? undefined : rules);
       this.state = state;
@@ -135,13 +186,13 @@ export class Continuity {
       this.heads = chapter?.claims ?? [];
       this.fileOrigin = false;
       const blockedNames = chapter?.blocked?.map((entry) => canonicalCast(entry.castId).name) ?? [];
-      this.status = blockedNames.length
-        ? `${blockedNames.join(', ')}: saved history is still in another game. This chapter starts with a local resident; that history cannot be saved here. Other supported histories carry over.`
-        : chapter
-          ? `This chapter carries over ${chapter.inputs.length} supported histories. All residents were checked together. The other residents begin with their original histories.`
-          : localOnly
-            ? 'You started a fresh local chapter. Saved browser histories have not changed.'
-            : 'You started a fresh chapter with the residents’ original histories. No saved histories were carried over.';
+      this.status = shelfUnavailable
+        ? 'This chapter is saved on this device. Shared resident histories are unavailable here.'
+        : blockedNames.length
+          ? `${blockedNames.join(', ')}: saved history is still in another game. This chapter starts with a local resident; that history cannot be saved here. Other supported histories carry over.`
+          : chapter
+            ? `This chapter carries over ${chapter.inputs.length} supported histories. All residents were checked together. The other residents begin with their original histories.`
+            : 'You started a fresh chapter with the residents’ original histories. There were no saved histories to carry over.';
       // Caller installs the prepared state before opening any recording hook.
       return state;
     } finally {
@@ -156,7 +207,7 @@ export class Continuity {
     this.requireEntry(generation);
     const saved = JSON.parse(text);
     const state = importRun(saved.run);
-    if (state.shortYield || state.roofBreak || state.longRoofBreak) validateYieldSources(saved.sources);
+    validateYieldSources(saved.sources);
     await this.validateRunEnvelopes(state);
     if (
       typeof saved.runId !== 'string' ||
@@ -189,6 +240,7 @@ export class Continuity {
       throw new Error('The game changed while the save was loading. Try loading it again.');
     if (state.shortYield && typeof saved.playPaused !== 'boolean')
       throw new Error('Missing saved pause boundary');
+    this.requireEntry(generation);
     this.state = state;
     this.runId = saved.runId;
     this.heads = heads;
@@ -203,8 +255,8 @@ export class Continuity {
     this.requireEntry(generation);
     const raw = JSON.parse(text);
     const { castSources: archiveSources, ...native } = raw;
-    const state = importRun([7, 8, 9, 10].includes(raw.schema) ? native : raw);
-    if (raw.schema === 7 || raw.schema === 9 || raw.schema === 10) validateYieldSources(archiveSources ?? []);
+    const state = importRun(native);
+    validateYieldSources(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
     const sources = raw.castSources ?? [];
     if (!Array.isArray(sources) || JSON.stringify(sources).length > maxArchive)
@@ -213,6 +265,7 @@ export class Continuity {
       );
     if (generation !== this.generation)
       throw new Error('The game changed while the file was loading. Try loading it again.');
+    this.requireEntry(generation);
     this.state = state;
     this.heads = [];
     this.runId = crypto.randomUUID();
@@ -233,14 +286,8 @@ export class Continuity {
       sources: this.sources,
     });
   }
-  export(state: State) {
-    if (
-      !state.longRoofBreak &&
-      (state.settlement?.config.edition === 'settlement-replies/1' ||
-        state.settlement?.config.edition === 'settlement-replies/2')
-    )
-      return exportRun(state) as object;
-    return { ...(exportRun(state) as object), castSources: structuredClone(this.sources) };
+  export(state: State, compact = false) {
+    return { ...(exportRun(state, compact) as object), castSources: structuredClone(this.sources) };
   }
   pinnedHistories() {
     const group = new Map((this.state?.chapter?.claims ?? []).map((p) => [`${p.castId}/${p.branchId}`, p]));
@@ -259,51 +306,32 @@ export class Continuity {
     // Historical callers cannot create a separate continuing-person recording choice.
   }
 
-  async setEnabled(value: boolean) {
-    this.invalidate();
-    await this.shelf.ready;
-    this.shelf.setEnabled(value);
-    this.status =
-      'You changed whether people continue between games. This chapter keeps its current residents. Only a new chapter can load saved browser histories.';
-  }
   checkpoint(castId: string, fork = false) {
     const generation = this.generation,
       state = this.state,
-      runId = this.runId;
+      runId = this.runId,
+      tick = state?.tick,
+      inputCount = state?.inputs.length;
     const task = this.operation.then(async () => {
-      if (state?.roofBreak || state?.longRoofBreak)
-        throw new Error(
-          'People from this recorded roof-break day cannot move to another game yet. Download the complete run to keep this day and its source history.',
-        );
-      if (state?.shortYield)
-        throw new Error(
-          'People from this yielded short day cannot move to another game yet. Download the run to keep this day.',
-        );
+      if (this.fileOrigin) throw new Error('File play cannot publish people.');
+      if (this.busy) throw new Error('The game changed while another chapter was being prepared.');
       const current = () =>
-        !state?.shortYield &&
-        !state?.roofBreak &&
-        !state?.longRoofBreak &&
         generation === this.generation &&
         state === this.state &&
-        runId === this.runId;
+        runId === this.runId &&
+        state?.tick === tick &&
+        state?.inputs.length === inputCount;
       if (
         !state ||
         !current() ||
-        !state.inputs.some(
-          (input) => input.command.kind !== 'pause-chapter' && input.command.kind !== 'resume-chapter',
-        ) ||
         state.tick === 0 ||
         (!state.chapterPaused &&
+          !state.ended &&
           state.villagers.find((v) => v.person.id === castId)?.person.body.alive !== false)
       )
         throw new Error(
           'Play the chapter first. Then pause it and wait for current actions to finish before saving a person.',
         );
-      if (state.settlement)
-        throw new Error(
-          'People from this longer day cannot move to another game yet. Download the run to keep this day.',
-        );
-      if (this.fileOrigin) throw new Error('File play cannot publish people.');
       await this.shelf.ready;
       if (!current() || !this.shelf.enabled)
         throw new Error(
@@ -330,6 +358,7 @@ export class Continuity {
         const { revision: _revision, ...body } = closed;
         envelope = await createPersona({ ...body, transfer: { ...body.transfer, hostRun: runId } });
       } else {
+        requireDepartureBoundary(state, villager.id);
         if (villager.order && state.buildings.some((b) => b.id === villager.order?.target && !b.complete))
           throw new Error(
             'This resident still has shared building work to finish. Finish it before the resident leaves.',
@@ -366,6 +395,10 @@ export class Continuity {
           transfer: { ...captured.transfer, life, hostRun: runId },
           limitations: captured.limitations,
         });
+        // A published calendar must pass the same semantic admission as the next native chapter.
+        // This retains unsupported prayer/debt/source guards rather than silently discarding duties.
+        const opening = createGame(state.seed).villagers.find((v) => v.person.id === castId)!.person;
+        admitResident(preparePersonaLife(envelope, Date.now()), opening);
       }
       if (!current())
         throw new Error('The game changed before the person could be saved. Try saving the person again.');
@@ -385,21 +418,32 @@ export class Continuity {
       }
       if (!current())
         throw new Error('The game changed before the person could be saved. Try saving the person again.');
-      await this.shelf.request({
-        action: 'put',
-        envelope,
-        fork,
-        authored: !fork && !parent && !this.fileOrigin && !state.chapter?.inputs.length,
-      });
-      if (!current()) return;
-      this.heads = [...this.heads.filter((p) => p.castId !== castId), envelope].sort((a, b) =>
-        a.castId.localeCompare(b.castId),
-      );
-      this.key = crypto.randomUUID();
-      this.lab.setPersonaRecording(this.key);
-      this.status = `${villager.name}: ${envelope.terminal ? 'The end of this person’s history has been saved.' : 'This person’s current history has been saved.'} Details that cannot carry over remain in the local game data and are included when you download the game file.`;
-      this.changed();
-      if (current()) await this.recording();
+      const release = holdPublication(state);
+      this.publishing = true;
+      try {
+        await this.shelf.request({
+          action: 'put',
+          envelope,
+          fork,
+          authored: !fork && !parent && !this.fileOrigin && !state.chapter?.inputs.length,
+        });
+        if (!current()) return;
+        this.heads = [...this.heads.filter((p) => p.castId !== castId), envelope].sort((a, b) =>
+          a.castId.localeCompare(b.castId),
+        );
+        this.key = crypto.randomUUID();
+        this.lab.setPersonaRecording(this.key);
+        this.status = `${villager.name}: ${envelope.terminal ? 'The end of this person’s history has been saved.' : 'This person’s current history has been saved.'} Details that cannot carry over remain in the local game data and are included when you download the game file.`;
+        this.changed();
+        if (current()) await this.recording();
+      } finally {
+        release();
+        this.publishing = false;
+        if (this.deferredInvalidation) {
+          this.deferredInvalidation = false;
+          this.invalidate();
+        }
+      }
     });
     this.operation = task.catch(() => {});
     return task;
@@ -483,5 +527,31 @@ export async function validateRunEnvelopes(state: State) {
   if (state.chapter)
     await Promise.all(
       [...state.chapter.claims, ...state.chapter.inputs.map((i) => i.parent)].map((p) => validatePersona(p)),
+    );
+}
+
+/** Native simulation obligations are local to their actual owner. Historical records are not work. */
+function requireDepartureBoundary(state: State, id: string) {
+  const v = state.villagers.find((v) => v.id === id)!;
+  const w = state.settlement;
+  const actor = w?.actors[id];
+  const commitment = actor?.commitment;
+  if (
+    v.person.activity ||
+    activeRoofBreak(state, id) ||
+    activeLongRoof(state, id) ||
+    activePeer(state, id) ||
+    w?.replyScenes?.[id]?.attempts.some((a) => ['requested', 'running'].includes(a.status)) ||
+    w?.dispute?.includes(id) ||
+    w?.trolley === id ||
+    (actor && (actor.running || actor.job || actor.path.length || actor.carried || actor.pendingRequest)) ||
+    (commitment &&
+      (v.person.agenda.commitments.some(
+        (c) => c.id === commitment && isContinuingCommitment(v.person.agenda, c),
+      ) ||
+        v.person.agenda.owed?.some((d) => d.ofId === commitment || d.scheduledAs === commitment)))
+  )
+    throw new Error(
+      'This resident still has unfinished work, supplies or conversations in this day. Finish or explicitly stop them before leaving.',
     );
 }
