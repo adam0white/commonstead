@@ -149,7 +149,7 @@ test('completed work stays complete; pause and storm cancel only unfinished stag
   expect(JSON.stringify(importRun(exportRun(s)))).toBe(ended);
 });
 
-test('complete source archives survive native and file loads; new extension cannot publish an old passport', async () => {
+test('complete source archives survive native and file loads; active run requires a departure pause', async () => {
   const { Continuity } = await import('../src/continuity.ts');
   const { createFileSession } = await import('../src/file-session.ts');
   const c = new Continuity({ setPersonaRecording() {} } as never, {} as never);
@@ -172,7 +172,7 @@ test('complete source archives survive native and file loads; new extension cann
     sources,
   });
   await c.loadLocal(native);
-  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow('cannot move to another game yet');
+  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow(/Play the chapter/);
   const full = c.export(s);
   const f = createFileSession();
   expect(await f.select(new File([JSON.stringify(full)], 'roof.json'))).toBe(true);
@@ -306,7 +306,7 @@ test('schemas3–9 retain literal raw exports and complete legal continuations w
   }
 });
 
-test('schema10 keeps source archives through full, compact, gzip and native loads, and refuses publication before shelf access', async () => {
+test('schema10 keeps source archives through full, compact, gzip and native loads, and refuses an unpaused departure before shelf access', async () => {
   const { gzipSync } = await import('node:zlib');
   const { Continuity } = await import('../src/continuity.ts');
   const { createFileSession } = await import('../src/file-session.ts');
@@ -335,7 +335,7 @@ test('schema10 keeps source archives through full, compact, gzip and native load
   await c.loadLocal(
     JSON.stringify({ run: exportRun(s), runId: 'synthetic-long', fileOrigin: false, heads: [], sources }),
   );
-  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow('cannot move to another game yet');
+  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow(/Play the chapter/);
   expect(accessed).toBe(0);
   const download = c.export(s) as { castSources: unknown[] };
   expect(download.castSources).toEqual(sources);

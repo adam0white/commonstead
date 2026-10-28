@@ -51,7 +51,7 @@ describe('complete memory file session', () => {
       }
     }
   });
-  test('retains nonempty source archive and refuses replies archive and full clock mutation', async () => {
+  test('retains nonempty source archive in replies editions and refuses full clock mutation', async () => {
     const s = createGame(418);
     const raw = { ...(exportRun(s) as object), castSources: sources };
     const c = createFileSession();
@@ -62,10 +62,11 @@ describe('complete memory file session', () => {
     await expect(c.select(file(bad))).rejects.toThrow();
     expect(c.snapshot()).toEqual(raw);
     const replies = createGame(418, undefined, { edition: REPLY_EDITION });
-    await expect(c.select(file({ ...(exportRun(replies) as object), castSources: sources }))).rejects.toThrow(
-      /archive/i,
-    );
-    expect(c.snapshot()).toEqual(raw);
+    expect(await c.select(file({ ...(exportRun(replies) as object), castSources: sources }))).toBe(true);
+    expect(c.snapshot()!.castSources).toEqual(sources);
+    c.resume();
+    c.advance(3);
+    expect(c.snapshot()!.castSources).toEqual(sources);
   });
   test('late A after B, rejection, empty and close cannot install', async () => {
     for (const later of ['B', 'invalid', 'empty', 'close']) {

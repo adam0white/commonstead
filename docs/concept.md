@@ -227,3 +227,10 @@ A current act finishes first. Carried supplies follow the existing return route,
 Full/compact JSON, gzip files, downloads, native load and replay retain the complete new state and source archives. Schemas3–9 retain literal exports and complete legal continuations when this new action is absent. No new portable source-calendar/passport contract is published: schema10 checkpointing refuses before shelf access or head/source writes. Current f93 arrival locks, held checkpoints and foreign-head guards remain in force. Published client0.5.0 / pure portable HF4.3.0 do not upgrade Commonstead actors from3.0.0/engine2.23.0 or grant new-world support.
 
 Remaining for this unit: root's one independent exact-source review, signed source/exact CI, root merge, exact main CI and clean live delivery. These are engineering controls, not a new player round, owner acceptance or whole F781 completion. F765/F778 yield, F776 forecast, second replies, standard-day Dai, witnessed cross-resident response, next-scene/night/closing/voice and public ownership/source contracts remain separately dated in [the work plan](work-orders-plan.md). Owner feel/readiness and real human accessibility remain separate, due2026-11-03.
+
+
+### Automatic native carryover, 2026-10-27
+
+This supersedes the historical schema4/5/6/7/9/10 departure exclusions above. Every native edition admits supported shelf people automatically. Fresh starts enable the shelf; recording remains a separate choice. Settlement and long-roof replay pin the same initial chapter. Every native full, compact and local export retains source archives. File sessions retain those archives without claiming ownership.
+
+Departure follows actual paused or ended boundaries and refuses unfinished native work, supplies, conversations and unsupported personal obligations. Finite prayers remain real duties. Existing supported-source validation, Burak's released projector and shelf CAS remain authoritative. Existing simulation rules and replay hashes stay unchanged. Technical delivery ends with a reviewed merged change, exact merged CI and a clean live release. Adam accepts gameplay after playing.

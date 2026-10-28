@@ -143,6 +143,13 @@ export type State = {
   ended: boolean;
   won: boolean;
 };
+// Host persistence lock only. It never enters State, exports, replay or actor rules.
+const publishing = new WeakSet<State>();
+export function holdPublication(state: State): () => void {
+  if (publishing.has(state)) throw new Error('A resident save is already being published.');
+  publishing.add(state);
+  return () => publishing.delete(state);
+}
 export const NODES: { id: string; kind: Resource; x: number; y: number }[] = [
   { id: 'food', kind: 'food', x: 200, y: 440 },
   { id: 'wood', kind: 'wood', x: 245, y: 190 },
@@ -516,6 +523,7 @@ export function publicPlaceText(text: string): string {
 }
 
 export function apply(s: State, c: GameCommand): void {
+  if (publishing.has(s)) return;
   if (c.kind === 'long-roof-break-return') {
     validateRoofCommand({ ...c, kind: 'roof-break-return' });
     if (longRoofUnavailable(s, c.ids)) return;
@@ -786,6 +794,7 @@ export function apply(s: State, c: GameCommand): void {
   s.message = `${selected.map((v) => residentName(v)).join(', ')} will ${c.target === 'move' ? 'move to the selected place' : `start ${nextTask(c.target, s.buildings)}`}.`;
 }
 export function step(s: State): void {
+  if (publishing.has(s)) return;
   if (s.settlement) {
     stepSettlement(s);
     return;
@@ -1015,6 +1024,7 @@ export function exportRun(s: State, compact = false): unknown {
       schema: 10,
       framework: '3.0.0',
       rules: LONG_ROOF_RETURN,
+      ...(s.chapter ? { chapter: structuredClone(s.chapter) } : {}),
       config: structuredClone(s.settlement!.config),
       extension: { version: LONG_ROOF_RETURN },
       seed: s.seed,
@@ -1070,6 +1080,7 @@ export function exportRun(s: State, compact = false): unknown {
             ? 5
             : 4,
       framework: '3.0.0',
+      ...(s.chapter ? { chapter: structuredClone(s.chapter) } : {}),
       config: structuredClone(s.settlement.config),
       seed: s.seed,
       tick: s.tick,
@@ -1127,25 +1138,23 @@ export function importRun(raw: unknown): State {
       throw new Error('version');
     if (r.schema === 5 || r.schema === 6) {
       requireJson(raw);
-      exactKeys(raw, [
-        'schema',
-        'framework',
-        'config',
-        'seed',
-        'tick',
-        'inputs',
-        'hash',
-        r.compact === true ? 'compact' : 'state',
-      ]);
+      exactKeys(
+        raw,
+        [
+          'schema',
+          'framework',
+          'config',
+          'seed',
+          'tick',
+          'inputs',
+          'hash',
+          r.compact === true ? 'compact' : 'state',
+        ],
+        ['chapter'],
+      );
       if (r.compact !== undefined && r.compact !== true) throw new Error('compact');
     }
-    const s = replay(
-      r.seed,
-      r.inputs,
-      r.tick,
-      r.schema === 3 ? (r.chapter ?? undefined) : undefined,
-      r.schema >= 4 ? r.config : undefined,
-    );
+    const s = replay(r.seed, r.inputs, r.tick, r.chapter ?? undefined, r.schema >= 4 ? r.config : undefined);
     if (
       (r.compact !== true && stable(s) !== stable(r.state)) ||
       (r.compact === true && (![4, 5, 6].includes(r.schema) || r.state !== undefined)) ||
@@ -1430,18 +1439,23 @@ function importLongRoof(raw: unknown): State {
   requireShortJson(raw);
   if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
   const r = raw as Record<string, unknown>;
-  exactKeys(r, [
-    'schema',
-    'framework',
-    'rules',
-    'config',
-    'extension',
-    'seed',
-    'tick',
-    'inputs',
-    'hash',
-    r.compact === true ? 'compact' : 'state',
-  ]);
+  exactKeys(
+    r,
+    [
+      'schema',
+      'framework',
+      'rules',
+      'config',
+      'extension',
+      'seed',
+      'tick',
+      'inputs',
+      'hash',
+      r.compact === true ? 'compact' : 'state',
+    ],
+    ['chapter'],
+  );
+  if (r.chapter !== undefined && r.chapter !== null) checkChapter(r.chapter as Chapter);
   exactKeys(r.extension, ['version']);
   exactKeys(r.config, ['edition']);
   if (
@@ -1455,7 +1469,7 @@ function importLongRoof(raw: unknown): State {
     r.seed as number,
     r.inputs as Input[],
     r.tick as number,
-    undefined,
+    (r.chapter as Chapter | null) ?? undefined,
     r.config as SettlementConfig,
     false,
     undefined,

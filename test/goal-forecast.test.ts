@@ -88,4 +88,4 @@ test('observed physical construction supports only a conditional forecast and pr
   expect(o.pace(token, underway.s)).toBe(null);
   o.observe({}, underway.s);
   expect(o.pace(token, underway.s)).toBe(null);
-});
+}, 20_000); // Full causal simulation and replay may exceed5s under shared-host load.
