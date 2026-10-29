@@ -6,6 +6,8 @@ import { beforeStorm, indoors, paceWords, tiredOf } from './pressure.ts';
 import { routeWorkReading } from './route-work-reading.ts';
 import type { Job } from './settlement.ts';
 import type { State, Villager } from './sim.ts';
+import type { StoryChoice } from './story-content.ts';
+import { shortConversationReason, storyReason } from './story-records.ts';
 import { orderNotice, returnTiming } from './work-orders.ts';
 
 /** Presentation only. Observe host break clocks, visible task transitions and how tired
@@ -159,10 +161,18 @@ export function invitationReadiness(
     return `Wait ${60 - s.tick} game seconds ${s.settlement ? 'before inviting a private story' : 'until the clock reaches 1:00'}. The clock counts at every speed. Pauses do not count. No shared location is required.`;
   if (s.settlement)
     return 'A private story can be requested now. During a work or travel act, wait for it to finish and ask again, or explicitly cancel it first. An accepted request can wait through a personal activity such as rest; the resident may still decline. Later collaborations have their own time, place and material requirements.';
+  if (action === 'collaborate') {
+    const names = ['nora', 'sam', 'dai', 'nerys', 'dilek', 'burak', 'sevim', 'oskar'];
+    return (
+      storyReason(s, v.id, `collaboration-${names[Number(v.id.slice(1)) - 1]}` as StoryChoice) ||
+      'The disclosure is recorded. You can offer its collaboration; the resident may choose a need instead.'
+    );
+  }
+  const reason = shortConversationReason(s, v.id, 'disclosure');
+  if (reason) return reason;
+
   if (v.discovery === 2)
     return 'The small collaboration has already been shown. This chapter has no further conversation step.';
-  if (action === 'collaborate' && v.discovery === 0)
-    return 'Invite a conversation first. The small collaboration follows that conversation.';
   if (!v.invitedBreak && v.recoveryUntil > s.tick)
     return 'This break was not offered by you. Offer this person a break before inviting the conversation or collaboration.';
   if (!v.invitedBreak || v.recoveryUntil <= s.tick)
@@ -201,7 +211,8 @@ export function currentNotice(s: State): string {
 export function observedEvents(events: readonly { at: number; text: string }[]): string[] {
   const groups: { first: number; last: number; text: string; count: number }[] = [];
   for (const event of events) {
-    const prior = groups.at(-1);
+    const cache = /inspects the .* cache/.test(event.text);
+    const prior = cache ? groups.find((g) => g.text === event.text) : groups.at(-1);
     if (prior?.text === event.text) {
       prior.last = event.at;
       prior.count++;

@@ -1,3 +1,20 @@
+import { IDBFactory } from 'fake-indexeddb';
+import { afterEach, beforeEach } from 'vitest';
+import * as writeCapability from '../src/shared-write-capability';
+
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+  // Downstream admission/CAS mechanism fixture only: retain every existing assertion.
+  // This mock proves no real current-pair write capability or reader certification.
+  // Unmocked current refusal is exercised in shared-write-capability.test.ts.
+  vi.spyOn(writeCapability, 'requireSharedWriteCapability').mockImplementation(() => undefined as never);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  rollout.enforce = false;
+});
+
 import { describe, expect, test, vi } from 'vitest';
 
 // Most controls isolate admission and ownership from the live rollout gate.
@@ -135,6 +152,10 @@ function harness(initial: PersonaEnvelope[] = [], now = clock) {
           }),
           blocked: [],
         } as T;
+      if (request.action === 'get')
+        return (data.revisions.find(
+          (p) => p.castId === request.castId && p.revision === data.heads[request.castId!],
+        ) ?? null) as T;
       if (request.action === 'putBatch') {
         data = acceptPersonaBatch(data, request.envelopes ?? [], request.expectedHeads);
         return null as T;
@@ -1130,4 +1151,81 @@ test('an already recorded portable claim validates while peer writes are closed'
     claims: [claim],
   });
   expect(importRun(exportRun(game))).toEqual(game);
+});
+
+// The real published helper crosses putBatch after the host durable intent; a lost
+// response is unknown custody, never a reason to reset the previous native save.
+test('durable public admission recovers an acknowledged claim with lost return without re-put', async () => {
+  const { NativeSaveStore } = await import('../src/save-store');
+  const store = new NativeSaveStore();
+  await store.read();
+  await store.write('previous complete bytes');
+  const h = harness([await source()]);
+  const request = h.shelf.request.bind(h.shelf);
+  let lose = true;
+  h.shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    const reply = await request<T>(r);
+    if (r.action === 'putBatch' && lose) {
+      lose = false;
+      throw new Error('Synthetic lost return after actual CAS');
+    }
+    return reply;
+  };
+  const c = new Continuity(h.lab, h.shelf, () => {}, store);
+  await expect(c.fresh(418)).rejects.toThrow('lost return');
+  expect(await store.read()).toBe('previous complete bytes');
+  const intent = await c.admissions.read();
+  expect(intent?.phase).toBe('forwarded');
+  expect(intent?.accepted).toHaveLength(1);
+  const staged = await c.admissions.preparedText();
+  expect(staged).toBeTruthy();
+  const puts = h.requests.filter((r) => r.action === 'putBatch').length;
+  vi.mocked(writeCapability.requireSharedWriteCapability).mockRestore();
+  rollout.enforce = true;
+  expect(() => writeCapability.requireSharedWriteCapability(CAST[0]!.castId)).toThrow(/saved history/);
+  const recovered = await c.recoverPrepared();
+  expect(recovered?.chapter?.inputs).toHaveLength(1);
+  expect(h.requests.filter((r) => r.action === 'putBatch')).toHaveLength(puts);
+  expect(await store.read()).toBe(staged);
+  expect(exportRun(importRun(exportRun(recovered!)))).toEqual(exportRun(recovered!));
+});
+
+test('successful empty shelf CAS durably saves authored New game without admission intent', async () => {
+  const h = harness(),
+    c = new Continuity(h.lab, h.shelf);
+  const state = await c.fresh(418);
+  expect(state.chapter).toBeNull();
+  expect(await c.admissions.read()).toBeNull();
+  expect(h.requests.find((r) => r.action === 'putBatch')?.envelopes).toEqual([]);
+  expect(JSON.parse((await c.store.read())!).run).toEqual(exportRun(state));
+});
+
+// CS-R4: an actual incoming helper preparation cancelled before forwarding owns no shelf claim.
+test('never-forwarded actual incoming preparation can be explicitly discarded without losing the prior game', async () => {
+  const { NativeSaveStore } = await import('../src/save-store');
+  const store = new NativeSaveStore();
+  await store.read();
+  await store.write('prior complete original bytes');
+  const h = harness([await source()]),
+    c = new Continuity(h.lab, h.shelf, () => {}, store);
+  const marker = c.admissions.markForwarded.bind(c.admissions);
+  c.admissions.markForwarded = async (...args) => {
+    c.invalidate();
+    return marker(...args);
+  };
+  await expect(c.fresh(418)).rejects.toThrow();
+  expect((await c.admissions.read())?.phase).toBe('prepared');
+  expect(h.requests.filter((r) => r.action === 'putBatch')).toHaveLength(0);
+  expect(await store.read()).toBe('prior complete original bytes');
+  expect(await store.write('must not overwrite prior')).toBe(false);
+  c.admissions.markForwarded = marker;
+  await expect(c.fresh(418)).rejects.toThrow();
+  expect(await store.read()).toBe('prior complete original bytes');
+  expect((await c.admissions.read())?.phase).toBe('prepared');
+  await (c as unknown as { discardUnforwarded: () => Promise<boolean> }).discardUnforwarded();
+  expect(await c.admissions.read()).toBeNull();
+  expect(await store.read()).toBe('prior complete original bytes');
+  expect(await store.write('ordinary save after explicit safe release')).toBe(true);
+  const next = await c.fresh(418);
+  expect(next.chapter?.inputs).toHaveLength(1);
 });

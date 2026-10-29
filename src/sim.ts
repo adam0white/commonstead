@@ -29,16 +29,30 @@ import {
   workPace,
 } from './pressure.ts';
 import {
+  activePublic,
+  interruptPublic,
+  type PublicHost,
+  requestPublicExchange,
+  stagePublicExchanges,
+  stepPublicExchange,
+} from './public-exchanges';
+import type { PublicCommand } from './public-voice-content';
+import {
   applySettlement,
   initSettlement,
   LONG_ROOF_RETURN,
   type LongRoofAttempt,
   longRoofUnavailable,
   requestLongRoof,
+  requestReply,
+  requestYieldReturn,
   type Settlement,
   type SettlementConfig,
+  settlementBuildReason,
+  settlementStoryHost,
   stepSettlement,
   validateReply,
+  type YieldReturn,
 } from './settlement.ts';
 import {
   activePeer,
@@ -48,6 +62,25 @@ import {
   validatePeer,
 } from './settlement-dialogue.ts';
 import { REPLIES, REPLY_EDITION, type ReplyBranch } from './settlement-scenes.ts';
+import { STORY_CHOICES, type StoryChoice } from './story-content.ts';
+import {
+  activeStory,
+  ensureStory,
+  interruptStory,
+  recordDisclosure,
+  recordRestCompleted,
+  recordRestStart,
+  recordStorm,
+  recordWork,
+  requestStory,
+  requireSupportedProducer,
+  type StoryHost,
+  type StoryState,
+  shortConversationReason,
+  stageStories,
+  stepStory,
+} from './story-records.ts';
+import { continueWorkshop } from './workshop-continuation.ts';
 
 export function taskLabel(target: string): string {
   return (
@@ -64,6 +97,12 @@ export function taskLabel(target: string): string {
 
 export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
+  | PublicCommand
+  | { kind: 'continue-workshop' }
+  | { kind: 'remainder'; action: 'start' | 'stop' }
+  | { kind: 'story-act'; ids: string[]; choice: StoryChoice | 'read-card' }
+  | { kind: 'evening'; action: 'continue' | 'close' | 'keep-playing' }
+  | { kind: 'yield-return'; ids: string[] }
   | { kind: 'roof-break-return'; ids: string[] }
   | { kind: 'long-roof-break-return'; ids: string[] }
   | { kind: 'reply'; ids: string[]; branch: ReplyBranch }
@@ -125,6 +164,16 @@ export type RoofBreak = {
 };
 export const ROOF_RETURN = 'roof-break-return/1';
 export type State = {
+  remainder?: { startedAt: number; running: boolean };
+  story?: StoryState;
+  continuedWorkshop?: {
+    atTick: number;
+    runAtMs: number;
+    endAtMs: number;
+    endTick: number;
+    stormSourceId: string;
+  };
+  yieldReturn?: YieldReturn[];
   longRoofBreak?: { version: typeof LONG_ROOF_RETURN; attempts: LongRoofAttempt[] };
   /** Created only by the separately named public action, never an implicit saved default. */
   roofBreak?: { version: typeof ROOF_RETURN; attempts: RoofBreak[] };
@@ -257,6 +306,7 @@ export function createGame(
     state.resources.food = PRESSURE_FOOD;
     state.message = PRESSURE_OPENING;
   }
+  ensureStory(state);
   if (config) initSettlement(state, config);
   return state;
 }
@@ -289,6 +339,7 @@ function recover(s: State, v: Villager, kind: 'rest' | 'meal', automatic = false
       : offer('eat', 8, 0, { food: 0.7, water: 0.8 }, ['rest']);
   const r = decide(v.person, [a]);
   if (!begin(v.person, a, r)) return;
+  recordRestStart(s, v);
   if (kind === 'meal') s.resources.food -= 2;
   v.recoveryUntil = s.tick + (kind === 'rest' ? 35 : 8);
   v.actionUntil = v.recoveryUntil;
@@ -337,7 +388,7 @@ function chooseWork(s: State, v: Villager, push = false) {
         : {},
   );
   const accepted = offered.find((a) => a.id === r.chosenAffordanceId);
-  if (accepted) begin(v.person, accepted, r);
+  if (accepted && begin(v.person, accepted, r)) recordRestStart(s, v);
   if (push)
     perceive(v.person, [
       {
@@ -417,6 +468,8 @@ export function roofBreakUnavailable(s: State, ids: readonly string[]): string {
     return 'Resume an unfinished day before requesting a roof break.';
   if (!ids.length || ids.some((id) => !s.villagers.some((v) => v.id === id)))
     return 'Select residents for the roof break.';
+  if (ids.some((id) => activeStory(s, id)))
+    return 'Finish or stop the current exchange before requesting a roof break.';
   if (ids.some((id) => activeRoofBreak(s, id)))
     return 'A selected resident already has a roof break in progress. A new order interrupts it; repeating this action does not restart it.';
   if (s.villagers.some((v) => ids.includes(v.id) && s.tick < v.availableAt))
@@ -533,6 +586,101 @@ export function publicPlaceText(text: string): string {
 
 export function apply(s: State, c: GameCommand): void {
   if (publishing.has(s)) return;
+  if (c.kind === 'continue-workshop') {
+    exactKeys(c, ['kind']);
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+    continueWorkshop(s);
+    s.inputs.push({ tick: s.tick, command: { kind: 'continue-workshop' } });
+    return;
+  }
+  if (c.kind === 'remainder') {
+    exactKeys(c, ['kind', 'action']);
+    if (
+      !['start', 'stop'].includes(c.action) ||
+      s.settlement ||
+      s.ended ||
+      s.chapterPaused ||
+      s.pauseRequested ||
+      s.inputs.length >= 10000 ||
+      !s.buildings.some((b) => b.kind === 'storehouse' && b.complete)
+    )
+      throw new Error('Finish the storehouse in an active short chapter before handing over.');
+    if (c.action === 'stop' && !s.remainder?.running) throw new Error('No automatic remainder is running.');
+    // Handoff drains ordinary steps; stopping preserves the actually reached state.
+    s.remainder = { startedAt: s.remainder?.startedAt ?? s.tick, running: c.action === 'start' };
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
+  if (s.remainder?.running && !['pause-chapter', 'resume-chapter'].includes(c.kind))
+    throw new Error('Stop the automatic remainder before giving further orders.');
+  if (c.kind === 'public-exchange') {
+    requestPublicExchange(s, c);
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
+  if (
+    'ids' in c &&
+    c.ids.some((id) => activePublic(s, id)) &&
+    !['order', 'build', 'settlement'].includes(c.kind)
+  )
+    throw new Error('Finish or explicitly stop the public invitation first.');
+  if (c.kind === 'story-act') {
+    exactKeys(c, ['kind', 'ids', 'choice']);
+    if (
+      !Array.isArray(c.ids) ||
+      c.ids.length !== 1 ||
+      !(c.choice === 'read-card' || Object.hasOwn(STORY_CHOICES, c.choice))
+    )
+      throw new Error('Choose one resident and an available reply.');
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+    // CS-R7: reply editions use the same actual owner for both public first-reply commands.
+    if (s.settlement && hasReplies(s.settlement.config.edition) && Object.hasOwn(REPLIES, c.choice)) {
+      const reply = { kind: 'reply' as const, ids: c.ids, branch: c.choice as ReplyBranch };
+      validateReply(s, reply);
+      requestReply(s, reply);
+    } else requestStory(s, c.ids[0]!, c.choice, s.settlement ? settlementStoryHost : shortStoryHost);
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
+  if (c.kind === 'evening') {
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+    exactKeys(c, ['kind', 'action']);
+    if (
+      !['continue', 'close', 'keep-playing'].includes(c.action) ||
+      !(s.settlement?.storm || s.continuedWorkshop) ||
+      s.ended
+    )
+      throw new Error('The evening can end after the actual storm result.');
+    s.story ??= {
+      version: 'commonstead-residual/1',
+      paper: 4,
+      firstResults: [],
+      sources: [],
+      events: [],
+      objects: [],
+      attempts: [],
+      reads: [],
+      work: [],
+    };
+    if (c.action === 'close') {
+      s.story.close = { requestedAt: s.tick };
+      s.message = 'Ending the evening when current actions reach their next boundary.';
+    } else {
+      delete s.story.close;
+      s.message = 'Continue tonight.';
+    }
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
+  if (s.story?.close && !['pause-chapter', 'resume-chapter'].includes(c.kind))
+    throw new Error('Keep playing before requesting more work.');
+  if (c.kind === 'yield-return') {
+    exactKeys(c, ['kind', 'ids']);
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+    requestYieldReturn(s, c.ids, s.inputs.length);
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
   if (c.kind === 'long-roof-break-return') {
     validateRoofCommand({ ...c, kind: 'roof-break-return' });
     if (longRoofUnavailable(s, c.ids)) return;
@@ -581,6 +729,11 @@ export function apply(s: State, c: GameCommand): void {
     s.inputs.push({ tick: s.tick, command: { kind: 'yield-day' } });
     return;
   }
+  if ('ids' in c && c.ids.some((id) => activeStory(s, id))) {
+    if (c.kind === 'settlement' && c.action === 'cancel') {
+      for (const id of c.ids) interruptStory(s, id);
+    } else throw new Error('Finish or explicitly stop the current exchange before another request.');
+  }
   if (s.shortYield) {
     if (!['pause-chapter', 'resume-chapter'].includes(c.kind))
       throw new Error('The residents have the remaining day. Further work requests are closed.');
@@ -607,9 +760,44 @@ export function apply(s: State, c: GameCommand): void {
       )
     )
       throw new Error('Cancel the pending paper conversation explicitly before giving another task.');
-  } else if (c.kind === 'reply') throw new Error('Replies require the fresh reply edition.');
+  } else if (c.kind === 'reply') {
+    if (c.ids.length !== 1 || !Object.hasOwn(REPLIES, c.branch) || REPLIES[c.branch].actor !== c.ids[0])
+      throw new Error('Choose the matching resident and reply.');
+    requestStory(s, c.ids[0]!, c.branch, s.settlement ? settlementStoryHost : shortStoryHost);
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
   if (s.ended && c.kind !== 'pause-chapter') return;
   if (s.chapterPaused && c.kind !== 'resume-chapter') return;
+  if (!s.settlement && c.kind === 'order' && c.target === 'collaborate') {
+    if (c.ids.length !== 1 || !s.villagers.some((v) => v.id === c.ids[0]))
+      throw new Error('Select one current resident.');
+    const names = ['nora', 'sam', 'dai', 'nerys', 'dilek', 'burak', 'sevim', 'oskar'];
+    const name = names[Number(c.ids[0]!.slice(1)) - 1];
+    if (!name) throw new Error('This resident has no authored collaboration.');
+    requestStory(s, c.ids[0]!, `collaboration-${name}` as StoryChoice, shortStoryHost);
+    s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+    return;
+  }
+  // A refused replacement is recorded for truthful replay/UI; it does not acquire the public owner.
+  if (s.settlement && c.kind === 'build' && c.ids.some((id) => activePublic(s, id))) {
+    const reason = settlementBuildReason(s, c);
+    if (reason) {
+      const r = ensureStory(s);
+      r.rejectedPublicBuilds ??= [];
+      r.rejectedPublicBuilds.push({ inputIndex: s.inputs.length, at: s.tick, reason });
+      s.inputs.push({ tick: s.tick, command: structuredClone(c) });
+      s.message = reason;
+      return;
+    }
+  }
+  if ('ids' in c)
+    for (const id of c.ids)
+      interruptPublic(
+        s,
+        id,
+        'A later request stopped the public invitation. Earlier work was not automatically offered.',
+      );
   s.inputs.push({ tick: s.tick, command: structuredClone(c) });
   if (s.settlement) {
     applySettlement(s, c);
@@ -718,7 +906,7 @@ export function apply(s: State, c: GameCommand): void {
         : `${selected.length === 1 && selected[0] ? residentName(selected[0]) : 'The selected people'} will eat and drink here. Work will resume after the meal.`;
     return;
   }
-  if (c.target === 'listen' || c.target === 'collaborate') {
+  if (c.target === 'listen') {
     if (selected.length !== 1) {
       s.message = 'Invite one person to talk during a chosen break.';
       return;
@@ -726,17 +914,12 @@ export function apply(s: State, c: GameCommand): void {
     const v = selected[0];
     if (!v) return;
     const scene = DISCOVERIES[Number(v.id.slice(1)) - 1];
-    if (
-      !scene ||
-      !v.invitedBreak ||
-      v.recoveryUntil <= s.tick ||
-      s.tick < 60 ||
-      s.tick - v.breakStarted < 5
-    ) {
-      s.message =
-        'Spend a minute together. Then offer a break and wait five seconds. You can then invite a private conversation. Talking is optional.';
+    const why = shortConversationReason(s, v.id, 'disclosure');
+    if (why) {
+      s.message = why;
       return;
     }
+    if (!scene) return;
     const invitation = offer('talk', 5, 0, { belonging: 0.5 }, ['social']);
     const response = decide(v.person, [invitation], {
       suggestion: { voiceId: 'commander', action: 'talk', strength: 0 },
@@ -749,9 +932,7 @@ export function apply(s: State, c: GameCommand): void {
     if (c.target === 'listen' && v.discovery === 0) {
       v.discovery = 1;
       v.says = scene[0];
-    } else if (c.target === 'collaborate' && v.discovery === 1) {
-      v.discovery = 2;
-      v.says = scene[1];
+      recordDisclosure(s, v);
     }
     s.message = v.says;
     return;
@@ -817,9 +998,16 @@ export function step(s: State): void {
     s.trainingUntil = null;
     s.message = `${residentName(arrival)} has joined the workshop today.`;
   }
+  stageStories(s);
+  stagePublicExchanges(s);
   for (const v of s.villagers) {
     const activity = v.person.activity;
-    if (activity && (v.recoveryUntil ? s.tick >= v.recoveryUntil : v.order && s.tick >= v.actionUntil))
+    if (
+      !activeStory(s, v.id) &&
+      !activePublic(s, v.id)?.participants.some((p) => p.actor === v.id && p.status === 'running') &&
+      activity &&
+      (v.recoveryUntil ? s.tick >= v.recoveryUntil : v.order && s.tick >= v.actionUntil)
+    )
       stageOutcome(v.person, {
         affordanceId: activity.affordanceId,
         action: activity.action,
@@ -834,16 +1022,23 @@ export function step(s: State): void {
         summary: `I finished ${activity.action}.`,
       });
   }
+  const publicShared = s.story?.publicExchanges?.some((a) => ['requested', 'active'].includes(a.status));
+  if (publicShared) for (const v of s.villagers) tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
   for (const v of s.villagers) {
-    tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
+    if (!publicShared) tickPerson(v.person, START_MINUTE + s.tick * BODY_MINUTES);
+    if (stepPublicExchange(s, v, shortPublicHost)) continue;
+    if (stepStory(s, v, shortStoryHost)) continue;
+    if (s.story?.close && !v.person.activity) continue;
     if (v.availableAt === s.tick && v.status.startsWith('attending own routine'))
       v.status = 'available for agreed light tasks';
     if (v.recoveryUntil) {
       if (s.tick < v.recoveryUntil) continue;
       const action = v.person.activity?.action;
+      const resting = v.person.activity;
+      let completion: ReturnType<typeof finish>;
       const roofRest = activeRoofBreak(s, v.id);
       if (v.person.activity)
-        finish(v.person, {
+        completion = finish(v.person, {
           affordanceId: v.person.activity.affordanceId,
           action: v.person.activity.action,
           at: v.person.now,
@@ -854,8 +1049,13 @@ export function step(s: State): void {
               ? 'I finished the planned rest under the hub roof.'
               : `I finished ${action === 'rest' ? 'resting' : action === 'eat' ? 'eating' : 'drinking'}. I am returning to my task.`,
         });
+      if (resting?.action === 'rest' && completion?.status === 'completed' && v.person.now >= resting.endsAt)
+        recordRestCompleted(s, v, resting.id);
       v.recoveryUntil = 0;
       v.actionUntil = 0;
+      // CS-R6: consume the delivered completion, then retain requests without starting more work.
+      if (s.story?.close) continue;
+      if (stepPublicExchange(s, v, shortPublicHost)) continue;
       if (roofRest?.stage === 'rest' && roofRest.restUntil === s.tick) reofferRoofWork(s, v, roofRest);
       if (v.order) chooseWork(s, v);
       else {
@@ -874,6 +1074,9 @@ export function step(s: State): void {
           summary: `I worked on ${taskLabel(v.order.target)}.`,
           material: 1,
         });
+      if (s.story?.close) continue;
+      if (stepPublicExchange(s, v, shortPublicHost)) continue;
+      if (!v.order) continue;
       chooseWork(s, v);
     }
     if (v.recoveryUntil || !['work', 'move'].includes(v.person.activity?.action ?? '')) continue;
@@ -892,12 +1095,12 @@ export function step(s: State): void {
       v.status = 'waiting';
       v.says = shelter ? 'I am under the roof at the hub.' : 'I am here.';
       const roof = activeRoofBreak(s, v.id);
-      if (shelter && roof?.stage === 'roof') beginRoofRest(s, v, roof);
+      if (!s.story?.close && shelter && roof?.stage === 'roof') beginRoofRest(s, v, roof);
       continue;
     }
     if (v.person.activity?.action === 'move') {
       interrupt(v);
-      chooseWork(s, v);
+      if (!s.story?.close) chooseWork(s, v);
       continue;
     }
     const capacity =
@@ -905,13 +1108,27 @@ export function step(s: State): void {
       (v.person.activity?.protest ? (s.rules ? 0.6 : 0.75) : 1) *
       (s.rules ? workPace(v) : 1);
     const node = NODES.find((n) => n.id === v.order?.target);
-    if (node) s.resources[node.kind] += (s.rules && node.kind === 'food' ? 0.25 : 0.52) * capacity;
+    if (node) {
+      const amount = (s.rules && node.kind === 'food' ? 0.25 : 0.52) * capacity;
+      s.resources[node.kind] += amount;
+      recordWork(s, { actor: v.id, at: s.tick, kind: 'delivery', target: node.kind, amount });
+    }
     const b = s.buildings.find((b) => b.id === v.order?.target);
     if (b && !b.complete) {
+      const before = b.progress;
       b.progress = Math.min(
         1,
         b.progress + capacity / (b.kind === 'house' ? 35 : s.rules ? STORE_EFFORT : 180),
       );
+      recordWork(s, {
+        actor: v.id,
+        at: s.tick,
+        kind: 'build',
+        target: b.id,
+        amount: b.progress - before,
+        before,
+        after: b.progress,
+      });
       if (b.progress === 1) {
         b.complete = true;
         s.shortYield?.chronicle.push({
@@ -929,6 +1146,20 @@ export function step(s: State): void {
       v.says = 'The building is finished.';
     }
   }
+  if (
+    s.continuedWorkshop &&
+    ((s.story?.close && s.villagers.every((v) => !v.person.activity && !activeStory(s, v.id))) ||
+      s.villagers[0]!.person.now * 60000 >= s.continuedWorkshop.endAtMs)
+  ) {
+    for (const v of s.villagers) {
+      interruptStory(s, v.id, 'The continued workshop ended at its actual boundary.');
+      interrupt(v);
+    }
+    s.ended = true;
+    s.chapterPaused = true;
+    if (s.story?.close) s.story.close.committedAt = s.tick;
+    s.message = 'This continued workshop ended. Unfinished work remains unfinished.';
+  }
   if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
     s.chapterPaused = true;
     s.message = 'Everyone has finished. The game is paused so people can leave.';
@@ -940,7 +1171,9 @@ export function step(s: State): void {
         ? 'The storm will arrive in two minutes. Bring everyone under a roof: the workshop hub or a finished building.'
         : 'The storm will arrive in two minutes. Finish the storehouse, then bring everyone under a roof.';
   if (s.tick === 600) {
+    recordStorm(s);
     cancelRoofBreak(s);
+    for (const v of s.villagers) interruptStory(s, v.id, 'The storm ended this unfinished exchange.');
     s.ended = true;
     // The actual storm ends work. It interrupts remaining acts; it does not complete obligations.
     for (const v of s.villagers) {
@@ -956,7 +1189,7 @@ export function step(s: State): void {
 }
 /** One visible batch. Callers must pass false while the menu or tab is inactive. */
 export function stepYieldBatch(s: State, active: boolean): number {
-  if (!active || !s.shortYield) return 0;
+  if (!active || !(s.shortYield || s.remainder?.running)) return 0;
   const before = s.tick;
   for (let i = 0; i < 12 && !s.ended && !s.chapterPaused; i++) step(s);
   return s.tick - before;
@@ -981,7 +1214,7 @@ export function stateHash(s: State): string {
   }
   return (h >>> 0).toString(16).padStart(8, '0');
 }
-export function replay(
+function* replaySteps(
   seed: number,
   inputs: Input[],
   tick: number,
@@ -991,7 +1224,7 @@ export function replay(
   rules?: typeof PRESSURE,
   allowRoof = false,
   allowLongRoof = false,
-): State {
+): Generator<number, State, void> {
   const limit = config ? 1800 : 600;
   if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
     throw new Error('Invalid replay bounds');
@@ -1032,6 +1265,7 @@ export function replay(
     while (s.tick < input.tick) {
       const before = s.tick;
       step(s);
+      yield s.tick;
       if (before === s.tick) throw new Error('Replay advances a paused chapter');
     }
     apply(s, input.command);
@@ -1040,6 +1274,7 @@ export function replay(
   while (s.tick < tick) {
     const before = s.tick;
     step(s);
+    yield s.tick;
     if (before === s.tick) throw new Error('Replay advances a paused chapter');
   }
   return s;
@@ -1131,13 +1366,13 @@ function gameEnvelope(s: State, compact = false): unknown {
     hash: stateHash(s),
   };
 }
-function importGameEnvelope(raw: unknown): State {
+function* importGameEnvelopeSteps(raw: unknown): Generator<number, State, void> {
   try {
     if (!raw || typeof raw !== 'object') throw new Error('format');
-    if ((raw as { schema?: unknown }).schema === 10) return importLongRoof(raw);
-    if ((raw as { schema?: unknown }).schema === 9) return importRoofBreak(raw);
-    if ((raw as { schema?: unknown }).schema === 7) return importShortYield(raw);
-    if ((raw as { schema?: unknown }).schema === 8) return importPressure(raw);
+    if ((raw as { schema?: unknown }).schema === 10) return yield* importLongRoofSteps(raw);
+    if ((raw as { schema?: unknown }).schema === 9) return yield* importRoofBreakSteps(raw);
+    if ((raw as { schema?: unknown }).schema === 7) return yield* importShortYieldSteps(raw);
+    if ((raw as { schema?: unknown }).schema === 8) return yield* importPressureSteps(raw);
     const r = raw as {
       chapter: Chapter | null;
       schema: number;
@@ -1180,7 +1415,13 @@ function importGameEnvelope(raw: unknown): State {
       );
       if (r.compact !== undefined && r.compact !== true) throw new Error('compact');
     }
-    const s = replay(r.seed, r.inputs, r.tick, r.chapter ?? undefined, r.schema >= 4 ? r.config : undefined);
+    const s = yield* replaySteps(
+      r.seed,
+      r.inputs,
+      r.tick,
+      r.chapter ?? undefined,
+      r.schema >= 4 ? r.config : undefined,
+    );
     if (
       (r.compact !== true && stable(s) !== stable(r.state)) ||
       (r.compact === true && (![4, 5, 6].includes(r.schema) || r.state !== undefined)) ||
@@ -1292,7 +1533,7 @@ function requireShortJson(value: unknown, depth = 0): void {
 }
 
 /** Closed native schema; archive ownership metadata is validated by Continuity separately. */
-function importShortYield(raw: unknown): State {
+function* importShortYieldSteps(raw: unknown): Generator<number, State, void> {
   requireShortJson(raw);
   if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized short run');
   const r = raw as Record<string, unknown>;
@@ -1322,7 +1563,7 @@ function importShortYield(raw: unknown): State {
   if (!Array.isArray(inputs) || inputs.length > 10000) throw new Error('inputs');
   const yields = inputs.filter((i) => i?.command?.kind === 'yield-day');
   if (yields.length !== 1 || yields[0]?.tick !== r.extension.cutover) throw new Error('cutover');
-  const s = replay(
+  const s = yield* replaySteps(
     r.seed as number,
     inputs,
     r.tick as number,
@@ -1342,7 +1583,7 @@ function importShortYield(raw: unknown): State {
 }
 
 /** Closed native schema 8: the default short chapter under `pressure/1`. */
-function importPressure(raw: unknown): State {
+function* importPressureSteps(raw: unknown): Generator<number, State, void> {
   requireShortJson(raw);
   if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
   const r = raw as Record<string, unknown>;
@@ -1366,7 +1607,7 @@ function importPressure(raw: unknown): State {
   if (r.chapter !== null) checkChapter(r.chapter as Chapter);
   const inputs = r.inputs as Input[];
   if (!Array.isArray(inputs) || inputs.length > 10000) throw new Error('inputs');
-  const s = replay(
+  const s = yield* replaySteps(
     r.seed as number,
     inputs,
     r.tick as number,
@@ -1384,7 +1625,7 @@ function importPressure(raw: unknown): State {
   return s;
 }
 
-function importRoofBreak(raw: unknown): State {
+function* importRoofBreakSteps(raw: unknown): Generator<number, State, void> {
   requireShortJson(raw);
   if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
   const r = raw as Record<string, unknown>;
@@ -1411,7 +1652,7 @@ function importRoofBreak(raw: unknown): State {
   )
     throw new Error('version');
   if (r.chapter !== null) checkChapter(r.chapter as Chapter);
-  const s = replay(
+  const s = yield* replaySteps(
     r.seed as number,
     r.inputs as Input[],
     r.tick as number,
@@ -1430,7 +1671,7 @@ function importRoofBreak(raw: unknown): State {
     throw new Error('state mismatch');
   return s;
 }
-function validateShortInput(raw: unknown, allowRoof = false): void {
+function validateShortInput(raw: unknown, allowRoof = false, actualIds?: string[]): void {
   if (allowRoof && (raw as { kind?: string })?.kind === 'roof-break-return') {
     validateRoofCommand(raw);
     return;
@@ -1446,7 +1687,12 @@ function validateShortInput(raw: unknown, allowRoof = false): void {
     !Array.isArray(c.ids) ||
     c.ids.length > 20 ||
     new Set(c.ids).size !== c.ids.length ||
-    c.ids.some((id) => typeof id !== 'string' || !/^v[1-9][0-9]?$/.test(id))
+    c.ids.some(
+      (id) =>
+        typeof id !== 'string' ||
+        !/^v[1-9][0-9]?$/.test(id) ||
+        (actualIds !== undefined && !actualIds.includes(id)),
+    )
   )
     throw new Error('ids');
   if (c.kind === 'order') {
@@ -1466,7 +1712,7 @@ function validateShortInput(raw: unknown, allowRoof = false): void {
 }
 
 /** Closed schema10, independently named from pressure/1 and the old supported passports. */
-function importLongRoof(raw: unknown): State {
+function* importLongRoofSteps(raw: unknown): Generator<number, State, void> {
   requireShortJson(raw);
   if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
   const r = raw as Record<string, unknown>;
@@ -1496,7 +1742,7 @@ function importLongRoof(raw: unknown): State {
     (r.compact !== undefined && r.compact !== true)
   )
     throw new Error('version');
-  const s = replay(
+  const s = yield* replaySteps(
     r.seed as number,
     r.inputs as Input[],
     r.tick as number,
@@ -1519,7 +1765,7 @@ function importLongRoof(raw: unknown): State {
 
 /** Shape validation only: base-day targets can already be complete or refused. Their ordinary
  * apply contract decides that at the recorded tick, after replay advances to that tick. */
-function validateLongBaseInput(raw: unknown): void {
+function validateLongBaseInput(raw: unknown, actualIds?: string[]): void {
   const c = raw as Command;
   if (['train', 'pause-chapter', 'resume-chapter'].includes(c?.kind)) {
     exactKeys(raw, ['kind']);
@@ -1531,7 +1777,7 @@ function validateLongBaseInput(raw: unknown): void {
     !Array.isArray(c.ids) ||
     c.ids.length > 20 ||
     new Set(c.ids).size !== c.ids.length ||
-    c.ids.some((id) => !/^v[1-8]$/.test(id))
+    c.ids.some((id) => (actualIds ? !actualIds.includes(id) : !/^v[1-8]$/.test(id)))
   )
     throw new Error('ids');
   if (c.kind === 'order') {
@@ -1562,18 +1808,227 @@ function validateLongBaseInput(raw: unknown): void {
 
 /** Full and compact files retain HF's exact archive as well as the host input log. */
 export function exportRun(s: State, compact = false): unknown {
+  if (s.yieldReturn || s.story)
+    return {
+      schema: 12,
+      framework: FRAMEWORK_VERSION,
+      seed: s.seed,
+      tick: s.tick,
+      chapter: s.chapter,
+      config: s.settlement?.config ?? null,
+      rules: s.rules ?? null,
+      inputs: structuredClone(s.inputs),
+      hash: stateHash(s),
+      ...(compact ? { compact: true } : { state: JSON.parse(JSON.stringify(s)) }),
+      hf: archiveCommunity(s.villagers[0]!.person),
+    };
   return {
     ...(gameEnvelope(s, compact) as Record<string, unknown>),
     hf: archiveCommunity(s.villagers[0]!.person),
   };
 }
-export function importRun(raw: unknown): State {
+function* importRunSteps(raw: unknown, checked = false): Generator<number, State, void> {
   if (!raw || typeof raw !== 'object' || !('hf' in raw))
     throw new Error(
       'This file was saved by an older Commonstead version. Keep the file and start a fresh game.',
     );
   const { hf, ...host } = raw as Record<string, unknown>;
-  const s = importGameEnvelope(host);
-  restoreCommunity(s.villagers[0]!.person, hf as Parameters<typeof restoreCommunity>[1]);
-  return s;
+  try {
+    let s: State;
+    if (host.schema === 12) {
+      exactKeys(
+        host,
+        host.compact === true
+          ? ['schema', 'framework', 'seed', 'tick', 'chapter', 'config', 'rules', 'inputs', 'hash', 'compact']
+          : ['schema', 'framework', 'seed', 'tick', 'chapter', 'config', 'rules', 'inputs', 'hash', 'state'],
+      );
+      if (
+        host.framework !== FRAMEWORK_VERSION ||
+        !Array.isArray(host.inputs) ||
+        host.inputs.length > 10000 ||
+        !Number.isInteger(host.tick) ||
+        (host.tick as number) < 0 ||
+        (host.tick as number) > 10000
+      )
+        throw new Error('Invalid current run.');
+      s = createGame(
+        host.seed as number,
+        (host.chapter as Chapter) ?? undefined,
+        (host.config as SettlementConfig) ?? undefined,
+        (host.rules as typeof PRESSURE) ?? undefined,
+      );
+      let previous = -1;
+      for (const input of host.inputs as Input[]) {
+        exactKeys(input, ['tick', 'command']);
+        if (!Number.isInteger(input.tick) || input.tick < previous || input.tick > (host.tick as number))
+          throw new Error('Invalid current input.');
+        while (s.tick < input.tick) {
+          const before = s.tick;
+          step(s);
+          yield s.tick;
+          if (s.tick === before) throw new Error('Replay cannot advance this stopped run.');
+        }
+        if (
+          ![
+            'public-exchange',
+            'story-act',
+            'yield-return',
+            'evening',
+            'remainder',
+            'continue-workshop',
+          ].includes(input.command.kind)
+        ) {
+          if (input.command.kind === 'long-roof-break-return' || input.command.kind === 'roof-break-return')
+            validateRoofCommand({ ...input.command, kind: 'roof-break-return' });
+          else if (host.config)
+            validateLongBaseInput(
+              input.command,
+              s.villagers.map((v) => v.id),
+            );
+          else if (input.command.kind !== 'reply')
+            validateShortInput(
+              input.command,
+              true,
+              s.villagers.map((v) => v.id),
+            );
+        }
+        if (
+          'ids' in input.command &&
+          (!Array.isArray(input.command.ids) ||
+            input.command.ids.some((id) => !s.villagers.some((v) => v.id === id)))
+        )
+          throw new Error('The command names a resident absent from this run.');
+        apply(s, input.command);
+        previous = input.tick;
+      }
+      while (s.tick < (host.tick as number)) {
+        const before = s.tick;
+        step(s);
+        yield s.tick;
+        if (s.tick === before) throw new Error('Replay cannot advance this stopped run.');
+      }
+      if (
+        (!s.yieldReturn && !s.story) ||
+        stable(s.inputs) !== stable(host.inputs) ||
+        stateHash(s) !== host.hash ||
+        (host.state !== undefined && stable(host.state) !== stable(s))
+      )
+        throw new Error('Current run differs from its actual input history.');
+    } else s = yield* importGameEnvelopeSteps(host);
+    if (checked) {
+      // The worker checked public HF admission. Keep the actual replay-created Run
+      // only when its entire archive equals the selected archive, including journals.
+      if (stable(archiveCommunity(s.villagers[0]!.person)) !== stable(hf))
+        throw new Error('The game log and complete HF archive disagree.');
+    } else restoreCommunity(s.villagers[0]!.person, hf as Parameters<typeof restoreCommunity>[1]);
+    return s;
+  } catch {
+    throw new Error(
+      'This file does not replay the same way in this version of Commonstead. It may come from an older version. The file was not loaded. Start a new game instead.',
+    );
+  }
+}
+
+const shortStoryHost: StoryHost = {
+  body: (s, _v) => choices(s).filter((a) => a.action !== 'work'),
+  alternative: (s, v, a, d) => {
+    if (a.action === 'eat' && s.resources.food < 2) return;
+    if (begin(v.person, a, d)) {
+      recordRestStart(s, v);
+      if (a.action === 'eat') s.resources.food -= 2;
+      v.recoveryUntil = s.tick + Math.ceil(a.duration / BODY_MINUTES);
+      v.actionUntil = v.recoveryUntil;
+      v.says = d.suggestion?.says || d.narration;
+      v.task = a.action;
+      v.status = `is ${a.action}.`;
+    }
+  },
+  move: (s, v, _map, point) => {
+    assign(s, v, { target: 'move', ...point });
+    return v.order?.target === 'move';
+  },
+  scene: () => {
+    throw new Error('Evening scenes belong to the longer day.');
+  },
+};
+
+export const shortPublicHost: PublicHost = {
+  ...shortStoryHost,
+  work: (s, v, prior) => {
+    const order = prior as Villager['order'];
+    if (
+      !order ||
+      s.pauseRequested ||
+      s.story?.close ||
+      (!NODES.some((n) => n.id === order.target) &&
+        !s.buildings.some((b) => b.id === order.target && !b.complete))
+    )
+      return;
+    return Math.hypot(order.x - v.x, order.y - v.y) > 15
+      ? offer('move', 10, 0.15, {})
+      : choices(s).find((a) => a.action === 'work');
+  },
+  startWork: (s, v, prior, a, d) => {
+    const current = shortPublicHost.work(s, v, prior);
+    if (!current || JSON.stringify(current) !== JSON.stringify(a) || !begin(v.person, a, d)) return false;
+    v.order = structuredClone(prior) as NonNullable<Villager['order']>;
+    v.actionUntil = s.tick + Math.ceil(a.duration / BODY_MINUTES);
+    v.recoveryUntil = 0;
+    v.task = a.action === 'move' ? `moving to ${taskLabel(v.order.target)}` : taskLabel(v.order.target);
+    v.status =
+      a.action === 'move' ? 'moving' : v.person.activity?.protest ? 'working under protest' : 'working';
+    v.says = d.suggestion?.says || d.narration;
+    return true;
+  },
+  detach: (_s, v) => {
+    const prior = v.order ? structuredClone(v.order) : null;
+    v.order = null;
+    return prior;
+  },
+  resume: (s, v, prior, quiet) => {
+    if (prior && !v.order) {
+      if (quiet) v.order = structuredClone(prior) as NonNullable<Villager['order']>;
+      else assign(s, v, prior as NonNullable<Villager['order']>);
+    }
+  },
+};
+
+export { requireSupportedProducer };
+
+function finishReplay(steps: Generator<number, State, void>): State {
+  for (;;) {
+    const result = steps.next();
+    if (result.done) return result.value;
+  }
+}
+export function replay(...args: Parameters<typeof replaySteps>): State {
+  return finishReplay(replaySteps(...args));
+}
+export function importRun(raw: unknown): State {
+  return finishReplay(importRunSteps(raw));
+}
+/** Same validators and native steps, with an event-loop boundary between ticks. */
+export async function importRunAsync(
+  raw: unknown,
+  options: {
+    signal?: AbortSignal;
+    progress?: (tick: number) => void;
+  } = {},
+): Promise<State> {
+  options.signal?.throwIfAborted();
+  const candidate = structuredClone(raw);
+  const { validateArchiveOffThread } = await import('./validation-client.ts');
+  await validateArchiveOffThread(candidate, options);
+  const steps = importRunSteps(candidate, true);
+  let until = performance.now() + 12;
+  for (;;) {
+    options.signal?.throwIfAborted();
+    const result = steps.next();
+    if (result.done) return result.value;
+    if (performance.now() >= until) {
+      options.progress?.(result.value);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      until = performance.now() + 12;
+    }
+  }
 }

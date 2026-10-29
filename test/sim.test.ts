@@ -48,6 +48,9 @@ describe('Commonstead fixed-tick simulation', () => {
       apply(s, { kind: 'order', ids: [v.id], target: 'listen' });
       expect(v.discovery).toBe(1);
       apply(s, { kind: 'order', ids: [v.id], target: 'collaborate' });
+      expect(v.discovery).toBe(1);
+      const requested = s.tick;
+      while (v.discovery !== 2 && s.tick < requested + 60) step(s);
       expect(v.discovery).toBe(2);
     }
     expect(stateHash(importRun(exportRun(s)))).toBe(stateHash(s));
@@ -267,11 +270,11 @@ describe('published HF plain narration', () => {
   });
 });
 
-test('reply edition is explicit, closed and cannot enter legacy notebooks', () => {
+test('current reply schema is closed and requires an actual disclosure in every opening', () => {
   const config = { edition: 'settlement-replies/1' } as const;
   const s = createGame(42, undefined, config);
   const full = exportRun(s) as Record<string, unknown>;
-  expect(full.schema).toBe(5);
+  expect(full.schema).toBe(12);
   expect(importRun(full)).toEqual(s);
   expect(importRun(exportRun(s, true))).toEqual(s);
   for (const extra of [{ chapter: {} }, { surplus: true }, { compact: false }])
@@ -381,7 +384,7 @@ test('short yield preserves the current host fields and HF archive with one exac
   const archiveBefore = archiveCommunity(first(yielded).person),
     prefix = structuredClone(yielded.inputs);
   apply(yielded, { kind: 'yield-day' });
-  expect((exportRun(yielded) as { schema: number }).schema).toBe(7);
+  expect((exportRun(yielded) as { schema: number }).schema).toBe(12);
   expect(yielded.shortYield?.cutover).toBe(before.tick);
   expect(yielded.inputs.slice(0, -1)).toEqual(prefix);
   const { shortYield: _receipt, ...host } = yielded;

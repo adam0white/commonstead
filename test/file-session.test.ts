@@ -169,7 +169,7 @@ test('late digest and real envelope validation completion cannot install after c
 });
 
 test('selected and streaming expanded bytes are bounded independently from UTF16 source limits', async () => {
-  const c = createFileSession();
+  const c = createFileSession({ selectedBytes: 5_000_000, decodedBytes: 5_000_000 });
   const tooLarge = new File(['x'.repeat(5_000_001)], 'large.json');
   const read = vi.spyOn(tooLarge, 'arrayBuffer');
   await expect(c.select(tooLarge)).rejects.toThrow(/Selected/);
@@ -184,4 +184,25 @@ test('selected and streaming expanded bytes are bounded independently from UTF16
   };
   await expect(c.select(file(raw))).rejects.toThrow(/source archive bounds/);
   expect(c.snapshot()).toBe(null);
+});
+
+// CS-R5: the file command owner records the real short ending before continuation.
+test('file short ending establishes a safe command-owned pause before retained continuation', async () => {
+  const s = createGame(418, undefined, undefined, PRESSURE);
+  while (s.tick < 599) step(s);
+  const raw = exportRun(s),
+    c = createFileSession();
+  await c.select(file(raw));
+  const original = c.original();
+  c.resume();
+  c.advance(1);
+  expect(c.state()?.ended).toBe(true);
+  expect(c.state()?.chapterPaused).toBe(false);
+  (c as unknown as { pauseAtEnd: () => void }).pauseAtEnd();
+  expect(c.state()?.chapterPaused).toBe(true);
+  c.apply({ kind: 'continue-workshop' });
+  expect(c.state()?.continuedWorkshop).toBeDefined();
+  expect(c.state()?.tick).toBe(600);
+  expect(c.original()).toEqual(original);
+  expect(c.snapshot()).toEqual(exportRun(importRun(c.snapshot())));
 });

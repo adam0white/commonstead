@@ -9,13 +9,17 @@ import { NODES, type State, taskLabel, type Villager } from './sim.ts';
  */
 export function orderConsequences(s: State, ids: readonly string[]): string {
   if (s.settlement)
-    return 'A new work or travel request during a work or travel act is rejected, not queued. Wait for that act to finish, then ask again, or explicitly cancel it first. An accepted request can wait through a personal activity, such as rest; the resident may choose another personal activity before work. Cancel selected tasks interrupts unfinished assembly and removes the work request. Yield replaces the yielding resident’s work request; ask for that work again afterward. Carried supplies must reach the hub before another work request.';
+    return 'A new work or travel request during a work or travel act is rejected, not queued. Wait for that act to finish, then ask again, or explicitly cancel it first. An accepted request can wait through a personal activity, such as rest; the resident may choose another personal activity before work. Cancel selected tasks interrupts unfinished assembly and removes the work request. Yield replaces the yielding resident’s work request; ask for that work again afterward. Yield, then request earlier work captures an actual existing work request and offers it once after a completed physical yield, if it is still valid. Carried supplies must reach the hub before another work request.';
   const people = s.villagers.filter((v) => ids.includes(v.id));
   const retained = people.filter((v) => v.order && !['shelter', 'move'].includes(v.order.target)).length;
   return `Rest stops selected people’s assembly and gathering for 35 game seconds. ${retained} of ${people.length} selected people have a work request to consider again afterward. A person may choose another break.${s.rules ? ' Everyone rests gives this break to everyone not already recovering and keeps each current request. Go under a roof replaces selected work with a walk to the hub. Everyone under a roof does this for everyone. Assembly and gathering stop immediately. At the hub they wait; work does not return automatically. Rest there, then give a new work order when you want them to return. Travel time is unknown.' : ''}`;
 }
 
 export function returnTiming(s: State, v: Villager): string {
+  const yielded = s.yieldReturn?.findLast((a) => a.actor === v.id);
+  if (yielded)
+    return `Yield and earlier work recorded at ${clock(yielded.at)}. Earlier request: ${yielded.priorJob.kind} ${taskLabel(yielded.priorJob.target)}. Stage: ${yielded.stage}. ${yielded.reason ?? 'The physical yield has not completed. A later work choice is unknown.'}`;
+
   const long = s.longRoofBreak?.attempts.findLast((a) => a.id === v.id);
   if (long) {
     const job = long.priorActor.job;

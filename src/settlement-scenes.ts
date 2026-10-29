@@ -143,6 +143,7 @@ export type ReplyAttempt = {
   resultId?: string;
 };
 export type ReplyScene = {
+  reservation?: { resultId: string; sheetId: string; paidAttemptId: string };
   disclosure: { id: string; at: number; textId: string };
   selectedBranch?: ReplyBranch;
   attempts: ReplyAttempt[];

@@ -1,6 +1,16 @@
 /** Complete memory-only session. No native storage, ownership or browser Shelf effects. */
 import { validateRunEnvelopes, validateYieldSources } from './continuity.ts';
-import { apply, exportRun, type GameCommand, importRun, type State, step, stepYieldBatch } from './sim.ts';
+import { COMPLETE_BYTES, FILE_AGGREGATE_BYTES } from './save-store.ts';
+import {
+  apply,
+  exportRun,
+  type GameCommand,
+  importRun,
+  importRunAsync,
+  type State,
+  step,
+  stepYieldBatch,
+} from './sim.ts';
 import { validateSourceArchives } from './source-archives';
 
 const encoder = new TextEncoder();
@@ -19,18 +29,22 @@ export function createFileSession(
     decodedBytes?: number;
     currentBytes?: number;
     aggregateBytes?: number;
+    progress?: (tick: number) => void;
   } = {},
 ) {
+  let controller = new AbortController();
   let epoch = 0,
     running = false,
     compact = false;
   let held: Held | null = null,
     original: Original | null = null;
-  const selectedLimit = bounds.selectedBytes ?? 5_000_000;
-  const decodedLimit = bounds.decodedBytes ?? 5_000_000;
-  const currentLimit = bounds.currentBytes ?? 5_000_000;
-  const aggregateLimit = bounds.aggregateBytes ?? 10_000_000;
+  const selectedLimit = bounds.selectedBytes ?? COMPLETE_BYTES;
+  const decodedLimit = bounds.decodedBytes ?? COMPLETE_BYTES;
+  const currentLimit = bounds.currentBytes ?? COMPLETE_BYTES;
+  const aggregateLimit = bounds.aggregateBytes ?? FILE_AGGREGATE_BYTES;
   function invalidate() {
+    controller.abort();
+    controller = new AbortController();
     epoch++;
     running = false;
   }
@@ -80,7 +94,7 @@ export function createFileSession(
         current = () => selection === epoch;
       if (!file) return false;
       try {
-        if (file.size > selectedLimit) throw new Error('Selected file exceeds 5,000,000 bytes.');
+        if (file.size > selectedLimit) throw new Error('Selected file exceeds complete run capacity.');
         const bytes = await file.arrayBuffer();
         if (!current()) return false;
         if (bytes.byteLength !== file.size || bytes.byteLength > selectedLimit)
@@ -98,7 +112,7 @@ export function createFileSession(
               if (!current()) return false;
               if (part.done) break;
               total += part.value.byteLength;
-              if (total > decodedLimit) throw new Error('Expanded file exceeds 5,000,000 bytes.');
+              if (total > decodedLimit) throw new Error('Expanded file exceeds complete run capacity.');
               chunks.push(part.value);
             }
           } finally {
@@ -112,7 +126,7 @@ export function createFileSession(
             at += chunk.byteLength;
           }
         }
-        if (decoded.byteLength > decodedLimit) throw new Error('Decoded file exceeds 5,000,000 bytes.');
+        if (decoded.byteLength > decodedLimit) throw new Error('Decoded file exceeds complete run capacity.');
         const source: Record<string, unknown> = JSON.parse(
           new TextDecoder('utf-8', { fatal: true }).decode(decoded),
         );
@@ -122,7 +136,7 @@ export function createFileSession(
         validateYieldSources(sourceArchives);
         await validateSourceArchives(sourceArchives);
         if (!current()) return false;
-        const state = importRun(native);
+        const state = await importRunAsync(native, { signal: controller.signal, progress: bounds.progress });
         if (!current()) return false;
         await validateRunEnvelopes(state);
         if (!current()) return false;
@@ -144,6 +158,13 @@ export function createFileSession(
         throw error;
       }
     },
+    // CS-R5: mutate the actual retained owner, never its UI clone.
+    pauseAtEnd() {
+      stage((state) => {
+        if (!state.ended) throw new Error('The chapter has not ended.');
+        if (!state.chapterPaused) apply(state, { kind: 'pause-chapter' });
+      });
+    },
     resume() {
       invalidate();
       stage((state) => {
@@ -158,7 +179,7 @@ export function createFileSession(
     advance(ticks: number) {
       if (!running) return;
       stage((state) => {
-        if (state.shortYield) stepYieldBatch(state, true);
+        if (state.shortYield || state.remainder?.running) stepYieldBatch(state, true);
         else for (let i = 0; i < ticks && !state.ended && !state.chapterPaused; i++) step(state);
       });
     },

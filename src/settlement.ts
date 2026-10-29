@@ -10,6 +10,7 @@ import {
   perceive,
   promise,
   readPerson,
+  refuseStart,
   releaseCommitment,
   reviewed,
   socialEvent,
@@ -17,6 +18,7 @@ import {
   tick as tickPerson,
 } from './hf4';
 import { blocked, MAPS, type Place, type Point, route } from './paths.ts';
+import { type PublicHost, stagePublicExchanges, stepPublicExchange } from './public-exchanges';
 import {
   activePeer,
   hasReplies,
@@ -32,7 +34,6 @@ import {
   REPLIES,
   type REPLY_EDITION,
   type ReplyAttempt,
-  type ReplyResult,
   type ReplyScene,
   SCENES,
   type SceneId,
@@ -40,6 +41,22 @@ import {
   sceneOutcome,
 } from './settlement-scenes.ts';
 import type { Building, Command, Resource, State, Villager } from './sim.ts';
+import {
+  activeStory,
+  interruptStory,
+  recordDisclosure,
+  recordFirstReply,
+  recordRestCompleted,
+  recordRestStart,
+  recordStorm,
+  recordStorySceneSpend,
+  recordWork,
+  type StoryHost,
+  stageStories,
+  stepStory,
+  storyClock,
+  storyScenePaper,
+} from './story-records.ts';
 
 /** Authored settlement-day/1 world only: finite stores, trips, geometry and timed scenes.
  * HF3 owns bodies, duties, attention, testimony, assent and social responses. No generic planner,
@@ -79,14 +96,12 @@ export type Settlement = {
   config: SettlementConfig;
   peer?: PeerState;
   replyScenes?: Record<string, ReplyScene>;
-  replyResults?: ReplyResult[];
   actors: Record<string, ActorWorld>;
   caches: Record<Place, Record<Resource, number>>;
   accounts: Account[];
   events: { at: number; text: string }[];
   completed: { actor: string; scene: string; at: number }[];
   storm: boolean;
-  paper: number;
   dispute: [string, string] | null;
   disputeAt: number | null;
   trolley: string | null;
@@ -104,8 +119,8 @@ export function initSettlement(s: State, config: SettlementConfig): void {
     throw new Error('Unknown settlement edition.');
   s.settlement = {
     config: { edition: config.edition },
-    ...(hasReplies(config.edition) ? { replyScenes: {}, replyResults: [] } : {}),
-    ...(config.edition === PEER_EDITION ? { peer: { witnesses: [], attempts: [] } } : {}),
+    ...(hasReplies(config.edition) ? { replyScenes: {} } : {}),
+    peer: { witnesses: [], attempts: [] },
     actors: Object.fromEntries(
       s.villagers.map((v) => [
         v.id,
@@ -129,7 +144,6 @@ export function initSettlement(s: State, config: SettlementConfig): void {
     events: [],
     completed: [],
     storm: false,
-    paper: 4,
     dispute: null,
     disputeAt: null,
     trolley: null,
@@ -222,9 +236,9 @@ function jobKey(v: Villager, j: Job): string {
 }
 // The released Affordance contract permits folding travel into an activity's purpose.
 // Route fragments interrupt rather than complete that purpose; only the actual world outcome keeps it.
-function primaryOffer(s: State, v: Villager, travelTicks?: number): Affordance {
+function primaryOffer(s: State, v: Villager, travelTicks?: number, retained?: Job): Affordance {
   const aw = actor(s, v),
-    j = aw.job;
+    j = retained ?? aw.job;
   if (!j) throw new Error('No world task');
   let a: Affordance;
   if (j.kind === 'scene') {
@@ -310,6 +324,62 @@ function bodyChoices(s: State, v: Villager): Affordance[] {
     });
   return options;
 }
+// Preview is pure. Only an actual gather boundary may publish conflict/witness receipts.
+function gatherBlocked(s: State, v: Villager): boolean {
+  const w = world(s);
+  return !!w.dispute || !!(w.trolley && w.trolley !== v.id);
+}
+function allowGatherStart(s: State, v: Villager): boolean {
+  if (!gatherBlocked(s, v)) return true;
+  const w = world(s),
+    aw = actor(s, v);
+  if (w.dispute) {
+    v.status = 'waiting for the shared route';
+    v.says = 'We disagree about the trolley route. We can talk, yield or offer a voluntary practice bout.';
+    return false;
+  }
+  if (w.trolley && w.trolley !== v.id) {
+    const other = s.villagers.find((p) => p.id === w.trolley);
+    if (
+      other &&
+      !w.routeAgreements.includes([v.id, other.id].sort().join('/')) &&
+      actor(s, other).map === aw.map &&
+      Math.hypot(v.x - other.x, v.y - other.y) < 50
+    ) {
+      w.dispute = [v.id, other.id];
+      w.disputeAt = s.tick;
+      witnessRoute(s, v, other);
+      for (const [p, q] of [
+        [v, other],
+        [other, v],
+      ] as const) {
+        socialEvent(p.person, {
+          at: p.person.now,
+          kind: 'conflict',
+          otherId: q.person.id,
+          byMe: false,
+          magnitude: 0.25,
+        });
+        perceive(p.person, [
+          {
+            at: p.person.now,
+            channel: 'saw',
+            kind: 'conflict',
+            actorId: q.person.id,
+            salience: 0.8,
+            summary: 'We reached the narrow trolley route together and disagreed about who would use it.',
+          },
+        ]);
+      }
+      event(
+        s,
+        `${v.name} and ${other.name} disagree over the narrow trolley route. Ask one resident to yield to open the route. Talking and practice are optional.`,
+      );
+    }
+    return false;
+  }
+  return true;
+}
 function startChoice(
   s: State,
   v: Villager,
@@ -318,8 +388,14 @@ function startChoice(
   purpose: Running['purpose'],
 ): boolean {
   const aw = actor(s, v);
+  if (purpose === 'job' && aw.job?.kind === 'gather' && !allowGatherStart(s, v)) {
+    refuseStart(v.person, a, decision);
+    return false;
+  }
   if (a.action === 'eat' && s.resources.food < 2) return false;
   if (!begin(v.person, a, decision)) return false;
+  if (purpose === 'job' && aw.job?.kind === 'gather') world(s).trolley = v.id;
+  recordRestStart(s, v);
   // Only an actual voluntary assent creates this bounded host appointment. HF owns its pressure/status.
   if (
     aw.job &&
@@ -379,6 +455,8 @@ function go(s: State, v: Villager, point: Point): boolean {
 }
 function cancel(s: State, v: Villager) {
   cancelLongRoof(s, v.id);
+  cancelYieldReturn(s, v.id);
+  interruptStory(s, v.id);
   interruptPeer(s, v.id, 'A participant explicitly stopped the unfinished route conversation.');
   interruptReply(s, v, 'The conversation stopped before it finished.');
   const aw = actor(s, v);
@@ -423,7 +501,10 @@ function setJob(s: State, v: Villager, job: Job, roof = false): void {
     return;
   }
   if (!go(s, v, aw.map === job.map ? job.point : PASSAGE)) return;
-  if (!roof) cancelLongRoof(s, v.id);
+  if (!roof) {
+    cancelLongRoof(s, v.id);
+    cancelYieldReturn(s, v.id);
+  }
   if (aw.commitment) releaseCommitment(v.person, aw.commitment);
   aw.commitment = null;
   aw.pendingRequest = 'ordinary';
@@ -432,15 +513,46 @@ function setJob(s: State, v: Villager, job: Job, roof = false): void {
   v.says = 'I will consider that request alongside my own needs and responsibilities.';
 }
 function spend(s: State, boards: number, meals: number, paper = 0): boolean {
-  if (s.resources.wood < boards || s.resources.food < meals || world(s).paper < paper) {
+  if (s.resources.wood < boards || s.resources.food < meals || s.story!.paper < paper) {
     s.message = `This needs ${boards} boards, ${meals} meals and ${paper} sheets of paper from the shared store.`;
     return false;
   }
   s.resources.wood -= boards;
   s.resources.food -= meals;
-  world(s).paper -= paper;
+  s.story!.paper -= paper;
   return true;
 }
+export function settlementBuildReason(s: State, c: Extract<Command, { kind: 'build' }>): string {
+  if (s.pauseRequested) return 'Resume the chapter before giving new requests.';
+  const selected = s.villagers.filter((v) => c.ids.includes(v.id));
+  if (!selected.length) return 'Select a resident first.';
+  if (
+    selected.some(
+      (v) =>
+        actor(s, v).map !== 'yard' ||
+        actor(s, v).carried ||
+        (actor(s, v).running && actor(s, v).running?.purpose !== 'body'),
+    )
+  ) {
+    return 'Choose available residents in the workshop yard.';
+  }
+  if (
+    blocked('yard', c) ||
+    s.buildings.some((b) => Math.hypot(b.x - c.x, b.y - c.y) < 90) ||
+    !selected.every((v) => route('yard', v, c))
+  ) {
+    return 'The site is blocked. No materials were spent.';
+  }
+  if (c.building === 'storehouse' && s.buildings.some((b) => b.kind === 'storehouse')) {
+    return 'The storehouse already has a site.';
+  }
+  const boards = c.building === 'house' ? 40 : 180,
+    ballast = c.building === 'house' ? 0 : 120;
+  if (s.resources.wood < boards || s.resources.stone < ballast)
+    return `The site needs ${boards} boards and ${ballast} ballast bags.`;
+  return '';
+}
+
 export function applySettlement(s: State, c: Command): void {
   const w = world(s);
   if (c.kind === 'peer') {
@@ -457,6 +569,7 @@ export function applySettlement(s: State, c: Command): void {
   }
   if (c.kind === 'pause-chapter') {
     cancelLongRoof(s);
+    for (const v of s.villagers) cancelYieldReturn(s, v.id);
     s.pauseRequested = true;
     s.chapterPaused = s.villagers.every((v) => !v.person.activity);
     return;
@@ -470,41 +583,20 @@ export function applySettlement(s: State, c: Command): void {
     s.message = 'Resume the chapter before giving new requests.';
     return;
   }
+  if (!('ids' in c)) return;
   const selected = s.villagers.filter((v) => c.ids.includes(v.id));
   if (!selected.length) {
     s.message = 'Select a resident first.';
     return;
   }
   if (c.kind === 'build') {
-    if (
-      selected.some(
-        (v) =>
-          actor(s, v).map !== 'yard' ||
-          actor(s, v).carried ||
-          (actor(s, v).running && actor(s, v).running?.purpose !== 'body'),
-      )
-    ) {
-      s.message = 'Choose available residents in the workshop yard.';
-      return;
-    }
-    if (
-      blocked('yard', c) ||
-      s.buildings.some((b) => Math.hypot(b.x - c.x, b.y - c.y) < 90) ||
-      !selected.every((v) => route('yard', v, c))
-    ) {
-      s.message = 'The site is blocked. No materials were spent.';
-      return;
-    }
-    if (c.building === 'storehouse' && s.buildings.some((b) => b.kind === 'storehouse')) {
-      s.message = 'The storehouse already has a site.';
+    const reason = settlementBuildReason(s, c);
+    if (reason) {
+      s.message = reason;
       return;
     }
     const boards = c.building === 'house' ? 40 : 180,
       ballast = c.building === 'house' ? 0 : 120;
-    if (s.resources.wood < boards || s.resources.stone < ballast) {
-      s.message = `The site needs ${boards} boards and ${ballast} ballast bags.`;
-      return;
-    }
     s.resources.wood -= boards;
     s.resources.stone -= ballast;
     const b = {
@@ -529,6 +621,7 @@ export function applySettlement(s: State, c: Command): void {
           continue;
         }
         cancelLongRoof(s, v.id);
+        cancelYieldReturn(s, v.id);
         aw.pendingRequest = 'insist';
         s.message = `You asked ${v.name} to keep working. The request will be heard once at the next action boundary. It can be refused.`;
         continue;
@@ -547,6 +640,7 @@ export function applySettlement(s: State, c: Command): void {
           continue;
         }
         cancelLongRoof(s, v.id);
+        cancelYieldReturn(s, v.id);
         aw.pendingRequest = 'ordinary';
         choose(s, v, a);
         continue;
@@ -731,7 +825,7 @@ function deliverConversation(s: State, a: Villager, b: Villager) {
         at: s.tick,
         speaker: speaker.name,
         listener: listener.name,
-        text: 'They do not pass on an account of the supplies.',
+        text: 'No outward supply account was recorded.',
       });
   }
   if (w.accounts.length > 40) w.accounts.splice(0, w.accounts.length - 40);
@@ -815,7 +909,10 @@ function pairStart(s: State, v: Villager): boolean {
     cancel(s, other);
     return true;
   }
-  if (j.kind === 'scene') world(s).records.grip = 'restored';
+  if (j.kind === 'scene') {
+    world(s).records.grip = 'restored';
+    recordStorySceneSpend(s, v.id, SCENES.trial.boards, 0, 0);
+  }
   startChoice(s, v, request, da, 'job');
   startChoice(s, other, optsB[0] as Affordance, db, 'job');
   return true;
@@ -828,6 +925,7 @@ function finishJob(s: State, v: Villager, run: Running) {
     v.discovery = Math.max(1, v.discovery);
     v.says = DISCOVERIES[Number(v.id.slice(1)) - 1]?.[0] ?? 'I have nothing private to share.';
     event(s, `${v.name} chooses to tell you: ${v.says}`);
+    recordDisclosure(s, v);
     if (world(s).replyScenes && ['v1', 'v7'].includes(v.id))
       world(s).replyScenes![v.id] ??= {
         disclosure: { id: `disclosure:${v.id}:${s.tick}`, at: s.tick, textId: `${v.id}:private-story` },
@@ -841,10 +939,15 @@ function finishJob(s: State, v: Villager, run: Running) {
       world(s).dispute = null;
       world(s).disputeAt = null;
       event(s, `${v.name} yields the shared trolley route after choosing to make room.`);
+      const retained = activeYieldReturn(s, v.id);
+      if (retained?.target === j.target) {
+        retained.completedAt = s.tick;
+        retained.stage = 'return';
+      }
     }
   }
   if (j.kind === 'gather') {
-    world(s).trolley = null;
+    if (world(s).trolley === v.id) world(s).trolley = null;
     const res = j.target as Resource,
       cache = world(s).caches[aw.map],
       amount = Math.min(cache[res], 8 * readPerson(v.person).body.capacity);
@@ -858,10 +961,20 @@ function finishJob(s: State, v: Villager, run: Running) {
   if (j.kind === 'build') {
     const b = s.buildings.find((b) => b.id === j.target);
     if (b && !b.complete) {
+      const before = b.progress;
       b.progress = Math.min(
         1,
         b.progress + (readPerson(v.person).body.capacity * 8) / (b.kind === 'house' ? 35 : 180),
       );
+      recordWork(s, {
+        actor: v.id,
+        at: s.tick,
+        kind: 'build',
+        target: b.id,
+        amount: b.progress - before,
+        before,
+        after: b.progress,
+      });
       if (b.progress >= 1) {
         b.complete = true;
         event(s, `The ${b.kind === 'house' ? 'guest cabin' : 'storehouse'} is finished.`);
@@ -1024,16 +1137,24 @@ export function stepSettlement(s: State): void {
         summary: REPLIES[reply.branch].says,
       });
   }
+  stageStories(s);
+  stagePublicExchanges(s);
   // New edition only: catch up all actors before any shared act or hearing.
-  if (w.peer) for (const v of s.villagers) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
+  const shared =
+    s.story?.publicExchanges?.some((a) => ['requested', 'active'].includes(a.status)) ||
+    w.config.edition === PEER_EDITION ||
+    w.peer?.attempts.some((a) => ['requested', 'talking', 'speaking'].includes(a.status));
+  if (shared) for (const v of s.villagers) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
   for (const v of s.villagers) {
     const aw = actor(s, v);
-    if (!w.peer) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
+    if (!shared) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
     if (!v.person.body.alive) {
       cancel(s, v);
       v.status = 'has died.';
       continue;
     }
+    if (stepPublicExchange(s, v, settlementPublicHost)) continue;
+    if (stepStory(s, v, settlementStoryHost)) continue;
     if (stepPeer(s, v, peerHost)) continue;
     if (stepReply(s, v)) continue;
     const run = aw.running;
@@ -1054,6 +1175,14 @@ export function stepSettlement(s: State): void {
       }
       const activity = v.person.activity;
       const report = activity ? finish(v.person, runningOutcome(s, v, run)) : undefined;
+      if (
+        run.action === 'rest' &&
+        activity?.action === 'rest' &&
+        activity.affordanceId === run.id &&
+        v.person.now >= activity.endsAt &&
+        report?.status === 'completed'
+      )
+        recordRestCompleted(s, v, activity.id);
       const roof = activeLongRoof(s, v.id);
       if (roof?.stage === 'rest' && run.from === roof.restStarted) {
         if (
@@ -1076,7 +1205,8 @@ export function stepSettlement(s: State): void {
         go(s, v, aw.job.point);
       }
     }
-    if (s.pauseRequested) continue;
+    if (s.pauseRequested || s.story?.close) continue;
+    if (stepYieldReturn(s, v)) continue;
     if (stepLongRoof(s, v)) continue;
     if (aw.running) {
       if (aw.running.purpose === 'travel') {
@@ -1099,6 +1229,8 @@ export function stepSettlement(s: State): void {
       }
       continue;
     }
+    if (stepPublicExchange(s, v, settlementPublicHost)) continue;
+    if (stepStory(s, v, settlementStoryHost)) continue;
     if (startReply(s, v)) continue;
     const j = aw.job;
     if (aw.path.length) {
@@ -1115,6 +1247,13 @@ export function stepSettlement(s: State): void {
       continue;
     }
     if (aw.carried && aw.map === 'yard' && Math.hypot(v.x - HOME.x, v.y - HOME.y) < 10) {
+      recordWork(s, {
+        actor: v.id,
+        at: s.tick,
+        kind: 'delivery',
+        target: aw.carried.resource,
+        amount: aw.carried.amount,
+      });
       s.resources[aw.carried.resource] += aw.carried.amount;
       aw.carried = null;
       const roof = activeLongRoof(s, v.id);
@@ -1176,7 +1315,9 @@ export function stepSettlement(s: State): void {
           d = decide(v.person, opts, requestOptions(s, v, req));
         const chosen = opts.find((a) => a.id === d.chosenAffordanceId);
         if (chosen === req && d.suggestion?.verdict !== 'refused') {
-          if (spend(s, scene.boards, scene.meals, scene.paper)) {
+          const paper = storyScenePaper(s, v.id, scene.paper);
+          if (spend(s, scene.boards, scene.meals, paper)) {
+            recordStorySceneSpend(s, v.id, scene.boards, scene.meals, paper);
             if (j.target === 'telescope') w.records.telescope = 'set';
             startChoice(s, v, req, d, 'job');
           } else aw.job = null;
@@ -1187,59 +1328,11 @@ export function stepSettlement(s: State): void {
         }
         continue;
       }
-      if (j.kind === 'gather') {
-        if (w.dispute) {
-          v.status = 'waiting for the shared route';
-          v.says =
-            'We disagree about the trolley route. We can talk, yield or offer a voluntary practice bout.';
-          choose(s, v);
-          continue;
-        }
-        if (w.trolley && w.trolley !== v.id) {
-          const other = s.villagers.find((p) => p.id === w.trolley);
-          if (
-            other &&
-            !w.routeAgreements.includes([v.id, other.id].sort().join('/')) &&
-            actor(s, other).map === aw.map &&
-            Math.hypot(v.x - other.x, v.y - other.y) < 50
-          ) {
-            w.dispute = [v.id, other.id];
-            w.disputeAt = s.tick;
-            witnessRoute(s, v, other);
-            for (const [p, q] of [
-              [v, other],
-              [other, v],
-            ] as const) {
-              socialEvent(p.person, {
-                at: p.person.now,
-                kind: 'conflict',
-                otherId: q.person.id,
-                byMe: false,
-                magnitude: 0.25,
-              });
-              perceive(p.person, [
-                {
-                  at: p.person.now,
-                  channel: 'saw',
-                  kind: 'conflict',
-                  actorId: q.person.id,
-                  salience: 0.8,
-                  summary:
-                    'We reached the narrow trolley route together and disagreed about who would use it.',
-                },
-              ]);
-            }
-            event(
-              s,
-              `${v.name} and ${other.name} disagree over the narrow trolley route. Ask one resident to yield to open the route. Talking and practice are optional.`,
-            );
-          }
-          choose(s, v);
-          continue;
-        }
+      if (j.kind === 'gather' && !allowGatherStart(s, v)) {
+        choose(s, v);
+        continue;
       }
       choose(s, v, primaryOffer(s, v), 'job');
-      if (j.kind === 'gather' && actor(s, v).running?.purpose === 'job') w.trolley = v.id;
       continue;
     }
     choose(s, v);
@@ -1250,8 +1343,23 @@ export function stepSettlement(s: State): void {
     s.chapterPaused = true;
     event(s, 'Everyone has finished. The chapter is paused at actual action boundaries.');
   }
+  // Evening scope: stop at actual action boundaries after the real storm; never advance the clock.
+  if (s.story?.close) {
+    for (const v of s.villagers)
+      if (!actor(s, v).running) {
+        interruptStory(s, v.id, 'The evening is ending.');
+        cancel(s, v);
+      }
+    if (s.villagers.every((v) => !v.person.activity)) {
+      s.story.close.committedAt = s.tick;
+      s.story.close.reason = 'chosen';
+      s.ended = true;
+      event(s, `You ended this evening at ${storyClock(s, s.tick)}. Unfinished work remains unfinished.`);
+    }
+  }
   if (s.tick === 750) event(s, 'The storm arrives at 20:00. Finish the storehouse before then.');
   if (s.tick === 900) {
+    recordStorm(s);
     w.storm = true;
     s.won = s.buildings.some((b) => b.kind === 'storehouse' && b.complete);
     if (!s.won) {
@@ -1284,6 +1392,35 @@ export function stepSettlement(s: State): void {
 function latestReply(s: State, v: Villager): ReplyAttempt | undefined {
   return world(s).replyScenes?.[v.id]?.attempts.at(-1);
 }
+// CS-R13: payment owns one physical unfinished sheet, not access from any later place.
+function reservedReplyReason(s: State, v: Villager): string {
+  const scene = world(s).replyScenes?.[v.id],
+    reservation = scene?.reservation;
+  if (!reservation) return '';
+  const sheet = s.story?.objects.find((o) => o.id === reservation.sheetId);
+  const paid = scene.attempts.find((a) => a.id === reservation.paidAttemptId);
+  if (
+    !sheet ||
+    !paid ||
+    paid.paperSpent !== 1 ||
+    paid.branch !== scene.selectedBranch ||
+    reservation.resultId !== `${paid.id}:paper` ||
+    reservation.sheetId !== `sheet:${reservation.resultId}` ||
+    sheet.actor !== v.id ||
+    sheet.kind !== (v.id === 'v1' ? 'drawing' : 'draft') ||
+    sheet.version !== 0 ||
+    sheet.unfinished !== true ||
+    sheet.source !== paid.id ||
+    sheet.holder !== null ||
+    sheet.map !== paid.map ||
+    sheet.point.x !== paid.point.x ||
+    sheet.point.y !== paid.point.y
+  )
+    return 'The reserved unfinished sheet identity or physical place changed. Keep the existing sheet.';
+  if (actor(s, v).map !== sheet.map || Math.hypot(v.x - sheet.point.x, v.y - sheet.point.y) > 5)
+    return 'Return to the reserved unfinished sheet at its actual place before retrying.';
+  return '';
+}
 export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>): void {
   const w = world(s),
     branch = REPLIES[c.branch];
@@ -1305,6 +1442,7 @@ export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>):
   )
     throw new Error('Finish the current task or explicitly cancel it before offering this reply.');
   if (
+    s.story?.firstResults.some((r) => r.actor === v.id) ||
     scene.completedBranch ||
     (scene.selectedBranch && scene.selectedBranch !== c.branch) ||
     last?.status === 'requested' ||
@@ -1313,10 +1451,12 @@ export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>):
     throw new Error(
       'This reply already has a request or result. An unfinished attempt may retry the same line.',
     );
-  if (w.paper < 1) throw new Error('This needs one sheet of paper.');
+  const sheetReason = reservedReplyReason(s, v);
+  if (sheetReason) throw new Error(sheetReason);
+  if (!scene.reservation && s.story!.paper < 1) throw new Error('This needs one sheet of paper.');
   if (s.tick + branch.ticks + 1 >= 1800) throw new Error('There is not enough time left in this day.');
 }
-function requestReply(s: State, c: Extract<Command, { kind: 'reply' }>) {
+export function requestReply(s: State, c: Extract<Command, { kind: 'reply' }>) {
   const v = s.villagers.find((v) => v.id === c.ids[0]);
   if (!v) return;
   const scene = world(s).replyScenes?.[v.id];
@@ -1334,6 +1474,7 @@ function requestReply(s: State, c: Extract<Command, { kind: 'reply' }>) {
   });
   // A validated, recorded reply has priority over unfinished earlier-work re-offers.
   cancelLongRoof(s, v.id);
+  cancelYieldReturn(s, v.id);
   event(
     s,
     `You offered a reply to ${v.name}. The current body action will finish first. No words have been delivered yet.`,
@@ -1384,12 +1525,20 @@ function startReply(s: State, v: Villager): boolean {
     aw = actor(s, v);
   if (!a || a.status !== 'requested' || aw.running || v.person.activity || s.pauseRequested) return false;
   const scene = w.replyScenes?.[v.id];
+  const sheetReason = reservedReplyReason(s, v);
+  if (sheetReason) {
+    a.status = 'unavailable';
+    a.endedAt = s.tick;
+    a.reason = sheetReason;
+    event(s, sheetReason);
+    return false;
+  }
   if (
     aw.map !== a.map ||
     Math.hypot(v.x - a.point.x, v.y - a.point.y) > 1 ||
     aw.job ||
     aw.carried ||
-    w.paper < 1 ||
+    (!scene?.reservation && s.story!.paper < 1) ||
     s.tick + REPLIES[a.branch].ticks >= 1800 ||
     scene?.disclosure.id !== a.disclosureId
   ) {
@@ -1449,8 +1598,27 @@ function startReply(s: State, v: Villager): boolean {
     event(s, `${v.name} could not start the conversation. No paper was spent.`);
     return true;
   }
-  w.paper--;
-  a.paperSpent = 1;
+  // CS-R7: a paid interrupted first answer keeps its exact sheet across either public route.
+  if (!scene!.reservation) {
+    s.story!.paper--;
+    a.paperSpent = 1;
+    const resultId = `${a.id}:paper`;
+    scene.reservation = { resultId, sheetId: `sheet:${resultId}`, paidAttemptId: a.id };
+    s.story!.objects.push({
+      id: `sheet:${resultId}`,
+      version: 0,
+      kind: v.id === 'v1' ? 'drawing' : 'draft',
+      actor: v.id,
+      map: actor(s, v).map,
+      point: { x: v.x, y: v.y },
+      holder: null,
+      source: a.id,
+      text: 'Unfinished first answer.',
+      // CS-R12: a spent reservation is not a completed drawing or draft.
+      unfinished: true,
+      packed: false,
+    });
+  }
   a.status = 'running';
   a.startedAt = s.tick;
   a.until =
@@ -1500,18 +1668,9 @@ function stepReply(s: State, v: Villager): boolean {
     if (!scene) throw new Error('Missing replayed disclosure');
     a.status = 'completed';
     a.endedAt = s.tick;
-    a.resultId = `${a.id}:paper`;
+    a.resultId = scene.reservation!.resultId;
     scene.completedBranch = a.branch;
-    world(s).replyResults?.push({
-      id: a.resultId,
-      actor: v.id,
-      branch: a.branch,
-      attemptId: a.id,
-      at: s.tick,
-      object: branch.object,
-      text: branch.text,
-      says: branch.says,
-    });
+    recordFirstReply(s, v, { id: a.resultId, attemptId: a.id, branch: a.branch, text: branch.text });
     v.says = branch.says;
     v.task = 'waiting';
     v.status = 'waiting';
@@ -1590,6 +1749,8 @@ export function longRoofUnavailable(s: State, ids: readonly string[]): string {
   if (s.ended || s.pauseRequested || s.chapterPaused) return 'Resume an unfinished day first.';
   if (!ids.length || ids.some((id) => !s.settlement?.actors[id]))
     return 'Select residents for the roof break.';
+  if (ids.some((id) => activeYieldReturn(s, id)))
+    return 'Finish or cancel the yield and earlier-work sequence first.';
   if (ids.some((id) => activeLongRoof(s, id)))
     return 'A selected resident already has a roof break in progress.';
   if (s.inputs.length >= 10000 || (s.longRoofBreak?.attempts.length ?? 0) + ids.length > 10000)
@@ -1604,6 +1765,7 @@ export function longRoofUnavailable(s: State, ids: readonly string[]): string {
         !v.person.body.alive ||
         v.availableAt > s.tick ||
         activePeer(s, id) ||
+        activeStory(s, id) ||
         ['requested', 'running'].includes(s.settlement?.replyScenes?.[id]?.attempts.at(-1)?.status ?? '')
       );
     })
@@ -1826,3 +1988,214 @@ function stepLongRoof(s: State, v: Villager): boolean {
   a.restActivity = { affordanceId: activity.affordanceId, startedAt: activity.startedAt };
   return true;
 }
+
+export type YieldReturn = {
+  actor: string;
+  inputIndex: number;
+  at: number;
+  target: string;
+  priorJob: Job;
+  priorTarget: Building | null;
+  carried: ActorWorld['carried'];
+  stage: 'finish' | 'delivery' | 'yield' | 'return' | 'reoffered' | 'cancelled' | 'unavailable';
+  completedAt?: number;
+  endedAt?: number;
+  reason?: string;
+};
+export function activeYieldReturn(s: State, id: string) {
+  return s.yieldReturn?.findLast(
+    (a) => a.actor === id && ['finish', 'delivery', 'yield', 'return'].includes(a.stage),
+  );
+}
+export function cancelYieldReturn(s: State, id: string) {
+  const a = activeYieldReturn(s, id);
+  if (a) {
+    a.stage = 'cancelled';
+    a.endedAt = s.tick;
+    a.reason = 'A later accepted request or stop cancelled the earlier-work reoffer.';
+  }
+}
+export function validateYieldReturn(s: State, ids: readonly string[]) {
+  const w = s.settlement;
+  if (
+    !w ||
+    ids.length !== 1 ||
+    !w.dispute?.includes(ids[0]!) ||
+    s.ended ||
+    s.pauseRequested ||
+    s.chapterPaused
+  )
+    throw new Error('Choose one resident in the current route dispute during an active day.');
+  const aw = w.actors[ids[0]!],
+    v = s.villagers.find((v) => v.id === ids[0]);
+  if (
+    !aw?.job ||
+    !['gather', 'build'].includes(aw.job.kind) ||
+    aw.job.partner ||
+    !v?.person.body.alive ||
+    v.availableAt > s.tick
+  )
+    throw new Error('This resident has no actual earlier collection or building request to retain.');
+  if (activeYieldReturn(s, v.id) || activeLongRoof(s, v.id) || activePeer(s, v.id))
+    throw new Error('Finish or cancel the existing sequence first.');
+}
+/** Scope: one physical pair-bound yield followed by one validated actual-job reoffer.
+ * Existing delivery, route geometry, HF choices and costs remain the only execution route. */
+export function requestYieldReturn(s: State, ids: readonly string[], inputIndex: number) {
+  validateYieldReturn(s, ids);
+  const w = world(s),
+    id = ids[0]!,
+    aw = w.actors[id]!,
+    j = aw.job!;
+  s.yieldReturn ??= [];
+  s.yieldReturn.push({
+    actor: id,
+    inputIndex,
+    at: s.tick,
+    target: `${[...w.dispute!].sort().join('/')}:${w.disputeAt}`,
+    priorJob: structuredClone(j),
+    priorTarget: structuredClone(s.buildings.find((b) => b.id === j.target) ?? null),
+    carried: structuredClone(aw.carried),
+    stage: 'finish',
+  });
+  event(
+    s,
+    'Yield and earlier work recorded. Current acts and carried deliveries finish first. Yielding and later work remain separate choices.',
+  );
+}
+function stepYieldReturn(s: State, v: Villager): boolean {
+  const a = activeYieldReturn(s, v.id);
+  if (!a) return false;
+  const aw = actor(s, v),
+    w = world(s);
+  const unavailable = (reason: string) => {
+    a.stage = 'unavailable';
+    a.endedAt = s.tick;
+    a.reason = reason;
+  };
+  if (w.storm && a.at < 900) {
+    unavailable('The storm changed the work period. Earlier work was not offered.');
+    return false;
+  }
+  if (s.ended || s.tick >= 1800 || s.pauseRequested || !v.person.body.alive) {
+    unavailable('The day or resident is unavailable. Earlier work was not offered.');
+    return false;
+  }
+  if (aw.running) return false;
+  if (aw.carried) {
+    a.stage = 'delivery';
+    return false;
+  }
+  if (a.stage === 'return') {
+    const j = a.priorJob,
+      b = s.buildings.find((b) => b.id === j.target);
+    const map = j.sourceMap ?? j.map;
+    if (
+      j.kind === 'gather'
+        ? w.caches[map][j.target as Resource] <= 0
+        : !b ||
+          b.complete ||
+          !a.priorTarget ||
+          b.kind !== a.priorTarget.kind ||
+          b.x !== a.priorTarget.x ||
+          b.y !== a.priorTarget.y
+    ) {
+      unavailable('The earlier work is now empty, complete, changed or missing. No work was offered.');
+      return false;
+    }
+    const next: Job = {
+      ...structuredClone(j),
+      phase: 'out',
+      map,
+      point: j.kind === 'gather' ? CACHE_POINT : b!,
+    };
+    setJob(s, v, next, true);
+    if (aw.job === next) {
+      a.stage = 'reoffered';
+      a.endedAt = s.tick;
+      a.reason = 'The actual earlier work was offered once. Starting and completing it remain unknown.';
+    } else unavailable('The earlier work request could not be installed.');
+    return true;
+  }
+  if (a.stage === 'yield') {
+    if (!aw.job) {
+      unavailable('The yield did not complete for its recorded pair. Earlier work was not offered.');
+      return false;
+    }
+    return false;
+  }
+  if (!w.dispute || `${[...w.dispute].sort().join('/')}:${w.disputeAt}` !== a.target) {
+    unavailable('The recorded dispute changed before this yield. No different pair was cleared.');
+    return false;
+  }
+  setJob(s, v, { kind: 'yield', target: a.target, map: aw.map, point: HOME, phase: 'out' }, true);
+  if (aw.job?.kind === 'yield' && aw.job.target === a.target) a.stage = 'yield';
+  return false;
+}
+
+export const settlementStoryHost: StoryHost = {
+  body: bodyChoices,
+  alternative: (s, v, a, d) => {
+    startChoice(s, v, a, d, 'body');
+  },
+  move: (s, v, map, point) => {
+    setJob(s, v, { kind: 'map', target: map, map, point: { ...point }, phase: 'out' });
+    return actor(s, v).job?.kind === 'map';
+  },
+  scene: (s, id, scene) =>
+    applySettlement(s, {
+      kind: 'settlement',
+      ids: scene === 'trial' ? ['v1', 'v2'] : [id],
+      action: 'scene',
+      target: scene,
+    }),
+};
+
+function retainedWorkOffer(s: State, v: Villager, prior: unknown, preview = true): Affordance | undefined {
+  const j = prior as Job | null,
+    aw = actor(s, v);
+  if (!j || s.pauseRequested || s.story?.close || !['gather', 'build', 'move', 'map'].includes(j.kind))
+    return;
+  if (j.kind === 'build' && !s.buildings.some((b) => b.id === j.target && !b.complete)) return;
+  if (j.kind === 'gather' && !(world(s).caches[j.sourceMap ?? j.map][j.target as Resource] > 0)) return;
+  const destination = aw.map === j.map ? j.point : PASSAGE;
+  if (!route(aw.map, v, destination)) return;
+  const travel =
+    aw.map !== j.map
+      ? Math.hypot(v.x - PASSAGE.x, v.y - PASSAGE.y) <= 5
+        ? 24
+        : 8
+      : Math.hypot(v.x - j.point.x, v.y - j.point.y) > 5
+        ? 8
+        : undefined;
+  if (travel === undefined && ['move', 'map'].includes(j.kind)) return;
+  if (preview && travel === undefined && j.kind === 'gather' && gatherBlocked(s, v)) return;
+  return primaryOffer(s, v, travel, j);
+}
+export const settlementPublicHost: PublicHost = {
+  ...settlementStoryHost,
+  work: retainedWorkOffer,
+  startWork: (s, v, prior, a, d) => {
+    const current = retainedWorkOffer(s, v, prior, false);
+    if (!current || JSON.stringify(current) !== JSON.stringify(a)) {
+      refuseStart(v.person, a, d);
+      return false;
+    }
+    const job = structuredClone(prior) as Job,
+      aw = actor(s, v);
+    if (!go(s, v, aw.map === job.map ? job.point : PASSAGE)) return false;
+    // This is the retained request, not a new promise or a second requestOptions ingress.
+    aw.job = job;
+    aw.pendingRequest = null;
+    return startChoice(s, v, a, d, a.id === 'walk' || a.id === 'crossing' ? 'travel' : 'job');
+  },
+  detach: (s, v) => {
+    const aw = actor(s, v);
+    const prior = aw.job ? structuredClone(aw.job) : null;
+    aw.job = null;
+    return prior;
+  },
+  resume: (s, v, prior) => {
+    if (prior && !actor(s, v).job) setJob(s, v, prior as Job);
+  },
+};

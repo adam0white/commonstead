@@ -289,7 +289,7 @@ describe('opt-in settlement day focused headless controls', () => {
     until(s, () => s.settlement?.completed.some((c) => c.scene === 'correction') ?? false, 400);
     expect(s.settlement?.actors.v2?.map).toBe('quay');
     expect(s.resources.wood).toBe(80);
-    expect(s.settlement?.paper).toBe(3);
+    expect(s.story?.paper).toBe(3);
     expect(s.settlement?.records.samReport).toContain('did not reproduce');
     request(s, ['v2'], 'scene', 'visit');
     until(s, () => !s.settlement?.actors.v2?.job, 1000);
@@ -298,7 +298,7 @@ describe('opt-in settlement day focused headless controls', () => {
     expect(s.settlement?.completed.some((c) => c.scene === 'visit')).toBe(false);
     expect(s.settlement?.actors.v2?.running).toBeNull();
     expect(s.settlement?.actors.v2?.map).toBe('quay');
-    expect(s.settlement?.paper).toBe(3);
+    expect(s.story?.paper).toBe(3);
     expect(s.settlement?.events.some((e) => e.text.includes('returns from the arranged family visit'))).toBe(
       false,
     );
@@ -346,15 +346,15 @@ describe('fresh local personal replies with real HF choices', () => {
       apply(s, command);
       const attempt = scene.attempts[0];
       if (!attempt) throw new Error('attempt');
-      expect(w.paper).toBe(4);
+      expect(s.story!.paper).toBe(4);
       until(s, () => attempt.status === 'running', 50);
       expect(attempt.deliveredAt).toBe(s.tick);
       expect(attempt.attended).toBe(true);
       expect(attempt.decision?.chosenAffordanceId).toBe(`reply:${branch}`);
       expect(attempt.decision?.verdict).not.toBe('refused');
       expect(attempt.paperSpent).toBe(1);
-      expect(w.paper).toBe(3);
-      expect(w.replyResults).toEqual([]);
+      expect(s.story!.paper).toBe(3);
+      expect(s.story!.firstResults).toEqual([]);
       const beforeDuplicate = JSON.stringify(s);
       expect(() => apply(s, command)).toThrow();
       expect(() => apply(s, { ...command, branch: other })).toThrow();
@@ -370,8 +370,8 @@ describe('fresh local personal replies with real HF choices', () => {
       expect(fork.tick).toBe(started + 3);
       request(fork, [id], 'cancel');
       advance(fork, 20);
-      expect(fork.settlement?.paper).toBe(3);
-      expect(fork.settlement?.replyResults).toEqual([]);
+      expect(fork.story?.paper).toBe(3);
+      expect(fork.story?.firstResults).toEqual([]);
       expect(fork.settlement?.replyScenes?.[id]?.attempts[0]?.status).toBe('interrupted');
       expect(fork.settlement?.replyScenes?.[id]?.completedBranch).toBeUndefined();
       expect(fork.settlement?.events.some((e) => e.text.includes(REPLIES[branch].says))).toBe(false);
@@ -379,7 +379,7 @@ describe('fresh local personal replies with real HF choices', () => {
       expect(attempt.endedAt).toBe(attempt.until);
       expect(s.tick - started).toBeGreaterThanOrEqual(REPLIES[branch].ticks);
       expect(s.tick - started).toBeLessThanOrEqual(REPLIES[branch].ticks + 1);
-      expect(w.replyResults).toEqual([
+      expect(s.story!.firstResults).toEqual([
         expect.objectContaining({
           actor: id,
           branch,
@@ -426,9 +426,9 @@ function requiredPeerValue<T>(value: T | null | undefined): T {
 }
 
 describe('fresh public route dialogue day', () => {
-  test('uses a separate native edition and refuses a peer input in every released edition', () => {
+  test('current native schema retains each edition and refuses peer input without an actual witness', () => {
     const s = createGame(418, undefined, { edition: 'settlement-replies/2' } as never);
-    expect((exportRun(s) as { schema: number }).schema).toBe(6);
+    expect((exportRun(s) as { schema: number }).schema).toBe(12);
     expect(s.settlement?.replyScenes).toEqual({});
     expect(importRun(exportRun(s))).toEqual(s);
     expect(importRun(exportRun(s, true))).toEqual(s);

@@ -85,7 +85,7 @@ test('invitation explains the actual remaining gate and readiness never promises
   for (let i = 0; i < 5; i++) step(s);
   expect(invitationReadiness(s, ['v1'], 'listen')).toContain('30 game seconds remain');
   expect(invitationReadiness(s, ['v1'], 'listen')).toContain('may still decline');
-  expect(invitationReadiness(s, ['v1'], 'collaborate')).toContain('Invite a conversation first');
+  expect(invitationReadiness(s, ['v1'], 'collaborate')).toContain('actual disclosure');
   for (let i = 0; i < 30; i++) step(s);
   expect(invitationReadiness(s, ['v1'], 'listen')).toContain('Offer this person a break');
 });

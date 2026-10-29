@@ -13,7 +13,7 @@ import type { Job } from './settlement.ts';
 import { REPLY_EDITION } from './settlement-scenes.ts';
 import type { State, Villager } from './sim.ts';
 
-/** Only fresh local settlement-replies/2 owns this bounded public route exchange.
+/** The actual witnessed pair owns this bounded public route exchange in every current long chapter.
  * These authored words concern witnessed route facts, never private biography or cache testimony.
  * Attention is not agreement. Talking never yields, releases a trolley or repairs a relationship.
  * HF owns choices, duration, reviews, bodies and attention; this module owns peer receipts only.
@@ -122,8 +122,7 @@ export function activePeer(s: State, id: string): PeerAttempt | undefined {
 }
 export function validatePeer(s: State, c: PeerCommand): RouteWitness {
   const w = s.settlement;
-  if (!w?.peer || w.config.edition !== PEER_EDITION)
-    throw new Error('Start a fresh day with resident conversations.');
+  if (!w?.peer) throw new Error('Start a fresh day with resident conversations.');
   const keys = Object.keys(c);
   if (
     keys.length !== 5 ||

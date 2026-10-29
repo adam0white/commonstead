@@ -13,6 +13,7 @@ type KernelDecision = Extract<
   { kind: 'decision' }
 >['decision'];
 export type DecisionRecord = KernelDecision & {
+  at: number;
   narration: string;
   suggestion?: NonNullable<KernelDecision['suggestion']> & { says: string };
 };

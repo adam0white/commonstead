@@ -584,6 +584,13 @@ export function begin(p: Old.Person, a: Old.Affordance, r: Old.DecisionRecord) {
   c.starting.delete(p.id);
   return p.activity;
 }
+/** Resolve a chosen but now physically unavailable start through the ordinary public host rejection. */
+export function refuseStart(p: Old.Person, a: Old.Affordance, r: Old.DecisionRecord) {
+  if (r.chosenAffordanceId !== a.id || p.activity) return;
+  const c = community(p);
+  // No starting permission: serve emits the existing action.resolved/rejected response.
+  c.serve(c.at);
+}
 /** Stage only outcomes that the host has actually established at this world tick. */
 export function stageOutcome(p: Old.Person, outcome: Old.Outcome) {
   const c = community(p),
@@ -619,18 +626,29 @@ export function finish(p: Old.Person, outcome: Old.Outcome): Old.Outcome | undef
   c.read();
   return { ...receipt.outcome };
 }
-export function perceive(p: Old.Person, percepts: readonly Old.Percept[]) {
+export type ObservationReceipt = {
+  eventId: string;
+  evidenceId: string;
+  perceptId: string;
+  attention: number;
+  deliveredAt: number;
+  occurredAt: number;
+  summary?: string;
+};
+export function observe(p: Old.Person, percepts: readonly Old.Percept[]) {
   const c = community(p);
   const at = c.at + 1;
+  const evidenceId = `observed:${c.sequence + 1}`;
+  const ids = percepts.map((_, i) => `percept:${c.sequence}:${i}`);
   const result = c.serve(at, [
     c.input(
       'observation.received',
       {
         person: p.id,
-        evidenceId: `observed:${c.sequence + 1}`,
+        evidenceId,
         percepts: percepts.map(({ at: occurred, ...q }, i) => ({
           ...q,
-          id: `percept:${c.sequence}:${i}`,
+          id: ids[i]!,
           occurredAt: Math.min(at, Math.round(occurred * MINUTE)),
           claims: q.claims ?? [],
           norms: q.norms ?? [],
@@ -645,10 +663,19 @@ export function perceive(p: Old.Person, percepts: readonly Old.Percept[]) {
       at,
     ),
   ]);
-  return percepts.filter((p) =>
-    result.events.some((e) => e.data.kind === 'observation-attended' && e.data.summary === p.summary),
+  const receipts: ObservationReceipt[] = result.events.flatMap((e) =>
+    e.data.kind === 'observation-attended' &&
+    e.data.evidenceId === evidenceId &&
+    ids.includes(e.data.perceptId)
+      ? [{ eventId: e.id, ...e.data }]
+      : [],
   );
+  return { receipts, attended: percepts.filter((_, i) => receipts.some((e) => e.perceptId === ids[i])) };
 }
+export function perceive(p: Old.Person, percepts: readonly Old.Percept[]) {
+  return observe(p, percepts).attended;
+}
+
 export function promise(
   p: Old.Person,
   commitment: Omit<Old.Person['agenda']['commitments'][number], 'id' | 'status' | 'exempt'>,
@@ -719,6 +746,9 @@ export function socialEvent(
       event: { kind: event.kind, byMe: event.byMe ?? false, magnitude: event.magnitude },
     }),
   ]);
+}
+export function communityOwner(p: Old.Person): object {
+  return community(p).run;
 }
 export function archiveCommunity(p: Old.Person) {
   return archive(community(p).run);
@@ -892,4 +922,20 @@ export function restoreCommunity(p: Old.Person, saved: DeepReadonly<RunArchive>)
     throw new Error('The game log and HF archive disagree.');
   c.run = restored;
   c.read();
+}
+
+/** Exact public host resolutions already accepted by the Run; no synthesized receipt. */
+export function actionResolutions(
+  p: Old.Person,
+  activityId: string,
+): Extract<Input, { kind: 'action.resolved' }>[] {
+  return archiveCommunity(p)
+    .history.flatMap((transaction) => transaction.inputs)
+    .filter(
+      (input): input is Extract<Input, { kind: 'action.resolved' }> =>
+        input.kind === 'action.resolved' &&
+        input.payload.person === p.id &&
+        input.payload.activityId === activityId,
+    )
+    .map((input) => structuredClone(input));
 }
