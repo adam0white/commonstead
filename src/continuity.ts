@@ -8,13 +8,20 @@ import {
   initialPersonaLife,
   type personaChannel,
   preparePersonaLife,
-  projectPortablePerson,
   validatePersona,
 } from '@adam0white/lab-client';
 import { CAST } from './cast.ts';
 import { FRAMEWORK_VERSION } from './engine';
 import { isContinuingCommitment, snapshot } from './hf4';
-import { admitResident, type Chapter, claimTransfer, DIALECT, RULES, residentTransfer } from './passport.ts';
+import {
+  admitResident,
+  type Chapter,
+  claimTransfer,
+  DIALECT,
+  RULES,
+  requirePeerReadiness,
+  residentTransfer,
+} from './passport.ts';
 import { PRESSURE } from './pressure.ts';
 import { activeLongRoof, type SettlementConfig } from './settlement.ts';
 import { activePeer } from './settlement-dialogue.ts';
@@ -153,7 +160,17 @@ export class Continuity {
               }
               return initial;
             },
-            { isCurrent: () => generation === this.generation, claimTransfer },
+            {
+              isCurrent: () => generation === this.generation,
+              claimTransfer,
+              admitPerson: (input) => {
+                requirePeerReadiness(input.parent.castId);
+                const probe = createGame(seed, undefined, config, config || !rules ? undefined : rules);
+                const opening = probe.villagers.find((v) => v.person.id === input.parent.castId)?.person;
+                if (!opening) throw new Error('This person has no resident role.');
+                admitResident(input, opening);
+              },
+            },
           );
         } catch (error) {
           // Only a failed read permits local play. An unacknowledged write may own shelf people.
@@ -351,6 +368,7 @@ export class Continuity {
         throw new Error(
           `${villager.name}: this saved history is still in another game and cannot be saved here.`,
         );
+      requirePeerReadiness(castId);
       const parent = this.heads.find((p) => p.castId === castId);
       let envelope: PersonaEnvelope;
       let raw: unknown;
