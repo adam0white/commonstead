@@ -154,13 +154,14 @@ function remember(key: string, value: string) {
     /* Download remains available. */
   }
 }
-function save() {
+function save(): Promise<boolean> {
   if (fileSession) {
     if (state) lab?.captureSave(fileSession.snapshot());
-    return;
+    return Promise.resolve(true);
   }
-  if (!state) return;
+  if (!state) return Promise.resolve(false);
   const run = exportRun(state);
+  let persisted = Promise.resolve(false);
   if (nativeStorageReady) {
     const owner = state,
       generation = continuity!.generation;
@@ -172,22 +173,31 @@ function save() {
         fileOrigin: continuity!.fileOrigin,
       });
     const source = metadata(),
+      current = () => state === owner && continuity!.currentEntry(generation) && metadata() === source,
       text = continuity!.localSave(state, paused);
-    void nativeStore!
-      .write(text, () => state === owner && continuity!.currentEntry(generation) && metadata() === source)
+    persisted = nativeStore!
+      .write(text, current)
       .then((written) => {
-        if (written) {
+        if (written && current()) {
           nativeText = text;
           nativeSaveStatus('Game saved on this device.');
         }
+        return written;
       })
-      .catch(() =>
-        nativeSaveStatus(
-          'This run could not be saved. Your previous save is unchanged. Download this run before leaving.',
-        ),
-      );
+      .catch(() => {
+        if (current())
+          nativeSaveStatus(
+            'This run could not be saved. Your previous save is unchanged. Download this run before leaving.',
+          );
+        return false;
+      });
   }
   lab?.captureSave(run);
+  return persisted;
+}
+function downloadStoredRun(name: string, text: string) {
+  const saved = JSON.parse(text);
+  downloadJson(name, { ...saved.run, castSources: saved.sources });
 }
 function download() {
   if (fileSession) {
@@ -288,11 +298,11 @@ function title() {
         '<p>A prepared chapter is retained. The previous complete game remains available. Recovery checks current resident custody.</p><button id="recover-prepared">Check and recover prepared chapter</button><button id="discard-unforwarded">Discard a never-forwarded preparation</button><button id="download-prepared">Download prepared chapter</button><button id="download-previous">Download previous complete game</button>';
       bind('download-prepared', () => {
         void continuity!.admissions.preparedText().then((text) => {
-          if (text) downloadJson('commonstead-prepared-chapter.json', JSON.parse(text));
+          if (text) downloadStoredRun('commonstead-prepared-chapter.json', text);
         });
       });
       bind('download-previous', () => {
-        if (nativeText) downloadJson('commonstead-previous-complete.json', JSON.parse(nativeText));
+        if (nativeText) downloadStoredRun('commonstead-previous-complete.json', nativeText);
       });
       bind('discard-unforwarded', () => {
         void continuity!
@@ -1102,17 +1112,38 @@ function info() {
   );
   bind('close-info', closeModal);
 }
+async function saveAndTitle(id: string) {
+  const owner = state,
+    view = screen,
+    dialog = modal,
+    generation = continuity?.generation,
+    button = document.getElementById(id) as HTMLButtonElement | null;
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  const written = await save();
+  if (
+    state !== owner ||
+    screen !== view ||
+    modal !== dialog ||
+    !button.isConnected ||
+    (continuity && !continuity.currentEntry(generation!))
+  )
+    return;
+  if (!written) {
+    button.disabled = false;
+    nativeSaveStatus('The game could not be saved. Download this run before leaving.');
+    return;
+  }
+  closeModal();
+  title();
+}
 function menu() {
   sheet(
     `<h2>Paused</h2><p>${fileSession ? 'This file session stays in memory. Download it before leaving.' : esc(nativeSaveMessage || 'Saving this game on this device…')}</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div><button id="menu-title">Back to the title page</button><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><button id="download">Download this run</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><div id="compact-download"></div></details></div>`,
   );
   if (state?.shortYield) save();
   if (lab) document.getElementById('toggle')?.append(telemetryToggle(lab));
-  bind('menu-title', () => {
-    save();
-    closeModal();
-    title();
-  });
+  bind('menu-title', () => void saveAndTitle('menu-title'));
   bind('resume', () => {
     if (fileSession) {
       try {
@@ -1304,7 +1335,7 @@ function end() {
   shellBindings();
   bind('end-feedback', feedback);
   bind('end-download', download);
-  bind('end-title', title);
+  bind('end-title', () => void saveAndTitle('end-title'));
   bind('continue-workshop', () => {
     if (!state) return;
     try {

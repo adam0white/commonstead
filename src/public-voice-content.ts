@@ -276,7 +276,7 @@ export function closingCommand(s: State, id: string): PublicCommand {
   };
 }
 export function publicCommands(s: State, ids: string[]): { line: string; command: PublicCommand }[] {
-  if (!ids.length || ids.length > 2) return [];
+  if (!ids.length || ids.length > 2 || ids.some((id) => !s.villagers.some((v) => v.id === id))) return [];
   const rows: { line: string; command: PublicCommand }[] = [
     {
       line:

@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { publicCommands } from '../src/public-voice-content';
 import { apply, createGame, type GameCommand } from '../src/sim';
 
 // Public speech scope: a visible role is not a speaking receipt or a private disclosure.
@@ -132,6 +133,9 @@ test('partner response requires the completed native Yield and current source', 
   while (s.tick < 17) step(s);
   apply(s, { kind: 'yield-return', ids: ['v2'] });
   while (s.tick < 220 && s.yieldReturn![0]!.stage !== 'reoffered') step(s);
+  // Map and hub selections are not resident speech invitations, even after a real Yield.
+  for (const ids of [['town'], [s.buildings[0]!.id], ['v1', s.buildings[0]!.id]])
+    expect(publicCommands(s, ids)).toEqual([]);
   const history = archiveCommunity(s.villagers[0]!.person).history.flatMap((t) => t.inputs);
   const complete = history.find(
     (i) =>
