@@ -1,7 +1,7 @@
 // One actual-App synthetic Chromium control. No real browser profile, owner data or submissions.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import type { Browser } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
+import type { Browser, Page } from '@playwright/test';
 import { PRESSURE } from '../src/pressure.ts';
 import { EDITION } from '../src/settlement.ts';
 import { PEER_EDITION } from '../src/settlement-dialogue.ts';
@@ -216,4 +216,254 @@ export async function control(browser: Browser, url: string) {
     nativePositive: ['legacy', 'default', EDITION, REPLY_EDITION, PEER_EDITION],
     screenshots: 0,
   };
+}
+
+async function delayNativeSave(page: Page) {
+  await page.evaluate(async () => {
+    const modulePath = '/src/save-store.ts';
+    const { NativeSaveStore } = await import(modulePath);
+    const original = NativeSaveStore.prototype.write;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const driver = globalThis as unknown as { releaseNativeWrite: () => void; nativeWriteCalls: number };
+    driver.nativeWriteCalls = 0;
+    driver.releaseNativeWrite = release;
+    NativeSaveStore.prototype.write = function (...args: unknown[]) {
+      driver.nativeWriteCalls++;
+      return held.then(() => original.apply(this, args));
+    };
+  });
+}
+
+/** Actual App/IndexedDB controls. Only the save transport is delayed for the stale-dialog case. */
+export async function navigationControl(browser: Browser, url: string, prefix: string) {
+  const context = await browser.newContext();
+  await context.route('**/*', (r) => (r.request().url().startsWith(url) ? r.continue() : r.abort()));
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  async function current() {
+    const pending = page.waitForEvent('download');
+    await page.locator('#download').click();
+    return readFile((await (await pending).path())!);
+  }
+
+  try {
+    await page.goto(url);
+    await page.locator('#new').click();
+    await page.locator('#map').waitFor();
+    await page.waitForTimeout(2100);
+    await page.locator('#menu').click();
+    const before = await current();
+    assert(JSON.parse(before.toString()).tick > 0);
+    await writeFile(`${prefix}-navigation-before.json`, before);
+    await delayNativeSave(page);
+    await page.locator('#menu-title').click();
+    await page.waitForFunction(
+      () => (globalThis as unknown as { nativeWriteCalls: number }).nativeWriteCalls > 0,
+    );
+    assert.equal(
+      await page.locator('#resume').isVisible(),
+      true,
+      'menu must remain until the real save finishes',
+    );
+    await page.evaluate(() =>
+      (globalThis as unknown as { releaseNativeWrite: () => void }).releaseNativeWrite(),
+    );
+    await page.locator('#continue').waitFor();
+    await page.locator('#continue').click();
+    await page.locator('#map').waitFor();
+    await page.locator('#menu').click();
+    const after = await current();
+    await writeFile(`${prefix}-navigation-after.json`, after);
+    assert.deepEqual(JSON.parse(after.toString()), JSON.parse(before.toString()));
+
+    // Genuine supersession: closing the old menu while its save waits must not navigate later.
+    await delayNativeSave(page);
+    await page.locator('#menu-title').click();
+    await page.waitForFunction(
+      () => (globalThis as unknown as { nativeWriteCalls: number }).nativeWriteCalls > 0,
+    );
+    await page.locator('#resume').click();
+    await page.evaluate(() =>
+      (globalThis as unknown as { releaseNativeWrite: () => void }).releaseNativeWrite(),
+    );
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('#menu').isVisible(), true);
+    assert.equal(await page.locator('#new').count(), 0);
+    assert.deepEqual(errors, []);
+    return {
+      titleWaitsForDurableSave: true,
+      completeHotResumeEquality: true,
+      staleMenuCannotNavigate: true,
+      errors,
+      screenshots: 0,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+export async function endingNavigationControl(browser: Browser, url: string, prefix: string, raw: unknown) {
+  const context = await browser.newContext();
+  await context.route('**/*', (r) => (r.request().url().startsWith(url) ? r.continue() : r.abort()));
+  const page = await context.newPage();
+  try {
+    await page.goto(`${url}/file/`);
+    await page.locator('#file-load').waitFor();
+    await page.evaluate(async (run) => {
+      const modulePath = '/src/save-store.ts';
+      const { NativeSaveStore } = await import(modulePath);
+      const store = new NativeSaveStore();
+      await store.read();
+      await store.write(
+        JSON.stringify({ run, runId: 'actual599-ending-control', fileOrigin: false, heads: [], sources: [] }),
+      );
+    }, raw);
+    await page.goto(url);
+    await page.locator('#continue').click();
+    await page.locator('#map').waitFor();
+    await delayNativeSave(page);
+    await page.locator('#end-title').waitFor();
+    const pending = page.waitForEvent('download');
+    await page.locator('#end-download').click();
+    const before = await readFile((await (await pending).path())!);
+    await writeFile(`${prefix}-ending-before.json`, before);
+    assert.equal(JSON.parse(before.toString()).tick, 600);
+    await page.locator('#end-title').click();
+    assert.equal(
+      await page.locator('#end-title').isVisible(),
+      true,
+      'ending must remain until its final save commits',
+    );
+    await page.evaluate(() =>
+      (globalThis as unknown as { releaseNativeWrite: () => void }).releaseNativeWrite(),
+    );
+    await page.locator('#continue').waitFor();
+    await page.locator('#continue').click();
+    await page.locator('#end-title').waitFor();
+    const next = page.waitForEvent('download');
+    await page.locator('#end-download').click();
+    const after = await readFile((await (await next).path())!);
+    await writeFile(`${prefix}-ending-after.json`, after);
+    assert.deepEqual(JSON.parse(after.toString()), JSON.parse(before.toString()));
+    return {
+      actual599To600FinalSaveAwaited: true,
+      wholeEndingResumeEqual: true,
+      storageFixtureOnly: true,
+      screenshots: 0,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+/** Synthetic stored wrappers contain real current runs; this stages no shelf write or custody claim. */
+export async function recoveryDownloadControl(browser: Browser, url: string, prefix: string) {
+  const context = await browser.newContext();
+  await context.route('**/*', (r) => (r.request().url().startsWith(url) ? r.continue() : r.abort()));
+  const page = await context.newPage();
+  const s = createGame(418);
+  step(s);
+  const previous = exportRun(s);
+  step(s);
+  const candidate = exportRun(s);
+  const sources = [
+    {
+      revision: 'synthetic-recovery-source',
+      source: { game: 'commonstead', build: 'control', engine: '2.23.0', rules: 'commonstead-3' },
+      snapshot: { entire: ['source', 7] },
+    },
+  ];
+  const files: { name: string; bytes: Buffer; run: unknown }[] = [];
+  try {
+    await page.goto(`${url}/file/`);
+    await page.locator('#file-load').waitFor();
+    await page.evaluate(
+      async ({ previous, candidate, sources }) => {
+        const storePath = '/src/save-store.ts',
+          admissionPath = '/src/admission-store.ts';
+        const { NativeSaveStore } = await import(storePath);
+        const { AdmissionStore } = await import(admissionPath);
+        const store = new NativeSaveStore();
+        await store.read();
+        await store.write(
+          JSON.stringify({
+            run: previous,
+            runId: 'previous-download-control',
+            fileOrigin: false,
+            heads: [],
+            sources,
+          }),
+        );
+        await new AdmissionStore().stage(
+          {
+            id: 'download-only-control',
+            source: 'synthetic-storage-fixture',
+            generation: 0,
+            previousRevision: store.observedRevision,
+            expectedHeads: {},
+            claims: [],
+            accepted: [],
+            nonaccepted: [],
+            rawPrepare: {},
+            candidate: JSON.stringify({
+              run: candidate,
+              runId: 'prepared-download-control',
+              fileOrigin: false,
+              heads: [],
+              sources,
+            }),
+          },
+          () => true,
+        );
+      },
+      { previous, candidate, sources },
+    );
+    await page.goto(url);
+    await page.locator('#download-prepared').waitFor();
+    for (const [id, run] of [
+      ['download-prepared', candidate],
+      ['download-previous', previous],
+    ] as const) {
+      const pending = page.waitForEvent('download');
+      await page.locator(`#${id}`).click();
+      const bytes = await readFile((await (await pending).path())!);
+      await writeFile(`${prefix}-${id}.json`, bytes);
+      files.push({ name: id, bytes, run });
+    }
+    await page.goto(`${url}/file/`);
+    for (const file of files) {
+      await page
+        .locator('#file-load')
+        .setInputFiles({ name: `${file.name}.json`, mimeType: 'application/json', buffer: file.bytes });
+      await page.waitForFunction(
+        () =>
+          document.querySelector('#resume') ||
+          document.querySelector('#file-status')?.textContent?.includes('The file was not loaded'),
+      );
+      await writeFile(
+        `${prefix}-${file.name}-status.txt`,
+        (await page.locator('#file-status').textContent()) ?? '',
+      );
+      assert.equal(await page.locator('#resume').isVisible(), true, 'the downloaded recovery file must open');
+      const pending = page.waitForEvent('download');
+      await page.locator('#file-current').click();
+      const current = await readFile((await (await pending).path())!);
+      await writeFile(`${prefix}-${file.name}-reopened.json`, current);
+      assert.deepEqual(JSON.parse(current.toString()), { ...(file.run as object), castSources: sources });
+      await page.locator('#menu-title').click();
+    }
+    return {
+      bothRecoveryDownloadsOpenAsCompleteFiles: true,
+      completeSourcesRetained: true,
+      storageFixtureOnly: true,
+      shelfWrites: 0,
+      screenshots: 0,
+    };
+  } finally {
+    await context.close();
+  }
 }

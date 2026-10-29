@@ -1240,3 +1240,10 @@ a:focus-visible {
 #goal-reading-open {
   margin: 4px 12px;
 }
+
+/* Static recorded storm has the same text facts and no motion-dependent information. */
+.storm-scene {
+  width: 100%;
+  max-height: 24rem;
+  height: auto;
+}

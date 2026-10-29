@@ -1,6 +1,16 @@
 # Canonical adoption — content phase
 
-The current canonical edition pins HF 3.0.0 / engine 2.23.0, immutable lab-client 0.4.11 and lab-kit 0.5.12. Technical release and browser journey receipts are kept in `~/code/.lab-scratch/cast/commonstead.md`. Owner acceptance follows playing; agent controls are not human acceptance.
+## Current shared-write capability (2026-10-29)
+
+The composed candidate uses one physical published HF4.8.1 with immutable client0.5.7 and kit0.5.24. The released SDK portableWriteBlockers gate owns peer policy; Unknown peer status blocks portable writes. Admission checks each person independently and preserves the port's per-person skips. Rejected histories keep their existing heads. The host awaits durable preparation before forwarding any accepted claim and retains source/build/generation and ownership CAS checks. A failed or uncertain claim keeps the previous complete game and prepared candidate. Exact-current-head recovery reads without resending a claim.
+
+Every living and terminal checkpoint checks the same released peer gate before body evaluation, projection, closure or writes. File/local continuations and role/source reads remain available. Empty acknowledged shelf CAS still creates the ordinary authored New game. A package pin is not a live peer certificate. Historical positive mechanism controls isolate the peer gate and do not establish current live write readiness. Recheck actual peer adoption and unavailable source/role contracts with the shared owner by2026-10-29; act earlier on verified evidence.
+
+Already-forwarded durable intents may still reconcile exact current heads through read-only recovery. Recovery never resends a put, and history alone never grants current custody. Unknown, advanced, mixed or stale current heads remain unresolved with both complete saves held. Historical mechanism tests explicitly mock only this capability boundary to retain downstream CAS assertions; separate unmocked controls prove the current refusal. This slice has no authored lethal event; the shared producer guard is before both living and terminal branches, without a fake dead Person or a claim of played death.
+
+The older adoption/departure descriptions below are historical contracts and bounded mechanism evidence. They do not override this current refusal.
+
+The historical canonical edition pins HF 3.0.0 / engine 2.23.0, immutable lab-client 0.4.11 and lab-kit 0.5.12. Technical release and browser journey receipts are kept in `~/code/.lab-scratch/cast/commonstead.md`. Owner acceptance follows playing; agent controls are not human acceptance.
 
 ## Exhaustive foreground census
 

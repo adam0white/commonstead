@@ -68,7 +68,7 @@ test('pressure runs replay exactly through schema 8 and refuse leaving the day e
   apply(s, { kind: 'order', ids: ['v2'], target: 'shelter' });
   for (let i = 0; i < 10; i++) step(s);
   const run = exportRun(s) as { schema: number };
-  expect(run.schema).toBe(8);
+  expect(run.schema).toBe(12);
   expect(stateHash(importRun(JSON.parse(JSON.stringify(run))))).toBe(stateHash(s));
   expect(() => apply(s, { kind: 'yield-day' })).toThrow();
   expect(() => importRun({ ...run, rules: 'pressure/0' })).toThrow();

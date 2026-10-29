@@ -15,7 +15,7 @@ export function mountSettlementControls(
   issue: (c: Command) => void,
   view: (p: Place) => void,
 ): void {
-  host.innerHTML = `<details><summary>Travel, conversations and the day</summary><p>A new request during a work or travel act is rejected, not queued. Wait for that act to finish, then ask again, or cancel it first. An accepted request can wait through a personal activity such as rest. A resident may choose a need or responsibility instead. Cancel task stops unfinished work. The storm comes at 20:00; the day ends tomorrow at 08:00.</p><p>Eight fresh local residents live this day. This edition does not load saved browser lives. Download the full day to keep it. Saving character histories for another game is supported only by the ten-minute chapter.</p><p>Choose names for the people who will take part. View changes only the map you see. Travel asks people to walk there.</p><div class="day-controls">${Object.entries(
+  host.innerHTML = `<details><summary>Travel, conversations and the day</summary><p>A new request during a work or travel act is rejected, not queued. Wait for that act to finish, then ask again, or cancel it first. An accepted request can wait through a personal activity such as rest. A resident may choose a need or responsibility instead. Cancel task stops unfinished work. The storm comes at 20:00; the day ends tomorrow at 08:00.</p><p>This chapter keeps its pinned residents and supported saved histories. Download the complete run to keep its world and source data. Unsupported histories and unfinished duties cannot be published for another game.</p><p>Choose names for the people who will take part. View changes only the map you see. Travel asks people to walk there.</p><div class="day-controls">${Object.entries(
     MAPS,
   )
     .map(
@@ -104,7 +104,7 @@ export function updateSettlementControls(
       ),
   );
   list('day-events', observedEvents(w.events));
-  if (w.config.edition === PEER_EDITION) {
+  if (w.peer) {
     let panel = host.querySelector<HTMLElement>('#peer-route');
     if (!panel) {
       panel = document.createElement('section');
@@ -192,7 +192,7 @@ export function updateSettlementControls(
     const key = JSON.stringify([
       selected,
       scene,
-      w.paper,
+      s.story!.paper,
       s.pauseRequested,
       s.tick >= 1786,
       v ? w.actors[v.id] : null,

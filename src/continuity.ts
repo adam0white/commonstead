@@ -1,4 +1,10 @@
-import type { Lab, LifePreparation, PersonaEnvelope, PersonaLife } from '@adam0white/lab-client';
+import type {
+  Lab,
+  LifePreparation,
+  PersonaEnvelope,
+  PersonaLife,
+  PersonaRequest,
+} from '@adam0white/lab-client';
 import {
   anchorPersonaLife,
   canonicalCast,
@@ -10,7 +16,9 @@ import {
   preparePersonaLife,
   validatePersona,
 } from '@adam0white/lab-client';
+import { type AdmissionPin, AdmissionStore, admissionPin } from './admission-store';
 import { CAST } from './cast.ts';
+import { prepareDeparture } from './departure-source';
 import { FRAMEWORK_VERSION } from './engine';
 import { isContinuingCommitment, snapshot } from './hf4';
 import {
@@ -23,17 +31,20 @@ import {
   residentTransfer,
 } from './passport.ts';
 import { PRESSURE } from './pressure.ts';
+import { NativeSaveStore } from './save-store';
 import { activeLongRoof, type SettlementConfig } from './settlement.ts';
 import { activePeer } from './settlement-dialogue.ts';
+import { requireSharedWriteCapability } from './shared-write-capability';
 import {
   activeRoofBreak,
   apply,
   createGame,
   exportRun,
   holdPublication,
-  importRun,
+  importRunAsync,
   type State,
 } from './sim.ts';
+import { requireSupportedProducer } from './story-records.ts';
 
 type Shelf = ReturnType<typeof personaChannel>;
 
@@ -49,6 +60,8 @@ const maxArchive = 1_000_000;
 /** Run-scoped ownership, recording and source archive. No current shelf reads on local load. */
 export class Continuity {
   generation = 0;
+  private loading = new AbortController();
+  loadProgress?: (tick: number) => void;
   heads: PersonaEnvelope[] = [];
   fileOrigin = false;
   playPaused = false;
@@ -61,10 +74,13 @@ export class Continuity {
   private key = crypto.randomUUID();
   private operation = Promise.resolve();
   private state: State | null = null;
+  admissionBlocked: { castId: string; reason: string }[] = [];
+  readonly admissions = new AdmissionStore();
   constructor(
     readonly lab: Lab,
     readonly shelf: Shelf,
     readonly changed: () => void = () => {},
+    readonly store = new NativeSaveStore(),
   ) {
     lab.setPersonaRecording(`startup-${this.key}`);
   }
@@ -81,6 +97,8 @@ export class Continuity {
       this.deferredInvalidation = true;
       return;
     }
+    this.loading.abort();
+    this.loading = new AbortController();
     this.generation++;
     this.key = crypto.randomUUID();
     this.lab.setPersonaRecording(this.key);
@@ -130,15 +148,107 @@ export class Continuity {
       this.requireEntry(generation);
       if (generation !== this.generation)
         throw new Error('The game changed before the residents could join. Try starting the chapter again.');
+      await this.store.read();
+      const previousRevision = this.store.observedRevision;
+      const sourceIdentity = JSON.stringify(this.source());
+      const current = () =>
+        generation === this.generation && JSON.stringify(this.source()) === sourceIdentity;
+      const nextRunId = crypto.randomUUID();
+      let candidate: State | undefined;
+      let preparedId: string | undefined;
+      let preparedPin: AdmissionPin | undefined;
+      let emptyAcknowledged = false;
+      const wrapper = (state: State, claims: PersonaEnvelope[]) =>
+        JSON.stringify({
+          run: exportRun(state),
+          runId: nextRunId,
+          fileOrigin: false,
+          heads: claims,
+          sources: [],
+        });
       const base = createGame(seed, undefined, config, config || !rules ? undefined : rules);
       let chapter: Chapter | undefined;
       let shelfUnavailable = false;
       if (this.shelf.enabled) {
         let prepared = false;
+        let rawPrepare:
+          | {
+              inputs: LifePreparation[];
+              blocked: { castId: string; reason: string }[];
+              expectedHeads: Record<string, string | null>;
+            }
+          | undefined;
+        let accepted: LifePreparation[] = [];
+        let initial: Chapter['initial'] | undefined;
         const bridge = {
-          request: async <T>(request: Parameters<Shelf['request']>[0]): Promise<T> => {
+          request: async <T>(request: PersonaRequest): Promise<T> => {
+            if (request.action === 'putBatch') {
+              this.requireEntry(generation);
+              for (const envelope of request.envelopes ?? []) requireSharedWriteCapability(envelope.castId);
+              if (
+                !rawPrepare ||
+                JSON.stringify(request.expectedHeads) !== JSON.stringify(rawPrepare.expectedHeads)
+              )
+                throw new Error('Prepared shelf parents changed. No claim was sent.');
+              if (!initial) {
+                if (
+                  rawPrepare.inputs.length ||
+                  rawPrepare.blocked.length ||
+                  CAST.some((c) => rawPrepare!.expectedHeads[c.castId] !== null) ||
+                  request.envelopes?.length
+                )
+                  throw new Error('The empty shelf outcome does not match its preparation.');
+                if (!current()) throw new Error('The preparation source changed before the empty claim.');
+                const result = await this.shelf.request<T>(request);
+                this.requireEntry(generation);
+                emptyAcknowledged = true;
+                return result;
+              }
+              const claims = request.envelopes ?? [];
+              const nonaccepted = CAST.filter((c) => !accepted.some((i) => i.parent.castId === c.castId)).map(
+                (c) => c.castId,
+              );
+              const pinned: Chapter = {
+                version: DIALECT,
+                initial,
+                inputs: accepted,
+                claims,
+                blocked: nonaccepted
+                  .filter((id) => rawPrepare!.expectedHeads[id] !== null)
+                  .map((castId) => ({
+                    castId,
+                    reason: 'No accepted retained history was recorded for this preparation.',
+                  })),
+              };
+              candidate = createGame(seed, pinned, config, config || !rules ? undefined : rules);
+              preparedId = crypto.randomUUID();
+              const pin = await this.admissions.stage(
+                {
+                  id: preparedId,
+                  source: sourceIdentity,
+                  generation,
+                  previousRevision,
+                  expectedHeads: structuredClone(rawPrepare.expectedHeads),
+                  claims,
+                  accepted: accepted.map((i) => i.parent.castId),
+                  nonaccepted,
+                  rawPrepare,
+                  candidate: wrapper(candidate, claims),
+                },
+                current,
+              );
+              preparedPin = pin;
+              // Forwarding is durable before the public write; a lost return remains unknown.
+              await this.admissions.markForwarded(preparedId, current, pin);
+              this.requireEntry(generation);
+              if (!current()) throw new Error('The preparation source changed before the claim.');
+              return this.shelf.request<T>(request);
+            }
             const reply = await this.shelf.request<T>(request);
-            if (request.action === 'prepareBatch') prepared = true;
+            if (request.action === 'prepareBatch') {
+              prepared = true;
+              rawPrepare = structuredClone(reply) as typeof rawPrepare;
+            }
             return reply;
           },
         };
@@ -149,7 +259,8 @@ export class Continuity {
             CAST.map((c) => c.castId),
             this.source(),
             async (inputs: LifePreparation[]) => {
-              const initial = Object.fromEntries(base.villagers.map((v) => [v.person.id, v.person]));
+              accepted = structuredClone(inputs);
+              initial = Object.fromEntries(base.villagers.map((v) => [v.person.id, v.person]));
               for (const input of inputs) {
                 const opening = initial[input.parent.castId];
                 if (!opening)
@@ -161,7 +272,7 @@ export class Continuity {
               return initial;
             },
             {
-              isCurrent: () => generation === this.generation,
+              isCurrent: current,
               claimTransfer,
               admitPerson: (input) => {
                 requirePeerReadiness(input.parent.castId);
@@ -201,9 +312,21 @@ export class Continuity {
         );
       this.requireEntry(generation);
       // The default short chapter plays under the pressure rules; longer days keep their editions.
-      const state = createGame(seed, chapter, config, config || !rules ? undefined : rules);
+      const state = candidate ?? createGame(seed, chapter, config, config || !rules ? undefined : rules);
+      if (preparedId) {
+        if (!(await this.admissions.promote(preparedId, current, preparedPin!)))
+          throw new Error('Prepared chapter could not replace the previous save. Keep both sources.');
+        await this.store.read();
+      } else {
+        if (!shelfUnavailable && !emptyAcknowledged)
+          throw new Error('The shelf preparation was not acknowledged.');
+        if (!(await this.store.write(wrapper(state, []), current)))
+          throw new Error('The new chapter could not be saved. Your previous game is unchanged.');
+      }
+      this.requireEntry(generation);
+      this.admissionBlocked = structuredClone(chapter?.blocked ?? []);
       this.state = state;
-      this.runId = crypto.randomUUID();
+      this.runId = nextRunId;
       this.sources = [];
       this.heads = chapter?.claims ?? [];
       this.fileOrigin = false;
@@ -221,6 +344,88 @@ export class Continuity {
       this.busy = false;
     }
   }
+  /** Explicit recovery never resends the old put. Current public heads, not history, own custody. */
+  async discardUnforwarded(generation = this.beginEntry()): Promise<boolean> {
+    this.requireEntry(generation);
+    const intent = await this.admissions.read();
+    if (!intent) return false;
+    const source = JSON.stringify(this.source());
+    const current = () => this.currentEntry(generation) && JSON.stringify(this.source()) === source;
+    if (intent.source !== source || intent.phase !== 'prepared')
+      throw new Error('This preparation may have been forwarded. Keep both downloads.');
+    const heads = Object.fromEntries(
+      await Promise.all(
+        Object.keys(intent.expectedHeads).map(async (castId) => [
+          castId,
+          await this.shelf.request<PersonaEnvelope | null>({ action: 'get', castId }),
+        ]),
+      ),
+    );
+    if (!(await this.admissions.discardUnforwarded(admissionPin(intent), heads, current)))
+      throw new Error('The preparation or current ownership changed. Both saves remain held.');
+    this.status = 'Discarded the never-forwarded preparation. The previous complete game is unchanged.';
+    return true;
+  }
+  async recoverPrepared(generation = this.beginEntry()): Promise<State | null> {
+    this.requireEntry(generation);
+    const intent = await this.admissions.read();
+    if (!intent) return null;
+    const source = JSON.stringify(this.source());
+    if (intent.source !== source)
+      throw new Error('The prepared chapter belongs to a different source build. Keep both downloads.');
+    const current = () => this.currentEntry(generation) && JSON.stringify(this.source()) === source;
+    const readHeads = async () =>
+      Object.fromEntries(
+        await Promise.all(
+          Object.keys(intent.expectedHeads).map(async (castId) => [
+            castId,
+            await this.shelf.request<PersonaEnvelope | null>({ action: 'get', castId }),
+          ]),
+        ),
+      );
+    const heads = await readHeads();
+    this.requireEntry(generation);
+    if ((await this.admissions.recover(heads)) !== 'accepted')
+      throw new Error(
+        'Current resident custody is unresolved. Your previous game and prepared chapter are unchanged.',
+      );
+    const text = await this.admissions.preparedText();
+    if (!text) throw new Error('Prepared chapter is unavailable.');
+    const saved = JSON.parse(text);
+    const candidate = await importRunAsync(saved.run, {
+      signal: this.loading.signal,
+      progress: this.loadProgress,
+    });
+    await this.validateRunEnvelopes(candidate);
+    if (
+      saved.fileOrigin !== false ||
+      JSON.stringify(saved.sources) !== '[]' ||
+      JSON.stringify(saved.heads) !== JSON.stringify(intent.claims) ||
+      JSON.stringify(candidate.chapter?.claims) !== JSON.stringify(intent.claims) ||
+      JSON.stringify(candidate.chapter?.inputs.map((i) => i.parent.castId)) !==
+        JSON.stringify(intent.accepted) ||
+      candidate.chapter?.inputs.some((i) => intent.expectedHeads[i.parent.castId] !== i.parent.revision)
+    )
+      throw new Error(
+        'Prepared chapter metadata does not match its pinned claims and accepted residents. Keep both sources.',
+      );
+
+    // Recheck after expensive replay. Public shelf calls cannot promise a distributed transaction.
+    const latest = await readHeads();
+    if (!current() || (await this.admissions.recover(latest)) !== 'accepted')
+      throw new Error('Resident custody changed during recovery. Keep both downloads.');
+    if (!(await this.admissions.promote(intent.id, current, admissionPin(intent))))
+      throw new Error('The previous complete save changed. Prepared chapter was not installed.');
+    await this.store.read();
+    this.requireEntry(generation);
+    this.state = candidate;
+    this.runId = saved.runId;
+    this.heads = saved.heads;
+    this.sources = saved.sources;
+    this.fileOrigin = false;
+    this.status = 'Recovered the prepared chapter from exact current resident claims. No claim was resent.';
+    return candidate;
+  }
   async validateRunEnvelopes(state: State) {
     await validateRunEnvelopes(state);
   }
@@ -228,7 +433,10 @@ export class Continuity {
   async loadLocal(text: string, generation = this.beginEntry()) {
     this.requireEntry(generation);
     const saved = JSON.parse(text);
-    const state = importRun(saved.run);
+    const state = await importRunAsync(saved.run, {
+      signal: this.loading.signal,
+      progress: this.loadProgress,
+    });
     validateYieldSources(saved.sources);
     await validateSourceArchives(saved.sources);
     await this.validateRunEnvelopes(state);
@@ -264,6 +472,21 @@ export class Continuity {
     if (state.shortYield && typeof saved.playPaused !== 'boolean')
       throw new Error('Missing saved pause boundary');
     this.requireEntry(generation);
+    const blocked = saved.admissionBlocked ?? [];
+    if (
+      !Array.isArray(blocked) ||
+      blocked.length > 8 ||
+      blocked.some(
+        (entry: { castId: string; reason: string }) =>
+          !entry ||
+          !CAST.some((c) => c.castId === entry.castId) ||
+          typeof entry.reason !== 'string' ||
+          entry.reason.length > 500 ||
+          heads.some((p) => p.castId === entry.castId),
+      )
+    )
+      throw new Error('Invalid prepared history status.');
+    this.admissionBlocked = structuredClone(blocked);
     this.state = state;
     this.runId = saved.runId;
     this.heads = heads;
@@ -278,7 +501,7 @@ export class Continuity {
     this.requireEntry(generation);
     const raw = JSON.parse(text);
     const { castSources: archiveSources, ...native } = raw;
-    const state = importRun(native);
+    const state = await importRunAsync(native, { signal: this.loading.signal, progress: this.loadProgress });
     validateYieldSources(archiveSources ?? []);
     await validateSourceArchives(archiveSources ?? []);
     await this.validateRunEnvelopes(state);
@@ -308,10 +531,23 @@ export class Continuity {
       fileOrigin: this.fileOrigin,
       heads: this.heads,
       sources: this.sources,
+      ...(this.admissionBlocked.length ? { admissionBlocked: this.admissionBlocked } : {}),
     });
   }
   export(state: State, compact = false) {
     return { ...(exportRun(state, compact) as object), castSources: structuredClone(this.sources) };
+  }
+  departure(state: State, castId: string) {
+    if (this.fileOrigin || this.state !== state)
+      throw new Error(
+        'File sessions do not acquire or prepare shared resident ownership. Download the original file.',
+      );
+    return prepareDeparture(state, castId, {
+      runId: this.runId,
+      source: this.source(),
+      heads: this.heads,
+      sources: this.sources,
+    });
   }
   pinnedHistories() {
     const group = new Map((this.state?.chapter?.claims ?? []).map((p) => [`${p.castId}/${p.branchId}`, p]));
@@ -345,6 +581,8 @@ export class Continuity {
         runId === this.runId &&
         state?.tick === tick &&
         state?.inputs.length === inputCount;
+      // One producer entry covers living projection and terminal close before either branch.
+      if (state && current()) requireSharedWriteCapability(castId);
       if (
         !state ||
         !current() ||
@@ -356,6 +594,7 @@ export class Continuity {
         throw new Error(
           'Play the chapter first. Then pause it and wait for current actions to finish before saving a person.',
         );
+      requireSupportedProducer(state);
       await this.shelf.ready;
       if (!current() || !this.shelf.enabled)
         throw new Error(

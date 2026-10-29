@@ -38,7 +38,7 @@ test('recorded roof break walks, rests under the real roof, then re-offers each 
   expect(s.villagers.slice(0, 2).every((v) => !v.person.activity?.protest)).toBe(true);
   for (const compact of [false, true]) {
     const raw = exportRun(s, compact) as { schema: number };
-    expect(raw.schema).toBe(9);
+    expect(raw.schema).toBe(12);
     const loaded = importRun(JSON.parse(JSON.stringify(raw)));
     expect(loaded).toEqual(s);
     advance(loaded, 17);
@@ -172,7 +172,16 @@ test('complete source archives survive native and file loads; active run require
     sources,
   });
   await c.loadLocal(native);
-  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow(/Play the chapter/);
+  // Isolate the existing action-boundary control from the earlier live peer gate.
+  // The unmocked refusal is covered in shared-write-capability.test.ts.
+  const capability = await import('../src/shared-write-capability');
+  const { vi } = await import('vitest');
+  const readiness = vi.spyOn(capability, 'requireSharedWriteCapability').mockImplementation(() => {});
+  try {
+    await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow(/Play the chapter/);
+  } finally {
+    readiness.mockRestore();
+  }
   const full = c.export(s);
   const f = createFileSession();
   expect(await f.select(new File([JSON.stringify(full)], 'roof.json'))).toBe(true);
@@ -225,8 +234,8 @@ test('long-day roof action delivers the actual held load once, rests at the hub,
   expect(aw.pendingRequest).not.toBe('insist');
   for (const compact of [false, true]) {
     const raw = exportRun(s, compact) as { schema: number; rules: string };
-    expect(raw.schema).toBe(10);
-    expect(raw.rules).toBe('settlement-roof-break-return/1');
+    expect(raw.schema).toBe(12);
+    expect(raw.rules).toBeNull(); // The current envelope binds the roof input through its full history.
     const copy = importRun(JSON.parse(JSON.stringify(raw)));
     expect(copy).toEqual(s);
     advance(copy, 17);
@@ -335,7 +344,16 @@ test('schema10 keeps source archives through full, compact, gzip and native load
   await c.loadLocal(
     JSON.stringify({ run: exportRun(s), runId: 'synthetic-long', fileOrigin: false, heads: [], sources }),
   );
-  await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow(/Play the chapter/);
+  // Isolate the existing action-boundary control from the earlier live peer gate.
+  // The unmocked refusal is covered in shared-write-capability.test.ts.
+  const capability = await import('../src/shared-write-capability');
+  const { vi } = await import('vitest');
+  const readiness = vi.spyOn(capability, 'requireSharedWriteCapability').mockImplementation(() => {});
+  try {
+    await expect(c.checkpoint('hf.cast.nora.smallworks')).rejects.toThrow(/Play the chapter/);
+  } finally {
+    readiness.mockRestore();
+  }
   expect(accessed).toBe(0);
   const download = c.export(s) as { castSources: unknown[] };
   expect(download.castSources).toEqual(sources);
@@ -502,7 +520,7 @@ test('an accepted later reply during roof rest keeps its ordinary priority and c
   expect(reply.paperSpent).toBe(1);
   expect(reply.deliveredAt).toBeGreaterThanOrEqual(restUntil);
   expect(scene.completedBranch).toBe('nora-record-question');
-  expect(s.settlement!.replyResults!.some((r) => r.attemptId === reply.id)).toBe(true);
+  expect(s.story!.firstResults!.some((r) => r.attemptId === reply.id)).toBe(true);
   expect(aw.job?.kind).not.toBe('gather');
   expect(s.resources.wood).toBe(stock + load.amount);
 });

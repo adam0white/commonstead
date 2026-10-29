@@ -10,4 +10,6 @@ TypeScript support is 7+. Use `pnpm run check:lane` before every commit; it runs
 
 Use shared Node 26.12.0 and pnpm 12.14.0. Install with `pnpm install --frozen-lockfile`. Preserve strict engines and peers, no hoisting, shared-store hardlinks, the one-day third-party release age and version-specific build approvals in pnpm-workspace.yaml. Do not download a project runtime.
 
-Native carryover: every native edition automatically checks supported shelf people. Settlement and roof/yield checkpoints use actual action and world-obligation boundaries; no edition-wide refusal. Keep unsupported-duty validation, ownership CAS, complete source archives, existing replay hashes and file-session isolation. See docs/cast-adoption.md.
+The current HF4.8.1/client0.5.7/kit0.5.24 graph uses the released portable peer gate. Unknown peer status blocks portable writes. Per-person admission skips unsupported histories without claiming them. Durable preparation, local/file continuation and read-only exact-current-head recovery remain available. Live peer verification and missing shared contracts stay separate; see docs/cast-adoption.md.
+
+Native carryover (historical mechanism contract): every native edition automatically checks supported shelf people. Settlement and roof/yield checkpoints use actual action and world-obligation boundaries; no edition-wide refusal. Keep unsupported-duty validation, ownership CAS, complete source archives, existing replay hashes and file-session isolation. See docs/cast-adoption.md.
