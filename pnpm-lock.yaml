@@ -163,7 +163,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@adam0white/lab-client>@adam0white/human-framework': 4.6.0
+  '@adam0white/lab-client>@adam0white/human-framework': 4.8.1
   sharp: 0.35.5
   miniflare>undici: 7.30.1
 
@@ -172,14 +172,14 @@ importers:
   .:
     dependencies:
       '@adam0white/human-framework':
-        specifier: 4.6.0
-        version: 4.6.0
+        specifier: 4.8.1
+        version: 4.8.1
       '@adam0white/lab-client':
-        specifier: file:vendor/adam0white-lab-client-0.5.2.tgz
-        version: file:vendor/adam0white-lab-client-0.5.2.tgz
+        specifier: file:vendor/adam0white-lab-client-0.5.7.tgz
+        version: file:vendor/adam0white-lab-client-0.5.7.tgz
       '@adam0white/lab-kit':
-        specifier: file:vendor/adam0white-lab-kit-0.5.19.tgz
-        version: file:vendor/adam0white-lab-kit-0.5.19.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.2.tgz)
+        specifier: file:vendor/adam0white-lab-kit-0.5.24.tgz
+        version: file:vendor/adam0white-lab-kit-0.5.24.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz)
     devDependencies:
       '@biomejs/biome':
         specifier: 2.6.3
@@ -209,21 +209,21 @@ packages:
     resolution: {integrity: sha512-O0t7AytAqP3ZKNdNbyfJk4sSpeniQRJ6M29IPxXe9YQOaQVnr7C8VZ945PTkc6mao/zZpxPAjK0Cuuvz/0uR1A==}
     engines: {node: '>=24'}
 
-  '@adam0white/human-framework@4.6.0':
-    resolution: {integrity: sha512-FRwo9yEuU/kik2C8/Ed5jK8vVifIOaE5z0z80kRaLAruAY3dKIasKGwXPT/tBwPdSfIwblQrELvPPnAjBCLKnQ==}
+  '@adam0white/human-framework@4.8.1':
+    resolution: {integrity: sha512-o64zOnyR6B5OymP0AJ4taAEOCCsIvZ6VYcw5zH1vl+3lFXjKdwikZ6LIDEX799yiITvz+Wq5+aW0Yo4JAfaulA==}
     engines: {node: '>=24'}
 
-  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.2.tgz':
-    resolution: {integrity: sha512-CUbeh1l06zZEP5Ih9i4xKexhSC9fDNU7BS+MkO8YoHL26Dx6suLo4FOs85aUU6zhfsh8gG/68bewFB/rWbK8og==, tarball: file:vendor/adam0white-lab-client-0.5.2.tgz}
-    version: 0.5.2
+  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz':
+    resolution: {integrity: sha512-Fln5Jx0q9wwH+fluUKMZk+PaveJEbvKX9c1etkZV2NwatvWEYJcqskyWWBE8SGK2a+buaf5FEnDhVUvWwjFyoQ==, tarball: file:vendor/adam0white-lab-client-0.5.7.tgz}
+    version: 0.5.7
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.19.tgz':
-    resolution: {integrity: sha512-8nPLp1KsvZULER42Y+zJH/Mwdg66B1ww4nunwqmIxTf8jV/2PGXms3TzIMT3kLg/2niOIWa1H5vu9821iVUjHQ==, tarball: file:vendor/adam0white-lab-kit-0.5.19.tgz}
-    version: 0.5.19
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.24.tgz':
+    resolution: {integrity: sha512-ymor8uDESxyfxjYhIH1G560jMwVtqdSEQWwW78r7Ym23i0cy1RPr6dUsEaxICpxyYgYBaBakUnS6ZqhoJzOj0w==, tarball: file:vendor/adam0white-lab-kit-0.5.24.tgz}
+    version: 0.5.24
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
-      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14 || 0.4.15 || 0.5.0 || 0.5.1 || 0.5.2
+      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14 || 0.4.15 || 0.5.0 || 0.5.1 || 0.5.2 || 0.5.3 || 0.5.4 || 0.5.5 || 0.5.6 || 0.5.7
     peerDependenciesMeta:
       '@adam0white/lab-client':
         optional: true
@@ -1305,16 +1305,16 @@ snapshots:
 
   '@adam0white/human-framework@3.0.0': {}
 
-  '@adam0white/human-framework@4.6.0': {}
+  '@adam0white/human-framework@4.8.1': {}
 
-  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.2.tgz':
+  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz':
     dependencies:
       '@adam0white/hf-legacy': '@adam0white/human-framework@3.0.0'
-      '@adam0white/human-framework': 4.6.0
+      '@adam0white/human-framework': 4.8.1
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.19.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.2.tgz)':
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.24.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz)':
     optionalDependencies:
-      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.5.2.tgz
+      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.5.7.tgz
 
   '@biomejs/biome@2.6.3':
     optionalDependencies:

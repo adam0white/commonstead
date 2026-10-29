@@ -21,7 +21,9 @@ test('normal game work runs in one HF4 community and replays completely', () => 
   expect(archive.version).toBe(5);
   expect(archive.initial.people).toHaveLength(8);
   expect(s.resources.wood).toBeGreaterThan(80);
-  expect(verifyCommunity(s.villagers[0]!.person).verified).toBe(true);
+  const proof = verifyCommunity(s.villagers[0]!.person);
+  expect(proof.verified).toBe(true);
+  expect(proof.fullHash).toBe(archive.hashes.full);
   const restored = importRun(exportRun(s));
   expect(restored).toEqual(s);
   expect(exportRun(importRun(exportRun(restored)))).toEqual(exportRun(s));

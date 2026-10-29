@@ -1,4 +1,17 @@
 import { describe, expect, test, vi } from 'vitest';
+
+// Most controls isolate admission and ownership from the live rollout gate.
+const rollout = vi.hoisted(() => ({ enforce: false }));
+vi.mock('../src/passport.ts', async (original) => {
+  const actual = await original<typeof import('../src/passport.ts')>();
+  return {
+    ...actual,
+    requirePeerReadiness: (id: string) => {
+      if (rollout.enforce) actual.requirePeerReadiness(id);
+    },
+  };
+});
+
 import { FRAMEWORK_VERSION } from '../src/engine';
 import { apply, createGame, exportRun, importRun, stateHash, step } from '../src/sim.ts';
 import { decodeSourceSnapshot } from '../src/source-archives';
@@ -269,9 +282,10 @@ describe('finite source, batch ownership and recording controls', () => {
     const invalid = await createPersona({ ...body, source: { ...original.source, game: 'unknown' } });
     const h = harness([invalid]);
     const c = new Continuity(h.lab, h.shelf);
-    await expect(c.fresh(42)).rejects.toThrow(/cannot carry over/);
+    const started = await c.fresh(42);
+    expect(started.chapter?.blocked?.map((entry) => entry.castId)).toContain(original.castId);
     expect(h.data.heads[original.castId]).toBe(invalid.revision);
-    expect(h.requests.some((r) => r.action === 'putBatch')).toBe(false);
+    expect(h.requests.find((r) => r.action === 'putBatch')?.envelopes).toEqual([]);
     const empty = harness();
     await new Continuity(empty.lab, empty.shelf).fresh(42);
     expect(empty.requests.find((r) => r.action === 'putBatch')?.envelopes).toEqual([]);
@@ -786,7 +800,7 @@ test('a changed callback cancelling source staging prevents public put', async (
   expect(c.heads).toEqual([]);
 });
 
-test('a played Burak checkpoint publishes portable state and survives admission and replay', async () => {
+test('a played Burak checkpoint uses the SDK role and stays blocked until peers are ready', async () => {
   const h = harness();
   const first = new Continuity(h.lab, h.shelf);
   const played = await first.fresh(418, { edition: 'settlement-day/1' });
@@ -809,15 +823,11 @@ test('a played Burak checkpoint publishes portable state and survives admission 
     played,
   );
   const saved = h.data.revisions.find((p) => p.revision === h.data.heads[burak.castId])!;
-  expect(saved.transfer.castPassport).toBe('commonstead-retained/4');
+  expect(saved.transfer.castPassport).toBe('hf-portable-person/2');
   const second = await new Continuity(h.lab, h.shelf).fresh(418);
-  const claim = second.chapter?.claims.find((p) => p.castId === burak.castId);
-  if (!claim || !second.chapter) throw new Error('Missing Burak claim');
-  expect(claim.transfer.castPassport).toBe('commonstead-retained/4');
-  expect(validatePortablePerson(claim.transfer.portable).source.game).toBe('commonstead');
-  expect(validatePortablePerson(claim.transfer.portable).history).toEqual(
-    validatePortablePerson(saved.transfer.portable).history,
-  );
+  if (!second.chapter) throw new Error('Missing chapter');
+  expect(second.chapter.blocked?.map((row) => row.castId)).toContain(burak.castId);
+  expect(h.data.heads[burak.castId]).toBe(saved.revision);
   expect(importRun(exportRun(second))).toEqual(second);
   const damaged = structuredClone(second.chapter);
   const portable = validatePortablePerson(damaged.claims[0]!.transfer.portable);
@@ -849,8 +859,13 @@ test('older Days portable Burak source stays intact when retained memories are u
 test('an arriving Burak with unfinished building work cannot depart through his claim', async () => {
   const cast = CAST.find((c) => c.name === 'Burak');
   if (!cast) throw new Error('Missing Burak cast');
-  const envelope = await source(cast.castId),
-    h = harness([envelope]),
+  const portableSource = await source(cast.castId);
+  const { revision: _revision, ...nativeSource } = portableSource;
+  const envelope = await createPersona({
+    ...nativeSource,
+    transfer: { ...nativeSource.transfer, castPassport: 'commonstead-retained/4' },
+  });
+  const h = harness([envelope]),
     c = new Continuity(h.lab, h.shelf);
   const game = await c.fresh(418, undefined, null);
   const burak = game.villagers.find((v) => v.person.id === envelope.castId);
@@ -1074,4 +1089,45 @@ test('a load begun before a pending put cannot replace the run or discard its ne
   expect(c.sources).toHaveLength(1);
   expect(c.heads[0]!.revision).toBe(h.data.heads[CAST[0]!.castId]);
   expect(c.sources[0]!.revision).toBe(c.heads[0]!.revision);
+});
+
+test('a blocked resident is skipped without changing the saved head', async () => {
+  const id = 'hf.cast.burak.stairwell';
+  const parent = await source(id);
+  const h = harness([parent]);
+  const before = structuredClone(h.data);
+  const continuity = new Continuity(h.lab, h.shelf);
+  rollout.enforce = true;
+  try {
+    const game = await continuity.fresh(42);
+    expect(game.chapter?.blocked?.map((row) => row.castId)).toContain(id);
+    expect(game.villagers).toHaveLength(8);
+    expect(h.data.heads[id]).toEqual(before.heads[id]);
+    expect(h.data.revisions).toEqual(before.revisions);
+  } finally {
+    rollout.enforce = false;
+  }
+});
+
+test('an already recorded portable claim validates while peer writes are closed', async () => {
+  const parent = await source('hf.cast.burak.stairwell');
+  const input = preparePersonaLife(parent, clock);
+  const base = createGame(42);
+  const initial = Object.fromEntries(base.villagers.map((v) => [v.person.id, v.person]));
+  const opening = initial[parent.castId];
+  if (!opening) throw new Error('Missing Burak opening');
+  initial[parent.castId] = admitResident(input, opening);
+  const { revision, ...body } = parent;
+  const claim = await createPersona({
+    ...body,
+    parentRevision: revision,
+    transfer: { ...parent.transfer, life: input.life, portableClaim: { game: 'commonstead' } },
+  });
+  const game = createGame(42, {
+    version: 'commonstead-retained/4',
+    initial,
+    inputs: [input],
+    claims: [claim],
+  });
+  expect(importRun(exportRun(game))).toEqual(game);
 });

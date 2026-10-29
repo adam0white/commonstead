@@ -1,3 +1,7 @@
+# HF4.8.1 candidate — 2026-10-28
+
+Remaining: hosted review, exact CI, clean deployment and Adam's separate play acceptance by 2026-11-03. The game pins HF 4.8.1, client 0.5.7 and kit 0.5.24. Portable and native resident writes stay closed until every peer has a verified live client 0.5.5 or later with per-person skips. Blocked resident histories are skipped without replacing their heads. SDK roles validate portable arrivals; Commonstead has no direct Voice or Left Hand role. Earlier sections describe historical candidates and receipts.
+
 # HF4 port candidate — 2026-10-28
 
 Remaining: final normal lane, the same PR's exact source CI, matched merge, exact merged CI and a clean deployment. [PR14](https://github.com/adam0white/commonstead/pull/14) carries this port and the coordinator's menu cleanup. Technical delivery ends with that merged PR and a live release manifest on its merged commit with `dirty:false`. Adam accepts the game by playing; that acceptance stays separate.

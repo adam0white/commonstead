@@ -2,9 +2,14 @@ import { validatePortablePerson } from '@adam0white/human-framework';
 import {
   canonicalCast,
   canonicalPersona,
+  createPersona,
   type LifePreparation,
   lifeAdmission,
   type PersonaEnvelope,
+  portablePassport,
+  portablePersonOwner,
+  portablePersonRole,
+  portableWriteBlockers,
   preparePersonaLife,
   projectCastClaimTransfer,
 } from '@adam0white/lab-client';
@@ -22,9 +27,16 @@ export type Chapter = {
   initial: Record<string, Person>;
 };
 const same = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPersona(b);
+export function requirePeerReadiness(castId: string): void {
+  if (portableWriteBlockers(castId, 'commonstead').length)
+    throw new Error('This saved history cannot be written across games yet. Keep the source chapter.');
+}
 export function admitResident(input: LifePreparation, opening: Person): Person {
   const p = input.parent;
-  if (p.source.game !== 'commonstead' || p.source.engine !== FRAMEWORK_VERSION || p.source.rules !== RULES)
+  if (
+    !portablePassport(p) &&
+    (p.source.game !== 'commonstead' || p.source.engine !== FRAMEWORK_VERSION || p.source.rules !== RULES)
+  )
     throw new Error(
       'This source cannot carry over into this Commonstead version. Keep the source save or start fresh.',
     );
@@ -38,6 +50,14 @@ export function admitResident(input: LifePreparation, opening: Person): Person {
     throw new Error(
       'This resident history has an unsupported identity. Keep the source save or start a fresh chapter.',
     );
+  if (portablePassport(p)) {
+    if (portablePersonRole(p, 'commonstead') !== opening.id)
+      throw new Error('This person has no matching resident role.');
+    const portable = validatePortablePerson(p.transfer.portable);
+    if (portable.version !== 2)
+      throw new Error('This older source lacks retained history. Keep the source save.');
+    return admitRetained(opening, portable);
+  }
   if (p.transfer.castPassport !== DIALECT)
     throw new Error(
       'This older resident history needs a supported retained HF4 source. Keep the source save or start a fresh chapter.',
@@ -90,17 +110,25 @@ export function checkChapter(chapter: Chapter) {
       claim.source.rules !== RULES ||
       !same(
         claim.transfer,
-        projectCastClaimTransfer(
-          input.parent,
-          claim.source,
-          claimTransfer(chapter.initial, input),
-          input.life,
-        ),
+        portablePassport(input.parent)
+          ? {
+              ...claimTransfer(chapter.initial, input),
+              life: input.life,
+              portableClaim: { game: 'commonstead' },
+            }
+          : projectCastClaimTransfer(
+              input.parent,
+              claim.source,
+              claimTransfer(chapter.initial, input),
+              input.life,
+            ),
       )
     )
       throw new Error(
         'The chapter’s saved resident record is invalid. Load a different save or start a fresh local chapter.',
       );
+    if (portablePassport(claim) && portablePersonOwner(claim) !== 'commonstead')
+      throw new Error('The saved resident ownership is invalid. Keep the source save.');
   }
 }
 
@@ -113,9 +141,30 @@ export async function residentTransfer(person: Person) {
   if (entry?.kind !== 'host') throw new Error('Missing retained resident');
   const part = entry.parts.find((p) => p.select === 'persona');
   if (part?.select !== 'persona') throw new Error('Missing retained projection');
+  const portable = validatePortablePerson(part.value);
+  const provisional = await createPersona({
+    format: 'hf-persona/1',
+    castId: person.id,
+    castRevision: canonicalCast(person.id).revision,
+    branchId: 'role-check',
+    parentRevision: null,
+    source: { game: 'commonstead', engine: FRAMEWORK_VERSION, rules: RULES, build: 'role-check' },
+    transfer: { castPassport: `hf-portable-person/${portable.version}`, portable },
+    limitations: [],
+  });
+  let portableRole = false;
+  try {
+    portableRole = portablePersonRole(provisional, 'commonstead') === person.id;
+  } catch {
+    /* no released source role */
+  }
   return {
     raw: snapshot(person),
-    transfer: { castPassport: DIALECT, sourceRole: person.id, portable: part.value },
+    transfer: {
+      castPassport: portableRole ? `hf-portable-person/${portable.version}` : DIALECT,
+      sourceRole: person.id,
+      portable,
+    },
     limitations: [
       'The complete Commonstead source archive remains with this chapter. Arrival preserves supported retained memory and duties; it does not imply healing or task completion.',
     ],
