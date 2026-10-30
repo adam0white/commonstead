@@ -1,3 +1,7 @@
+# PR18 reader composition candidate — 2026-10-30
+
+Remaining: root's final review, signing, exact CI and any later release verification. This uncommitted candidate composes the per-person reader guards onto PR18 source `76798c58575ef7ade1f8a66e88e55e8dca22726a`. It preserves the one-current-policy schema13 refusal and both current physical scenarios. Root reports the existing CI run blocked at account startup with zero test steps; this worker did not retry CI or inspect accounts. Current peer readiness and missing publication contracts still refuse shared writes. Local checks and synthetic candidate browser controls do not qualify live, grant custody, retire a source or supply owner acceptance. Root owns the same PR's review and release decisions.
+
 # HF4.8.1 candidate — 2026-10-28
 
 Remaining: hosted review, exact CI, clean deployment and Adam's separate play acceptance by 2026-11-03. The game pins HF 4.8.1, client 0.5.7 and kit 0.5.24. Portable and native resident writes stay closed until every peer has a verified live client 0.5.5 or later with per-person skips. Blocked resident histories are skipped without replacing their heads. SDK roles validate portable arrivals; Commonstead has no direct Voice or Left Hand role. Earlier sections describe historical candidates and receipts.

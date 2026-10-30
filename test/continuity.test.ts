@@ -1142,7 +1142,7 @@ test('never-forwarded actual incoming preparation can be explicitly discarded wi
   await expect(c.fresh(418)).rejects.toThrow();
   expect(await store.read()).toBe('prior complete original bytes');
   expect((await c.admissions.read())?.phase).toBe('prepared');
-  await (c as unknown as { discardUnforwarded: () => Promise<boolean> }).discardUnforwarded();
+  await (c as unknown as { discardUnused: () => Promise<boolean> }).discardUnused();
   expect(await c.admissions.read()).toBeNull();
   expect(await store.read()).toBe('prior complete original bytes');
   expect(await store.write('ordinary save after explicit safe release')).toBe(true);

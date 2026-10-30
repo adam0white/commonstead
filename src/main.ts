@@ -195,7 +195,11 @@ function save(): Promise<boolean> {
 }
 function downloadStoredRun(name: string, text: string) {
   const saved = JSON.parse(text);
-  downloadJson(name, { ...saved.run, castSources: saved.sources });
+  downloadJson(name, {
+    ...saved.run,
+    castSources: saved.sources,
+    ...(saved.deniedIDs === undefined ? {} : { castDeniedIDs: saved.deniedIDs }),
+  });
 }
 function download() {
   if (fileSession) {
@@ -293,7 +297,7 @@ function title() {
       const panel = document.getElementById('prepared-recovery');
       if (!intent || screen !== 'title' || !panel) return;
       panel.innerHTML =
-        '<p>A prepared chapter is retained. The previous complete game remains available. Recovery checks current resident custody.</p><button id="recover-prepared">Check and recover prepared chapter</button><button id="discard-unforwarded">Discard a never-forwarded preparation</button><button id="download-prepared">Download prepared chapter</button><button id="download-previous">Download previous complete game</button>';
+        '<p>A prepared chapter is retained. The previous complete game remains available. Recovery checks current resident custody.</p><button id="recover-prepared">Check and recover prepared chapter</button><button id="discard-unused">Clear unused preparation</button><button id="download-prepared">Download prepared chapter</button><button id="download-previous">Download previous complete game</button>';
       bind('download-prepared', () => {
         void continuity!.admissions.preparedText().then((text) => {
           if (text) downloadStoredRun('commonstead-prepared-chapter.json', text);
@@ -302,13 +306,19 @@ function title() {
       bind('download-previous', () => {
         if (nativeText) downloadStoredRun('commonstead-previous-complete.json', nativeText);
       });
-      bind('discard-unforwarded', () => {
+      bind('discard-unused', () => {
         void continuity!
-          .discardUnforwarded()
-          .then(() => title())
-          .catch((error) => {
+          .discardUnused()
+          .then(() => {
+            title();
             const status = document.getElementById('load-status');
-            if (status) status.textContent = String(error);
+            if (status) status.textContent = 'The unused preparation was cleared. Your saved game was kept.';
+          })
+          .catch(() => {
+            const status = document.getElementById('load-status');
+            if (status)
+              status.textContent =
+                'The preparation could not be cleared safely. Your saved game and both downloads are still available.';
           });
       });
       bind('recover-prepared', () => {
@@ -480,6 +490,19 @@ function start(s: State) {
     const objective = document.querySelector('.objective .details');
     if (objective)
       objective.textContent = `Tired people work slowly; a break helps. The storm keeps everyone indoors tomorrow, so the dry store needs ${STORM_MEALS} meals per person. At 10:00, everyone should be under a roof: the workshop hub or a finished building. A cabin prepared with 40 boards makes room for two more people. Invite helpers at the workshop hub.`;
+  }
+  if (continuity?.admissionBlocked.length) {
+    const notice = document.createElement('p');
+    notice.id = 'continuity-status';
+    notice.className = 'small';
+    notice.setAttribute('role', 'status');
+    notice.textContent = continuity.admissionBlocked
+      .map(
+        (entry) =>
+          `${CAST.find((c) => c.castId === entry.castId)?.name}: the saved history could not carry over. They start fresh here. The earlier saved history stays as it was.`,
+      )
+      .join(' ');
+    document.querySelector('.objective')?.append(notice);
   }
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-speed]'))
     b.onclick = () => {

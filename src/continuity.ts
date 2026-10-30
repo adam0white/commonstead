@@ -75,6 +75,17 @@ export class Continuity {
   private operation = Promise.resolve();
   private state: State | null = null;
   admissionBlocked: { castId: string; reason: string }[] = [];
+  private deniedIDs: string[] | undefined;
+  private requirePublicationAuthority(castId: string) {
+    if (!this.deniedIDs)
+      throw new Error(
+        'This save has no resident publication authority. Keep playing locally or download the complete game.',
+      );
+    if (this.deniedIDs.includes(castId))
+      throw new Error(
+        `${canonicalCast(castId).name}: this saved history is still in another game and cannot be saved here.`,
+      );
+  }
   readonly admissions = new AdmissionStore();
   constructor(
     readonly lab: Lab,
@@ -127,6 +138,7 @@ export class Continuity {
     this.state = null;
     this.heads = [];
     this.sources = [];
+    this.deniedIDs = undefined;
   }
   async fresh(
     seed: number,
@@ -160,6 +172,7 @@ export class Continuity {
       let preparedId: string | undefined;
       let preparedPin: AdmissionPin | undefined;
       let emptyAcknowledged = false;
+      let deniedIDs: string[] | undefined;
       const wrapper = (state: State, claims: PersonaEnvelope[]) =>
         JSON.stringify({
           run: exportRun(state),
@@ -167,6 +180,8 @@ export class Continuity {
           fileOrigin: false,
           heads: claims,
           sources: [],
+          ...(deniedIDs === undefined ? {} : { deniedIDs }),
+          ...(state.chapter?.blocked?.length ? { admissionBlocked: state.chapter.blocked } : {}),
         });
       const base = createGame(seed, undefined, config, config || !rules ? undefined : rules);
       let chapter: Chapter | undefined;
@@ -210,6 +225,7 @@ export class Continuity {
               const nonaccepted = CAST.filter((c) => !accepted.some((i) => i.parent.castId === c.castId)).map(
                 (c) => c.castId,
               );
+              deniedIDs = nonaccepted.filter((id) => rawPrepare!.expectedHeads[id] !== null);
               const pinned: Chapter = {
                 version: DIALECT,
                 initial,
@@ -234,7 +250,8 @@ export class Continuity {
                   claims,
                   accepted: accepted.map((i) => i.parent.castId),
                   nonaccepted,
-                  rawPrepare,
+                  // Denial metadata is enough. Never persist unowned source histories.
+                  rawPrepare: { expectedHeads: rawPrepare.expectedHeads, blocked: pinned.blocked },
                   candidate: wrapper(candidate, claims),
                 },
                 current,
@@ -250,6 +267,8 @@ export class Continuity {
             if (request.action === 'prepareBatch') {
               prepared = true;
               rawPrepare = structuredClone(reply) as typeof rawPrepare;
+              validatePreparation(rawPrepare);
+              deniedIDs = [];
             }
             return reply;
           },
@@ -326,7 +345,8 @@ export class Continuity {
           throw new Error('The new chapter could not be saved. Your previous game is unchanged.');
       }
       this.requireEntry(generation);
-      this.admissionBlocked = structuredClone(chapter?.blocked ?? []);
+      this.deniedIDs = deniedIDs;
+      this.admissionBlocked = structuredClone(state.chapter?.blocked ?? []);
       this.state = state;
       this.runId = nextRunId;
       this.sources = [];
@@ -347,14 +367,14 @@ export class Continuity {
     }
   }
   /** Explicit recovery never resends the old put. Current public heads, not history, own custody. */
-  async discardUnforwarded(generation = this.beginEntry()): Promise<boolean> {
+  async discardUnused(generation = this.beginEntry()): Promise<boolean> {
     this.requireEntry(generation);
     const intent = await this.admissions.read();
     if (!intent) return false;
     const source = JSON.stringify(this.source());
     const current = () => this.currentEntry(generation) && JSON.stringify(this.source()) === source;
-    if (intent.source !== source || intent.phase !== 'prepared')
-      throw new Error('This preparation may have been forwarded. Keep both downloads.');
+    if (intent.source !== source)
+      throw new Error('This preparation could not be cleared safely. Your saved game was kept.');
     const heads = Object.fromEntries(
       await Promise.all(
         Object.keys(intent.expectedHeads).map(async (castId) => [
@@ -363,9 +383,9 @@ export class Continuity {
         ]),
       ),
     );
-    if (!(await this.admissions.discardUnforwarded(admissionPin(intent), heads, current)))
+    if (!(await this.admissions.discardUnused(admissionPin(intent), heads, current)))
       throw new Error('The preparation or current ownership changed. Both saves remain held.');
-    this.status = 'Discarded the never-forwarded preparation. The previous complete game is unchanged.';
+    this.status = 'The unused preparation was cleared. Your saved game was kept.';
     return true;
   }
   async recoverPrepared(generation = this.beginEntry()): Promise<State | null> {
@@ -396,6 +416,7 @@ export class Continuity {
     const text = await this.admissions.preparedText();
     if (!text) throw new Error('Prepared chapter is unavailable.');
     const saved = JSON.parse(text);
+    const deniedIDs = validateDeniedIDs(saved.deniedIDs);
     const candidate = await importRunAsync(saved.run, {
       signal: this.loading.signal,
       progress: this.loadProgress,
@@ -414,6 +435,7 @@ export class Continuity {
         'Prepared chapter metadata does not match its pinned claims and accepted residents. Keep both sources.',
       );
 
+    validateDenialAgreement(deniedIDs, candidate, saved.heads);
     // Recheck after expensive replay. Public shelf calls cannot promise a distributed transaction.
     const latest = await readHeads();
     if (!current() || (await this.admissions.recover(latest)) !== 'accepted')
@@ -422,6 +444,8 @@ export class Continuity {
       throw new Error('The previous complete save changed. Prepared chapter was not installed.');
     await this.store.read();
     this.requireEntry(generation);
+    this.deniedIDs = deniedIDs;
+    this.admissionBlocked = structuredClone(candidate.chapter?.blocked ?? []);
     this.state = candidate;
     this.runId = saved.runId;
     this.heads = saved.heads;
@@ -437,6 +461,7 @@ export class Continuity {
   async loadLocal(text: string, generation = this.beginEntry()) {
     this.requireEntry(generation);
     const saved = JSON.parse(text);
+    const deniedIDs = validateDeniedIDs(saved.deniedIDs);
     const state = await importRunAsync(saved.run, {
       signal: this.loading.signal,
       progress: this.loadProgress,
@@ -476,10 +501,13 @@ export class Continuity {
     if (state.shortYield && typeof saved.playPaused !== 'boolean')
       throw new Error('Missing saved pause boundary');
     this.requireEntry(generation);
-    const blocked = saved.admissionBlocked ?? [];
+    const blocked = saved.admissionBlocked ?? state.chapter?.blocked ?? [];
     if (
       !Array.isArray(blocked) ||
       blocked.length > 8 ||
+      new Set(blocked.map((entry: { castId: string }) => entry?.castId)).size !== blocked.length ||
+      JSON.stringify(blocked.map((entry: { castId: string }) => entry?.castId).sort()) !==
+        JSON.stringify((state.chapter?.blocked ?? []).map((entry) => entry.castId).sort()) ||
       blocked.some(
         (entry: { castId: string; reason: string }) =>
           !entry ||
@@ -490,6 +518,8 @@ export class Continuity {
       )
     )
       throw new Error('Invalid prepared history status.');
+    validateDenialAgreement(deniedIDs, state, heads);
+    this.deniedIDs = deniedIDs;
     this.admissionBlocked = structuredClone(blocked);
     this.state = state;
     this.runId = saved.runId;
@@ -504,7 +534,8 @@ export class Continuity {
   async importFile(text: string, generation = this.beginEntry()) {
     this.requireEntry(generation);
     const raw = JSON.parse(text);
-    const { castSources: archiveSources, ...native } = raw;
+    const deniedIDs = validateDeniedIDs(raw.castDeniedIDs);
+    const { castSources: archiveSources, castDeniedIDs: _deniedIDs, ...native } = raw;
     const state = await importRunAsync(native, { signal: this.loading.signal, progress: this.loadProgress });
     validateYieldSources(archiveSources ?? []);
     await validateSourceArchives(archiveSources ?? []);
@@ -517,6 +548,9 @@ export class Continuity {
     if (generation !== this.generation)
       throw new Error('The game changed while the file was loading. Try loading it again.');
     this.requireEntry(generation);
+    validateDenialAgreement(deniedIDs, state, []);
+    this.deniedIDs = deniedIDs;
+    this.admissionBlocked = structuredClone(state.chapter?.blocked ?? []);
     this.state = state;
     this.heads = [];
     this.runId = crypto.randomUUID();
@@ -535,17 +569,23 @@ export class Continuity {
       fileOrigin: this.fileOrigin,
       heads: this.heads,
       sources: this.sources,
+      ...(this.deniedIDs === undefined ? {} : { deniedIDs: this.deniedIDs }),
       ...(this.admissionBlocked.length ? { admissionBlocked: this.admissionBlocked } : {}),
     });
   }
   export(state: State, compact = false) {
-    return { ...(exportRun(state, compact) as object), castSources: structuredClone(this.sources) };
+    return {
+      ...(exportRun(state, compact) as object),
+      castSources: structuredClone(this.sources),
+      ...(this.deniedIDs === undefined ? {} : { castDeniedIDs: structuredClone(this.deniedIDs) }),
+    };
   }
   departure(state: State, castId: string) {
     if (this.fileOrigin || this.state !== state)
       throw new Error(
         'File sessions do not acquire or prepare shared resident ownership. Download the original file.',
       );
+    this.requirePublicationAuthority(state.villagers.find((v) => v.id === castId)?.person.id ?? castId);
     return prepareDeparture(state, castId, {
       runId: this.runId,
       source: this.source(),
@@ -585,6 +625,7 @@ export class Continuity {
         runId === this.runId &&
         state?.tick === tick &&
         state?.inputs.length === inputCount;
+      this.requirePublicationAuthority(castId);
       // One producer entry covers living projection and terminal close before either branch.
       if (state && current()) requireSharedWriteCapability(castId);
       if (
@@ -815,4 +856,58 @@ function requireDepartureBoundary(state: State, id: string) {
     throw new Error(
       'This resident still has unfinished work, supplies or conversations in this day. Finish or explicitly stop them before leaving.',
     );
+}
+
+/** Missing authority permits local play, never publication. Present malformed metadata refuses entry. */
+export function validateDeniedIDs(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length > CAST.length ||
+    new Set(value).size !== value.length ||
+    value.some((id) => typeof id !== 'string' || !CAST.some((c) => c.castId === id))
+  )
+    throw new Error('Invalid resident history denial metadata. Keep the original save.');
+  return [...value];
+}
+export function validateDenialAgreement(ids: string[] | undefined, state: State, heads: PersonaEnvelope[]) {
+  if (ids === undefined) return;
+  const blocked = state.chapter?.blocked?.map((p) => p.castId) ?? [];
+  if (
+    ids.some((id) => heads.some((p) => p.castId === id) || !blocked.includes(id)) ||
+    blocked.some((id) => !ids.includes(id))
+  )
+    throw new Error('Resident history denial metadata does not match the pinned chapter.');
+}
+function validatePreparation(value: unknown): void {
+  const p = value as
+    | {
+        inputs?: LifePreparation[];
+        blocked?: { castId: string; reason: string }[];
+        expectedHeads?: Record<string, string | null>;
+      }
+    | undefined;
+  const ids: string[] = CAST.map((c) => c.castId);
+  if (
+    !p ||
+    !p.expectedHeads ||
+    Object.keys(p.expectedHeads).length !== ids.length ||
+    ids.some(
+      (id) =>
+        !Object.hasOwn(p.expectedHeads!, id) ||
+        (p.expectedHeads![id] !== null && !/^[a-f0-9]{64}$/.test(p.expectedHeads![id]!)),
+    ) ||
+    !Array.isArray(p.inputs) ||
+    !Array.isArray(p.blocked)
+  )
+    throw new Error('Invalid prepared resident history metadata. No chapter was started.');
+  const present = [...p.inputs.map((i) => i?.parent?.castId), ...p.blocked.map((b) => b?.castId)];
+  if (
+    new Set(present).size !== present.length ||
+    present.some((id) => !ids.includes(id)) ||
+    ids.some((id) => (p.expectedHeads![id] !== null) !== present.includes(id)) ||
+    p.inputs.some((i) => !i?.parent || i.parent.revision !== p.expectedHeads![i.parent.castId]) ||
+    p.blocked.some((b) => !b || typeof b.reason !== 'string' || b.reason.length > 500)
+  )
+    throw new Error('Invalid prepared resident history metadata. No chapter was started.');
 }
