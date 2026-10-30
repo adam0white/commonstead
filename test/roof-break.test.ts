@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { PRESSURE } from '../src/pressure.ts';
@@ -38,7 +39,7 @@ test('recorded roof break walks, rests under the real roof, then re-offers each 
   expect(s.villagers.slice(0, 2).every((v) => !v.person.activity?.protest)).toBe(true);
   for (const compact of [false, true]) {
     const raw = exportRun(s, compact) as { schema: number };
-    expect(raw.schema).toBe(12);
+    expect(raw.schema).toBe(13);
     const loaded = importRun(JSON.parse(JSON.stringify(raw)));
     expect(loaded).toEqual(s);
     advance(loaded, 17);
@@ -87,7 +88,7 @@ test('completed or removed sites are not re-offered and long-day carried work st
     expect(s.villagers[0]!.order).toBe(null);
     expect(s.resources.wood).toBe(40);
   }
-  const d = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const d = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(d, { kind: 'order', ids: ['v1'], target: 'wood' });
   advance(d, 26);
   expect(d.settlement!.actors.v1!.carried).not.toBe(null);
@@ -96,17 +97,17 @@ test('completed or removed sites are not re-offered and long-day carried work st
   expect(JSON.stringify(d)).toBe(before);
 });
 
-test('old schemas keep literal full/compact bytes and legal continuation without the new input', () => {
+test('historical schemas are refused without changing their literal source bytes', () => {
   const prefix = process.env.COMMONSTEAD_ROOF_BASELINE;
   if (!prefix) return;
   for (let i = 0; i < 6; i++) {
     const b = JSON.parse(readFileSync(`${prefix}-old-${i}.json`, 'utf8'));
     for (const compact of [false, true]) {
       const text = compact ? b.compact : b.full;
-      const s = importRun(JSON.parse(text));
-      expect(JSON.stringify(exportRun(s, compact))).toBe(text);
-      advance(s, 17);
-      expect(JSON.stringify(s)).toBe(b.continuation);
+      const raw = JSON.parse(text);
+      const before = JSON.stringify(raw);
+      expect(() => importRun(raw)).toThrow(/Keep.*start a fresh/i);
+      expect(JSON.stringify(raw)).toBe(before);
     }
   }
 });
@@ -202,7 +203,7 @@ test('complete source archives survive native and file loads; active run require
 
 // Long-day faculty control: removing the new deliberate input must fail the recorded-capture assertion.
 test('long-day roof action delivers the actual held load once, rests at the hub, then offers the source job', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   advance(s, 26);
   const aw = s.settlement!.actors.v1!;
@@ -234,7 +235,7 @@ test('long-day roof action delivers the actual held load once, rests at the hub,
   expect(aw.pendingRequest).not.toBe('insist');
   for (const compact of [false, true]) {
     const raw = exportRun(s, compact) as { schema: number; rules: string };
-    expect(raw.schema).toBe(12);
+    expect(raw.schema).toBe(13);
     expect(raw.rules).toBeNull(); // The current envelope binds the roof input through its full history.
     const copy = importRun(JSON.parse(JSON.stringify(raw)));
     expect(copy).toEqual(s);
@@ -248,7 +249,7 @@ test('long-day roof action delivers the actual held load once, rests at the hub,
 });
 
 test('long-day busy acts finish without cancellation; explicit cancellation keeps the load and never restores work', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   advance(s, 20);
   const aw = s.settlement!.actors.v1!;
@@ -276,7 +277,7 @@ test('long-day busy acts finish without cancellation; explicit cancellation keep
 });
 
 test('long-day stale targets and no prior work cannot produce a work offer; departure pause interrupts the sequence', () => {
-  for (const edition of ['settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] as const) {
+  for (const edition of ['settlement-replies/2'] as const) {
     const s = createGame(418, undefined, { edition });
     apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
     advance(s, 40);
@@ -289,7 +290,7 @@ test('long-day stale targets and no prior work cannot produce a work offer; depa
     for (let n = 0; n < 100 && !s.chapterPaused; n++) step(s);
     expect(importRun(exportRun(s))).toEqual(s);
   }
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'build', ids: ['v1'], building: 'house', x: 575, y: 575 });
   apply(s, { kind: 'long-roof-break-return', ids: ['v1'] });
   // Counterfactual host removal only tests a stale target, never represented as a replayable source.
@@ -300,17 +301,17 @@ test('long-day stale targets and no prior work cannot produce a work offer; depa
   expect(s.settlement!.actors.v1!.job).toBeNull();
 });
 
-test('schemas3–9 retain literal raw exports and complete legal continuations without the new action', () => {
+test('historical schemas3–9 are refused while their original evidence remains unchanged', () => {
   const dir = process.env.COMMONSTEAD_LONG_ROOF_BASELINE;
   if (!dir) return;
   for (let schema = 3; schema <= 9; schema++) {
     const b = JSON.parse(readFileSync(`${dir}/schema-${schema}.json`, 'utf8'));
     for (const compact of [false, true]) {
       const raw = compact ? b.compact : b.full;
-      const s = importRun(JSON.parse(raw));
-      expect(JSON.stringify(exportRun(s, compact))).toBe(raw);
-      advance(s, 17);
-      expect(JSON.stringify(s)).toBe(b.continuation);
+      const source = JSON.parse(raw);
+      const before = JSON.stringify(source);
+      expect(() => importRun(source)).toThrow(/Keep.*start a fresh/i);
+      expect(JSON.stringify(source)).toBe(before);
     }
   }
 });
@@ -389,7 +390,7 @@ test('schema10 keeps source archives through full, compact, gzip and native load
 });
 
 test('a pending public reply refuses the new action without recording or changing its actor', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   advance(s, 60);
   apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
   apply(s, { kind: 'settlement', ids: ['v1'], action: 'story' });
@@ -404,7 +405,7 @@ test('a pending public reply refuses the new action without recording or changin
 });
 
 test('remote held supplies cross the existing passage before stock delivery, roof rest and the source-map offer', async () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   // Sam's ordinary live choices provide a positive remote return. Nora's same
   // journey can remain at the delivery point attending to her needs all day.
   const aw = s.settlement!.actors.v2!;
@@ -469,7 +470,7 @@ test('remote held supplies cross the existing passage before stock delivery, roo
 }, 120_000);
 
 test('an accepted later reply during roof rest keeps its ordinary priority and completed paper result', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   advance(s, 60);
   apply(s, { kind: 'settlement', ids: ['v1'], action: 'cancel' });
   apply(s, { kind: 'settlement', ids: ['v1'], action: 'story' });

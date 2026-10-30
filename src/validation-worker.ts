@@ -1,8 +1,10 @@
 import { restoreRun } from '@adam0white/human-framework';
+import { requireCurrentRun } from './current-policy';
 
 self.onmessage = ({ data }: MessageEvent<unknown>) => {
   try {
-    const result = restoreRun(data);
+    requireCurrentRun(data);
+    const result = restoreRun(data.hf);
     self.postMessage(
       result.ok
         ? { ok: true }

@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach } from 'vitest';
 import * as writeCapability from '../src/shared-write-capability';
@@ -539,7 +540,7 @@ test.each(['repair-nora-hf-2.21.0.json', 'repair-nora-hf-3.0.0.json', 'glance-ne
   },
 );
 
-test.each(['settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] as const)(
+test.each(['settlement-replies/2'] as const)(
   'native %s admits, keeps prayer duties, publishes only at a real boundary and admits its departure',
   async (edition) => {
     const h = harness([await source()]),
@@ -582,104 +583,23 @@ test.each(['settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] a
   60_000, // Bounded actual action boundary, complete source and replayed next admission.
 );
 
-test('short yield preserves an admitted current Nora, the actual completed storehouse and its departure metadata', async () => {
-  const captured = await sourceRecord(),
-    envelope = captured.envelope;
-  const h = harness([envelope]),
-    c = new Continuity(h.lab, h.shelf);
-  const s = await c.fresh(42, undefined, null);
-  expect(s.chapter?.inputs[0]?.parent.revision).toBe(envelope.revision);
-  c.sources = [{ revision: envelope.revision, source: envelope.source, snapshot: captured.raw }];
-  const metadata = () => ({
-    runId: c.runId,
-    heads: c.heads,
-    sources: c.sources,
-    fileOrigin: c.fileOrigin,
-    chapter: s.chapter,
-  });
-  const provenance = structuredClone(metadata());
-  // Malformed source/file controls run before the long actual construction, with the same admitted source.
-  const early = c.export(s),
-    overflow = structuredClone(early) as { castSources: { snapshot: unknown }[] };
-  overflow.castSources[0]!.snapshot = { sourceValue: 1 };
-  const overflowText = JSON.stringify(overflow).replace('"sourceValue":1', '"sourceValue":1e400');
-  expect(JSON.parse(overflowText).castSources[0].snapshot.sourceValue).toBe(Infinity);
-  let shelfAccess = 0;
-  const refusingShelf = new Proxy(h.shelf, {
-    get() {
-      shelfAccess++;
-      throw new Error('Unexpected Shelf access');
-    },
-  });
-  const refused = new Continuity(h.lab, refusingShelf);
-  await expect(refused.importFile(overflowText)).rejects.toThrow(/Invalid source number/);
-  expect(shelfAccess).toBe(0);
-  expect(refused.heads).toEqual([]);
-  expect(refused.sources).toEqual([]);
-  expect(metadata()).toEqual(provenance);
-  const files = new Continuity(h.lab, h.shelf);
-  await expect(
-    files.importFile(JSON.stringify({ ...early, castSources: [{ unknown: true }] })),
-  ).rejects.toThrow(/source/);
-  const advanceUntil = async (ready: () => boolean, limit: number, label: string) => {
-    for (let n = 0; !ready() && s.tick < limit; n++) {
-      const before = s.tick;
-      step(s);
-      if (s.tick === before) throw new Error(`No native progress during ${label} at tick ${s.tick}`);
-      if (n % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    expect(ready(), label).toBe(true);
-  };
-  const ids = s.villagers.map((v) => v.id);
-  await advanceUntil(() => s.tick >= 30, 30, 'arrival');
-  apply(s, { kind: 'order', ids, target: 'wood' });
-  await advanceUntil(() => s.resources.wood >= 180, 180, 'wood');
-  apply(s, { kind: 'order', ids, target: 'stone' });
-  await advanceUntil(() => s.resources.stone >= 120, 300, 'stone');
-  apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
-  await advanceUntil(() => s.buildings.some((b) => b.kind === 'storehouse' && b.complete), 599, 'storehouse');
-  const actorBefore = archiveCommunity(s.villagers[0]!.person),
-    prefix = structuredClone(s.inputs),
-    cutover = s.tick;
-  apply(s, { kind: 'yield-day' });
-  expect(s.inputs.slice(0, -1)).toEqual(prefix);
-  expect(metadata()).toEqual(provenance);
-  expect(archiveCommunity(s.villagers[0]!.person)).toEqual(actorBefore);
-  await expect(
-    files.importFile(JSON.stringify({ ...(c.export(s) as object), unknown: true })),
-  ).rejects.toThrow(/not loaded/);
-  for (let i = 0; i < 12; i++) step(s);
-  expect(s.tick).toBe(cutover + 12);
-  apply(s, { kind: 'pause-chapter' });
-  await advanceUntil(() => s.chapterPaused || s.ended, 600, 'departure');
-  // One exact restore of the played, yielded source. Generic full/compact matrices live in their dedicated controls.
-  const restoredOwner = new Continuity(h.lab, h.shelf),
-    resumed = await restoredOwner.loadLocal(c.localSave(s, true));
-  expect(resumed).toEqual(s);
-  expect(restoredOwner.playPaused).toBe(true);
-  expect({
-    runId: restoredOwner.runId,
-    heads: restoredOwner.heads,
-    sources: restoredOwner.sources,
-    fileOrigin: restoredOwner.fileOrigin,
-    chapter: resumed.chapter,
-  }).toEqual(provenance);
-  resumeForPlay(resumed);
-  expect(resumed).toEqual(s);
-  const prior = c.heads[0]!.revision;
-  await c.checkpoint(CAST[0]!.castId);
-  expect(c.heads[0]!.parentRevision).toBe(prior);
-  expect(await decodeSourceSnapshot(c.sources.at(-1)?.snapshot)).toEqual(
-    archiveCommunity(s.villagers[0]!.person),
-  );
-  expect(c.sources.slice(0, -1)).toEqual(provenance.sources);
-  const next = await new Continuity(h.lab, h.shelf).fresh(43);
-  expect(next.chapter?.inputs[0]?.parent.revision).toBe(c.heads[0]!.revision);
-  expect(next.villagers[0]?.person.id).toBe('hf.cast.nora.smallworks');
-  apply(resumed, { kind: 'resume-chapter' });
-  for (let i = 0; i < 5; i++) step(resumed);
-  expect(resumed.tick).toBe(s.tick + 5);
-}, 180_000);
+// The original no-pressure/yield continuation body is frozen in c98. Current HF4 refuses
+// that start before admission. Current pressure/long carryover remains covered above.
+test('historical no-pressure yield preparation refuses before changing resident source or occupied native bytes', async () => {
+  const captured = await sourceRecord();
+  const h = harness([captured.envelope]);
+  const c = new Continuity(h.lab, h.shelf);
+  const state = await c.fresh(42);
+  const occupied = await c.store.read();
+  const before = c.localSave(state);
+  const heads = structuredClone(h.data.heads);
+  const original = structuredClone(captured);
+  await expect(c.fresh(42, undefined, null)).rejects.toThrow(/Keep.*start a fresh/);
+  expect(await c.store.read()).toBe(occupied);
+  expect(c.localSave(state)).toBe(before);
+  expect(h.data.heads).toEqual(heads);
+  expect(captured).toEqual(original);
+});
 
 // Synthetic native sources and SDK reducer only; these are not browser transfer receipts.
 test('refuses complete next source capacity before public put and preserves the whole save', async () => {
@@ -824,7 +744,7 @@ test('a changed callback cancelling source staging prevents public put', async (
 test('a played Burak checkpoint uses the SDK role and stays blocked until peers are ready', async () => {
   const h = harness();
   const first = new Continuity(h.lab, h.shelf);
-  const played = await first.fresh(418, { edition: 'settlement-day/1' });
+  const played = await first.fresh(418, { edition: 'settlement-replies/2' });
   apply(played, { kind: 'order', ids: ['v1'], target: 'move', x: 500, y: 425 });
   for (let i = 0; i < 26; i++) step(played);
   apply(played, { kind: 'pause-chapter' });
@@ -888,7 +808,7 @@ test('an arriving Burak with unfinished building work cannot depart through his 
   });
   const h = harness([envelope]),
     c = new Continuity(h.lab, h.shelf);
-  const game = await c.fresh(418, undefined, null);
+  const game = await c.fresh(418);
   const burak = game.villagers.find((v) => v.person.id === envelope.castId);
   const claim = game.chapter?.claims[0];
   if (!burak || !claim) throw new Error('Missing Burak');

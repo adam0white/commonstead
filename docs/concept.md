@@ -299,3 +299,9 @@ The actual967-tick trace is the fixed engineering control. Browser execution rem
 
 
 The consolidated source-review correction keeps stable story-control DOM nodes while binding each click to the current selected residents. A second reply uses the matching completed first reply's exact sheet ID and version through an interrupted retry and completion. An independently prepared sheet remains a separate, legitimately paid object. Sevim's standalone draft stores the actual acknowledgement from the original first-reply definition; its completion speech remains separate. A blank-only first sheet stays unsendable. These causal controls use public fixed42 actions and a labelled minimal-DOM renderer check, not browser or player acceptance.
+
+## HF4 current-only policy correction — 2026-10-29
+
+The current host follows the owner HF4 rule: no behavior opt-ins and no legacy host continuation. Two genuine scenarios remain: short pressure and long settlement. The title no longer offers separate private-reply or trolley variants. The single long scenario keeps their complete applicable behavior and one actor synchronization strategy. Schema13 and its reconstructed current-policy tag distinguish this history from schema12; old files are refused without migration or replacement. Keep the original and start fresh. [The exact contract](current-policy.md) records the canonical reply owner, physical sheet and second-response semantics, current replay and custody boundaries.
+
+All earlier source, playtest, night and delivery receipts above retain their own identities. They do not certify this candidate. Shared peer/source/retirement/object-custody exclusions keep the owners and dates in the Deferred table. The director owns the same PR18, one assessment, exact CI and later delivery. Adam accepts after playing.

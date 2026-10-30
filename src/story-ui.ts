@@ -41,6 +41,8 @@ export function updateStoryControls(
     }
     for (const [choice, d] of Object.entries(STORY_CHOICES)) {
       if (d.actor !== id) continue;
+      // The settlement reply panel owns first answers; second answers use their exact result here.
+      if (s.settlement && d.group === 'first') continue;
       if (d.group === 'first' && s.story?.firstResults.some((e) => e.actor === id)) continue;
       if (d.group === 'collaboration' && s.villagers.find((v) => v.id === id)?.discovery !== 1) continue;
       if (d.group === 'second') {

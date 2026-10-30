@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { dayClock } from '../src/settlement.ts';
 import { apply, createGame, exportRun, importRun, step } from '../src/sim.ts';
@@ -6,7 +7,7 @@ import { WorkObservation } from '../src/work-observation.ts';
 // Headless causal control. A wrong projection that treats a pending yield as completed,
 // blocks returning loads, or calls a changed pair the earlier dispute must fail.
 test('route and work readings follow actual requests, choices, loads and distinct pairs', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   const view = new WorkObservation();
   const nora = s.villagers[0],
     sam = s.villagers[1],
@@ -105,7 +106,7 @@ test('route and work readings follow actual requests, choices, loads and distinc
 });
 
 test('pending roof return is not described as impossible when no job is retained', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   const person = s.villagers[0];
   if (!person || !s.settlement) throw new Error('Missing resident');
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });

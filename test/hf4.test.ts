@@ -1,10 +1,12 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { FRAMEWORK_VERSION } from '../src/engine';
 import { archiveCommunity, verifyCommunity } from '../src/hf4';
 import { apply, createGame, exportRun, importRun, step } from '../src/sim';
+import { fundedShort } from './current-short-control';
 
 test('training adds a helper to the correct game when another game is open', () => {
-  const first = createGame(41);
+  const first = fundedShort(41);
   apply(first, { kind: 'train' });
   const second = createGame(42);
   for (let i = 0; i < 15; i++) step(first);
@@ -34,7 +36,7 @@ test('retained longer-day resident enters another longer-day opening without los
   const { canonicalCast, createPersona, initialPersonaLife, preparePersonaLife } = await import(
     '@adam0white/lab-client'
   );
-  const s = createGame(42, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   for (let i = 0; i < 26; i++) step(s);
   apply(s, { kind: 'pause-chapter' });
@@ -53,7 +55,7 @@ test('retained longer-day resident enters another longer-day opening without los
     transfer: { ...captured.transfer, life: initialPersonaLife(p.id, 'retained-control', clock) },
     limitations: captured.limitations,
   });
-  const target = createGame(43, undefined, { edition: 'settlement-day/1' }).villagers[0]!.person;
+  const target = createGame(43, undefined, { edition: 'settlement-replies/2' }).villagers[0]!.person;
   expect(admitResident(preparePersonaLife(envelope, clock), target).agenda.commitments.length).toBe(
     p.agenda.commitments.length,
   );

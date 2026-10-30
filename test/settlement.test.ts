@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { describe, expect, test } from 'vitest';
 import { archiveCommunity } from '../src/hf4';
 import { blocked, route } from '../src/paths.ts';
@@ -34,12 +35,18 @@ function story(s: ReturnType<typeof day>, id: string) {
   until(s, () => !!s.villagers.find((v) => v.id === id)?.discovery, 100);
 }
 
-describe('opt-in settlement day focused headless controls', () => {
+describe('current settlement day focused headless controls', () => {
   test('full-day bodies, food, sleep and sourced duties advance with exact public replay', async () => {
     const s = day();
     const actions = new Set<string>();
+    let nearFull: unknown, nearCompact: unknown, expected1795: unknown;
     for (let i = 0; i < 1800; i++) {
       step(s);
+      if (s.tick === 1790) {
+        nearFull = exportRun(s);
+        nearCompact = exportRun(s, true);
+      }
+      if (s.tick === 1795) expected1795 = exportRun(s);
       if (i % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       for (const v of s.villagers) {
         const a = v.person.activity?.action;
@@ -62,6 +69,13 @@ describe('opt-in settlement day focused headless controls', () => {
     expect(s.resources.food).toBeLessThan(100);
     const restored = importRun(exportRun(s));
     expect(restored).toEqual(s);
+    for (const source of [nearFull, nearCompact]) {
+      const near = importRun(source);
+      expect(near.tick).toBe(1790);
+      advance(near, 5);
+      expect(near.tick).toBe(1795);
+      expect(exportRun(near)).toEqual(expected1795);
+    }
     advance(s, 3);
     advance(restored, 3);
     expect(restored).toEqual(s);
@@ -321,7 +335,7 @@ describe('fresh local personal replies with real HF choices', () => {
     ['v7', 'sevim-name-wrong', 'sevim-no-answer'],
   ] as const)
     test(`${id}: disclosure, attended offer, paid completion and interrupted replay fork`, () => {
-      const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+      const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
       const v = resident(s, id);
       const offer = { kind: 'reply', ids: [id], branch } as const;
       const command = { ...offer, ids: [id] };
@@ -428,11 +442,15 @@ function requiredPeerValue<T>(value: T | null | undefined): T {
 describe('fresh public route dialogue day', () => {
   test('current native schema retains each edition and refuses peer input without an actual witness', () => {
     const s = createGame(418, undefined, { edition: 'settlement-replies/2' } as never);
-    expect((exportRun(s) as { schema: number }).schema).toBe(12);
+    expect((exportRun(s) as { schema: number }).schema).toBe(13);
     expect(s.settlement?.replyScenes).toEqual({});
     expect(importRun(exportRun(s))).toEqual(s);
     expect(importRun(exportRun(s, true))).toEqual(s);
-    for (const config of [undefined, { edition: 'settlement-day/1' }, { edition: 'settlement-replies/1' }]) {
+    for (const config of [
+      undefined,
+      { edition: 'settlement-replies/2' },
+      { edition: 'settlement-replies/2' },
+    ]) {
       const old = createGame(418, undefined, config as never);
       const before = JSON.stringify(old);
       expect(() =>
@@ -574,7 +592,7 @@ test('one ordinary route dispute supports real paired talk, costed words, cancel
 // Retest 2026-10-27: the player answers a resident where she stands, and a load left in hand
 // after Cancel task is delivered by the existing walk back to the yard that the UI now offers.
 test('a reply needs no walk to the hub, and a cancelled carrier can still deliver', () => {
-  const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
   const nora = resident(s, 'v1');
   apply(s, { kind: 'order', ids: ['v1'], target: 'move', x: 300, y: 300 });
   story(s, 'v1');

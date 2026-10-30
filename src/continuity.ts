@@ -135,6 +135,8 @@ export class Continuity {
     generation = this.beginEntry(),
   ) {
     this.requireEntry(generation);
+    if (rules !== PRESSURE)
+      throw new Error('Keep the original file and start a fresh game with the current rules.');
     if (this.busy)
       throw new Error('A chapter is already being prepared. Wait for it to finish before starting another.');
     this.busy = true;
@@ -372,7 +374,9 @@ export class Continuity {
     if (!intent) return null;
     const source = JSON.stringify(this.source());
     if (intent.source !== source)
-      throw new Error('The prepared chapter belongs to a different source build. Keep both downloads.');
+      throw new Error(
+        'The prepared chapter belongs to a different source build. Keep both original downloads and start a fresh game.',
+      );
     const current = () => this.currentEntry(generation) && JSON.stringify(this.source()) === source;
     const readHeads = async () =>
       Object.fromEntries(

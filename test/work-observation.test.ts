@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { apply, createGame, exportRun, importRun, stateHash, step } from '../src/sim.ts';
 import {
@@ -50,7 +51,7 @@ test('observed break completion reports the actual return without certifying rec
 });
 
 test('one present-work view separates queued requests, supplies in transit and missing recovery history', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   const observation = new WorkObservation();
   const nora = s.villagers[0];
   if (!nora || !s.settlement) throw new Error('Missing day');
@@ -119,7 +120,7 @@ test('display groups repeated dated observations without discarding the original
 
 // Causal control: real collection and clock steps change public facts, reading never advances a run.
 test('counted supply and story projections follow real inputs and preserve exact continuation', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   const first = invitationReadiness(s, ['v1'], 'listen');
   expect(first).toContain('60 game seconds');
   expect(first).toContain('every speed');

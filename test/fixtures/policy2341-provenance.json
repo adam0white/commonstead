@@ -1,0 +1,26 @@
+[
+  {
+    "path": "policy2341-synthetic-old-long-peer.json.gz",
+    "sourceCommit": "c98efbf9b8f1a9146ddfbabd44c7957bfa9a9ed2",
+    "synthetic": true,
+    "producer": "Actual public createGame(42, undefined, config), one step, exportRun full; CAPTURE_POLICY_2341=1 before production edits",
+    "config": {
+      "edition": "settlement-replies/2"
+    },
+    "rawBytes": 454794,
+    "rawSha256": "bd01cc964d76df91cf669e5f7e78f99b05cd8df764aa6684521873e7def553dc",
+    "gzipBytes": 61755,
+    "gzipSha256": "d5cbaae171922062fac052ade73febf3abe4cb1b7e3cccdb86add815bef7150e"
+  },
+  {
+    "path": "policy2341-synthetic-old-short-no-pressure.json.gz",
+    "sourceCommit": "c98efbf9b8f1a9146ddfbabd44c7957bfa9a9ed2",
+    "synthetic": true,
+    "producer": "Actual public createGame(42, undefined, config), one step, exportRun full; CAPTURE_POLICY_2341=1 before production edits",
+    "config": null,
+    "rawBytes": 279344,
+    "rawSha256": "29ab214b295c7e49e0b22f8667f2048cdfc27338a40fac08163d572fdcf5b4a4",
+    "gzipBytes": 34741,
+    "gzipSha256": "abb7741955a9e6a829b84073a9aa123357c739f79e7a2e0ac711fa30963d520a"
+  }
+]

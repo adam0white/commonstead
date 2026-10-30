@@ -1,0 +1,21 @@
+# One current Commonstead policy
+
+HF4 has two physical scenarios: the short pressure chapter and the full settlement day. The title selects a horizon, not a feature set. Both retain their applicable conversation, project, story, roof, work, storm and ending actions. An action still needs its actual source facts, people, place, resources and remaining time.
+
+The short scenario always uses `pressure/1`: 30 opening meals, the existing work pace and storehouse effort, the tick600 storm, and the existing same-workshop continuation. The settlement keeps its existing caches, stocks, costs, 0.8-minute ticks, tick900 storm and tick1800 end. Its canonical internal config is `settlement-replies/2`. This is the existing complete long reply implementation, now the only long scenario. All long residents advance before any resident processes an action or hears speech.
+
+The settlement's `replyScenes` owner records the actual private disclosure, request, delivered line, returned attention, HF decision, matching activity and completed answer. Both first-reply input spellings reach that owner once. The settlement panel presents those first answers; the story panel presents their subsequent acts. Private confidences remain in their existing owner. A paid interrupted answer retains the exact unfinished sheet, source attempt, map, point and reservation. Matching completion produces one `firstResults` record and changes that same sheet from version0 to version1. A second answer uses that exact first-result sheet and version. Independent preparations remain separate paid objects. No earlier or absent answer is invented.
+
+Peer dialogue still requires a real witnessed route dispute. Shared talk, each timed outward line, withholding, cancellation and listener attention remain separate receipts. Conversation does not yield or settle the route. Roof and yield actions keep their existing delivery, commitment, timing and earlier-work checks. The short yard does not acquire the settlement's remote places or obligations.
+
+Current exports use schema13 and `commonstead-current/1` in both envelope and reconstructed state. The sync importer, cooperative importer and archive worker enforce that identity. Full and compact imports reconstruct the complete host and compare the entire HF archive. Older schemas, including schema12 at the same HF pin, are refused before replay/adoption. Editing an old header alone cannot supply the reconstructed policy state or its hash. No migration, old-hash rewrite or relabel is performed.
+
+Native Resume, native file loading, prepared recovery and `/file/` share this refusal. The player is told to keep the original and start fresh. Rejection keeps occupied native bytes, the pending preparation and previously held file/original bytes. Current source archives, per-person skips, publication guards, exact-head recovery, CAS and acknowledgements retain their owners. Unknown peer readiness and missing source/role/retirement/object-custody contracts remain closed, with their existing dated exclusions in concept.md. This change supplies no new public ownership contract.
+
+## Evidence boundaries
+
+The two gzip fixtures in `test/fixtures/policy2341-*` are labelled synthetic. They were captured once from actual public constructors and exports at c98efbf before production edits. Their provenance file records original and compressed hashes. No original player save was located. The complete pre-correction source and historical test bodies remain in the external base archive and full Git bundle.
+
+Current behavioral controls explicitly select the canonical long scenario. Historical no-pressure yield continuation tests are replaced by refusal; the current remainder has its existing control in remaining-host.test.ts. Optional historical baseline files are checked for refusal without rewriting them. No test horizon, timeout or mechanical assertion is relaxed to make an old edition playable.
+
+Source qualification, root's one assessment, exact hosted CI, deployment and owner play acceptance are separate states. The external report records actual checks and failures. Historical night proof in complete-save.md retains its original source identity and scope; it is not a schema13 proof.

@@ -4,9 +4,7 @@ import * as validation from '../src/continuity.ts';
 import { createFileSession } from '../src/file-session.ts';
 import { PRESSURE } from '../src/pressure.ts';
 import { EDITION } from '../src/settlement.ts';
-import { PEER_EDITION } from '../src/settlement-dialogue.ts';
-import { REPLY_EDITION } from '../src/settlement-scenes.ts';
-import { apply, createGame, exportRun, importRun, step, stepYieldBatch } from '../src/sim.ts';
+import { apply, createGame, exportRun, importRun, step } from '../src/sim.ts';
 
 const file = (raw: unknown) =>
   new File([JSON.stringify(raw)], 'synthetic.json', { type: 'application/json', lastModified: 42 });
@@ -19,12 +17,7 @@ const sources = [
 ];
 describe('complete memory file session', () => {
   test('real full and compact codecs retain all people, clocks and history, paused until explicit Resume', async () => {
-    for (const config of [
-      undefined,
-      { edition: EDITION },
-      { edition: REPLY_EDITION },
-      { edition: PEER_EDITION },
-    ] as const) {
+    for (const config of [undefined, { edition: EDITION }] as const) {
       for (const compact of [false, true]) {
         const state = createGame(418, undefined, config, config ? undefined : PRESSURE);
         step(state);
@@ -61,7 +54,7 @@ describe('complete memory file session', () => {
     bad.state.tick++;
     await expect(c.select(file(bad))).rejects.toThrow();
     expect(c.snapshot()).toEqual(raw);
-    const replies = createGame(418, undefined, { edition: REPLY_EDITION });
+    const replies = createGame(418, undefined, { edition: EDITION });
     expect(await c.select(file({ ...(exportRun(replies) as object), castSources: sources }))).toBe(true);
     expect(c.snapshot()!.castSources).toEqual(sources);
     c.resume();
@@ -104,31 +97,20 @@ describe('complete memory file session', () => {
   });
 });
 
-// Actual construction admits short yield. Generic full/compact and atomic capacity
-// controls above cover the shared file session; this control covers its closed wrapper.
-test('schema7 file wrapper retains source and resumes actual short yield', async () => {
-  const s = createGame(418),
-    ids = s.villagers.map((v) => v.id);
-  apply(s, { kind: 'order', ids, target: 'wood' });
-  while (s.resources.wood < 180 && s.tick < 180) step(s);
-  apply(s, { kind: 'order', ids, target: 'stone' });
-  while (s.resources.stone < 120 && s.tick < 300) step(s);
-  apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
-  while (!s.buildings.some((b) => b.kind === 'storehouse' && b.complete) && s.tick < 599) step(s);
-  expect(s.buildings.some((b) => b.kind === 'storehouse' && b.complete)).toBe(true);
-  apply(s, { kind: 'yield-day' });
-  const raw = { ...(exportRun(s, true) as object), castSources: sources };
-  expect(() => importRun(raw)).toThrow(); // The core is closed; the file host splits source records.
+// The old schema7 control required the removed no-pressure start. Keep its source in c98.
+test('file selection refuses a synthetic unsupported schema7 header and preserves its held current file', async () => {
   const c = createFileSession();
-  expect(await c.select(file(raw))).toBe(true);
-  expect(c.state()).toEqual(s);
-  expect(c.snapshot()?.castSources).toEqual(sources);
-  c.resume();
-  c.advance(1);
-  expect(c.state()!.tick).toBe(s.tick + 12);
-  expect(c.snapshot()?.castSources).toEqual(sources);
-  expect(c.original()!.name).toBe('synthetic.json');
-}, 180_000);
+  const current = file(exportRun(createGame(418)));
+  await c.select(current);
+  const before = c.snapshot(),
+    original = c.original();
+  const historical = { ...(exportRun(createGame(42)) as object), schema: 7 };
+  const bytes = JSON.stringify(historical);
+  await expect(c.select(file(historical))).rejects.toThrow(/Keep.*start a fresh/);
+  expect(c.snapshot()).toEqual(before);
+  expect(c.original()).toEqual(original);
+  expect(JSON.stringify(historical)).toBe(bytes);
+});
 
 test('late digest and real envelope validation completion cannot install after cancellation', async () => {
   for (const gate of ['digest', 'validation']) {

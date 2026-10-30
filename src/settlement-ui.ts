@@ -1,6 +1,6 @@
 import { MAPS, type Place } from './paths.ts';
 import { dayClock, validateReply } from './settlement.ts';
-import { hasReplies, PEER_EDITION, validatePeer } from './settlement-dialogue.ts';
+import { validatePeer } from './settlement-dialogue.ts';
 import { REPLIES, SCENES } from './settlement-scenes.ts';
 import type { Command, State } from './sim.ts';
 import { observedEvents } from './work-observation.ts';
@@ -174,7 +174,7 @@ export function updateSettlementControls(
       }
     }
   }
-  if (hasReplies(w.config.edition)) {
+  {
     let panel = host.querySelector<HTMLElement>('#personal-replies');
     if (!panel) {
       panel = document.createElement('section');
@@ -208,7 +208,7 @@ export function updateSettlementControls(
       el.textContent = value;
       panel.append(el);
     };
-    text('h3', 'Personal replies · fresh local day');
+    text('h3', 'Personal replies');
     for (const r of open) {
       const b = document.createElement('button');
       b.textContent = `${r.name} is waiting for your answer. Select ${r.name}`;

@@ -4,8 +4,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import type { Browser, Page } from '@playwright/test';
 import { PRESSURE } from '../src/pressure.ts';
 import { EDITION } from '../src/settlement.ts';
-import { PEER_EDITION } from '../src/settlement-dialogue.ts';
-import { REPLY_EDITION } from '../src/settlement-scenes.ts';
 import { apply, createGame, exportRun, importRun, step } from '../src/sim.ts';
 
 export async function control(browser: Browser, url: string) {
@@ -182,8 +180,8 @@ export async function control(browser: Browser, url: string) {
   }
 
   // Positive native legacy/default/settlement/replies save and Resume through the real host.
-  for (const edition of ['legacy', 'default', EDITION, REPLY_EDITION, PEER_EDITION] as const) {
-    const config = edition === 'legacy' || edition === 'default' ? undefined : { edition };
+  for (const edition of ['default', EDITION] as const) {
+    const config = edition === 'default' ? undefined : { edition };
     const state = createGame(418, undefined, config, edition === 'default' ? PRESSURE : undefined);
     const saved = JSON.stringify({
       run: exportRun(state),
@@ -213,7 +211,7 @@ export async function control(browser: Browser, url: string) {
     actualApp: 'PASS',
     fullCompactOriginalPausedResumeRetiredRAFPagehideReload: true,
     nativeKeys: 'zero accesses with both sinks throwing',
-    nativePositive: ['legacy', 'default', EDITION, REPLY_EDITION, PEER_EDITION],
+    nativePositive: ['default', EDITION],
     screenshots: 0,
   };
 }

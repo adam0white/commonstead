@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { readPerson } from '../src/hf4';
 import { closingLine, PRESSURE, stormSummary } from '../src/pressure.ts';
@@ -68,7 +69,7 @@ test('pressure runs replay exactly through schema 8 and refuse leaving the day e
   apply(s, { kind: 'order', ids: ['v2'], target: 'shelter' });
   for (let i = 0; i < 10; i++) step(s);
   const run = exportRun(s) as { schema: number };
-  expect(run.schema).toBe(12);
+  expect(run.schema).toBe(13);
   expect(stateHash(importRun(JSON.parse(JSON.stringify(run))))).toBe(stateHash(s));
   expect(() => apply(s, { kind: 'yield-day' })).toThrow();
   expect(() => importRun({ ...run, rules: 'pressure/0' })).toThrow();

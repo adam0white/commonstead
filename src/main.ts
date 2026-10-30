@@ -8,8 +8,6 @@ import { closingSpeech, continueAndAskClosing, publicEnding } from './public-end
 import { publicTranscript } from './public-history.ts';
 import { NativeSaveStore } from './save-store.ts';
 import { dayClock, EDITION, longRoofUnavailable } from './settlement.ts';
-import { PEER_EDITION } from './settlement-dialogue.ts';
-import { REPLY_EDITION } from './settlement-scenes.ts';
 import { mountSettlementControls, updateSettlementControls } from './settlement-ui.ts';
 import { buildingPanel, stormPanel } from './storm-view.ts';
 import { storyClock, storyClosing } from './story-records.ts';
@@ -288,7 +286,7 @@ function title() {
   canvas = null;
   paused = false;
   lab?.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><h2>Other ways to begin</h2><details><summary>A full day and night</summary><p>Thirty minutes at Steady, with a full day and night for eight residents. Supported saved histories carry over automatically. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Private stories</summary><p>Start a new day with eight residents. Supported saved histories carry over automatically. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Conversations about the trolley</summary><p>Eight residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. Supported saved histories carry over automatically. This day begins new conversations.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a></div><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><div id="prepared-recovery"></div><p id="load-status" class="status" role="status"></p></section></main>`;
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">Start a short storm day</button><h2>Choose a scenario</h2><details><summary>A full day and night</summary><p>Thirty minutes at Steady, with a full day and night for eight residents. Supported saved histories carry over automatically. The storm arrives at 20:00. Supplies, travel, private replies, trolley conversations and sleep take time. Conversations depend on what actually happens in this day. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><button id="title-feedback">Feedback</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a></div><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><div id="prepared-recovery"></div><p id="load-status" class="status" role="status"></p></section></main>`;
   void continuity!.admissions
     .read()
     .then((intent) => {
@@ -329,13 +327,13 @@ function title() {
       });
     })
     .catch(() => {});
-  const begin = async (day: false | true | typeof REPLY_EDITION | typeof PEER_EDITION = false) => {
+  const begin = async (day = false) => {
     const generation = continuity!.beginEntry();
     const status = document.getElementById('load-status');
     try {
       const prepared = await continuity!.fresh(
         418,
-        day ? { edition: day === true ? EDITION : day } : undefined,
+        day ? { edition: EDITION } : undefined,
         undefined,
         generation,
       );
@@ -355,38 +353,6 @@ function title() {
         message.textContent = 'The new game could not start. Your saved game is unchanged. Try again.';
     }
   };
-  bind('new-peer', () => {
-    continuity!.beginEntry();
-    if (!stored(SAVE)) {
-      void begin(PEER_EDITION);
-      return;
-    }
-    const button = document.getElementById('new-peer');
-    if (!button || document.getElementById('replace-peer')) return;
-    button.insertAdjacentHTML(
-      'afterend',
-      '<p>Replace your saved game with this new day? Earlier disclosures stay in the old game only.</p><button id="replace-peer">Replace with resident conversation day</button>',
-    );
-    bind('replace-peer', () => {
-      void begin(PEER_EDITION);
-    });
-  });
-  bind('new-replies', () => {
-    continuity!.beginEntry();
-    if (!stored(SAVE)) {
-      void begin(REPLY_EDITION);
-      return;
-    }
-    const button = document.getElementById('new-replies');
-    if (!button || document.getElementById('replace-replies')) return;
-    button.insertAdjacentHTML(
-      'afterend',
-      '<p>Replace your saved game with this new day? Earlier disclosures will stay in the old game only.</p><button id="replace-replies">Replace with fresh reply day</button>',
-    );
-    bind('replace-replies', () => {
-      void begin(REPLY_EDITION);
-    });
-  });
   bind('new-day', () => {
     continuity!.beginEntry();
     if (!stored(SAVE)) {
@@ -447,7 +413,9 @@ function title() {
         console.error(error);
         if (el)
           el.textContent =
-            'The saved game could not open. It is unchanged. Try again or choose Feedback to report the problem.';
+            error instanceof Error
+              ? error.message
+              : 'The saved game could not open. Keep the original save and start a fresh game.';
       } finally {
         cancel.remove();
       }

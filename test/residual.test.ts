@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { archiveCommunity } from '../src/hf4.ts';
 import { PRESSURE } from '../src/pressure.ts';
@@ -7,7 +8,7 @@ import { requireSupportedProducer } from '../src/story-records.ts';
 // Public fixed trace: completing a pair-bound yield must precede one actual earlier-work reoffer.
 // Calling a selected yield completed or treating another pair as the original must fail this control.
 test('physical yield retains actual earlier work and reoffers it only after completion', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   for (const [i, id] of ['v1', 'v2', 'v3'].entries())
     apply(s, { kind: 'order', ids: [id], target: i < 2 ? 'wood' : 'stone' });
   while (s.tick < 17) step(s);
@@ -34,7 +35,7 @@ test('physical yield retains actual earlier work and reoffers it only after comp
 });
 
 test('same-actor completed first answer opens one real second exchange', () => {
-  const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1'], target: 'move', x: 525, y: 475 });
   while (s.tick < 60) step(s);
   apply(s, { kind: 'settlement', ids: ['v1'], action: 'story' });
@@ -125,7 +126,7 @@ test('Nora reaches and attends the exact card before annotating; current native 
 });
 
 test('explicit cancellation stops earlier-work revival and preserves the actual carried quantity', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   for (const [i, id] of ['v1', 'v2', 'v3'].entries())
     apply(s, { kind: 'order', ids: [id], target: i < 2 ? 'wood' : 'stone' });
   while (s.tick < 17) step(s);
@@ -144,7 +145,7 @@ test('explicit cancellation stops earlier-work revival and preserves the actual 
 
 // Evening work needs its own actual object. A building or storm never grants eight stories.
 test('later work keeps real costs and closes at its actual boundary with truthful resident facts', () => {
-  const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'build', ids: ['v1', 'v2'], building: 'house', x: 653, y: 503 });
   while (s.tick < 60) step(s);
   apply(s, { kind: 'settlement', ids: ['v5'], action: 'story' });
@@ -172,7 +173,7 @@ test('later work keeps real costs and closes at its actual boundary with truthfu
 }, 120000);
 
 test('interrupted authored correction reuses its spent sheet and needs actual native completion', () => {
-  const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'build', ids: ['v1'], building: 'house', x: 653, y: 503 });
   while (s.tick < 60) step(s);
   apply(s, { kind: 'settlement', ids: ['v2'], action: 'story' });
@@ -208,7 +209,7 @@ test('interrupted authored correction reuses its spent sheet and needs actual na
 });
 
 test('a real storm ends an unfinished yield-return sequence without reviving earlier work', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   for (const [i, id] of ['v1', 'v2', 'v3'].entries())
     apply(s, { kind: 'order', ids: [id], target: i < 2 ? 'wood' : 'stone' });
   while (s.tick < 895) step(s);

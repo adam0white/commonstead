@@ -1,9 +1,10 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { apply, createGame, exportRun, importRun, step } from '../src/sim';
 import { storyClosing, storyReason } from '../src/story-records';
 
 function paid(id: 'v1' | 'v7', route: 'reply' | 'story-act', building = false) {
-  const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
   if (building) apply(s, { kind: 'build', ids: ['v2', 'v3', 'v4', 'v5'], building: 'house', x: 700, y: 475 });
   apply(s, { kind: 'order', ids: [id], target: 'move', x: 525, y: 475 });
   while (s.tick < 60) step(s);

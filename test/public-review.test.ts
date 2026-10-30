@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test, vi } from 'vitest';
 import * as hf from '../src/hf4';
 import { archiveCommunity } from '../src/hf4';
@@ -47,7 +48,7 @@ for (const [name, x, y] of [
   ['materials', 653, 503],
 ] as const)
   test(`rejected ${name} site preserves the entire public/native owner`, () => {
-    const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+    const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
     apply(s, { kind: 'public-exchange', ids: ['v1'], topic: 'role' });
     step(s);
     const native = archiveCommunity(s.villagers[0]!.person),
@@ -79,7 +80,7 @@ for (const longer of [false, true])
     let actualDecision: ReturnType<typeof decide> | undefined,
       selectedWork: Parameters<typeof decide>[1][number] | undefined,
       before: Record<string, number> | undefined;
-    const s = createGame(418, undefined, longer ? { edition: 'settlement-day/1' } : undefined),
+    const s = createGame(418, undefined, longer ? { edition: 'settlement-replies/2' } : undefined),
       v = s.villagers[0]!,
       h = longer ? settlementPublicHost : shortPublicHost;
     const spy = vi.spyOn(hf, 'decide').mockImplementation((person, offers, options) => {
@@ -129,7 +130,7 @@ for (const longer of [false, true])
 
 test('valid replacement build and explicit cancel still cancel the public invitation', () => {
   for (const cancel of [false, true]) {
-    const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+    const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
     apply(s, { kind: 'public-exchange', ids: ['v1'], topic: 'role' });
     step(s);
     apply(
@@ -156,7 +157,7 @@ test('valid replacement build and explicit cancel still cancel the public invita
 import { publicVoiceOffer } from '../src/public-voice-content';
 
 test('a rejected build input does not stale the retained work source on the next tick', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   apply(s, { kind: 'public-exchange', ids: ['v1'], topic: 'work', sourceId: 'input:0' });
   const a = s.story!.publicExchanges![0]!,
