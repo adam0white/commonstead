@@ -1,3 +1,13 @@
+# Completed-delivery reading candidate — 2026-10-31
+
+Remaining: review these documentation additions, exact-source Opus clearance after the Claude pause, hosted CI and delivery. PR18 at `82ce568` remains a separate unmerged dependency with its recorded Actions startup blocker; recheck capacity on 2026-11-01. This new branch adds a read-only completed-delivery reading to the existing Can we finish? panel. No schema, simulation, SDK or current-save policy changes.
+
+The reading reports actual boards and ballast bags delivered to the shared store during the last up to sixty game seconds. It labels rounded-down quantities and distinguishes unavailable history from no deliveries. It predicts neither arrivals nor goal reachability. F776 and the broader supply/source/future-choice questions remain open for the 2026-11-03 checkpoint. Other original clauses, next-day work, current browser persistence and player/owner judgments remain separate.
+
+The genuine seed418 public-input trace covers a carried load, its refused replacement request, actual hub delivery and admitted spending. Full and compact imports continue equally through tick26 after the same accepted input. Original and unobserved twin compare complete state, inputs, hashes, exact full/compact exports and whole HF archives at actual900 and1800; repeated display reads preserve them. Focused correction run: one test passed in78.59seconds; final lint/types lane passed. Source and test scopes have independent Codex clearance; this does not establish hosted CI, phone/wide layout, release or owner acceptance. Log fields named Bytes in that trace record JavaScript string lengths, not measured byte counts.
+
+The following sections are historical records of earlier candidates. Their pending signing or review wording does not describe the new branch or replace the retained PR18 delivery blocker.
+
 # PR18 reader composition candidate — 2026-10-30
 
 Remaining: root's final review, signing, exact CI and any later release verification. This uncommitted candidate composes the per-person reader guards onto PR18 source `76798c58575ef7ade1f8a66e88e55e8dca22726a`. It preserves the one-current-policy schema13 refusal and both current physical scenarios. Root reports the existing CI run blocked at account startup with zero test steps; this worker did not retry CI or inspect accounts. Current peer readiness and missing publication contracts still refuse shared writes. Local checks and synthetic candidate browser controls do not qualify live, grant custody, retire a source or supply owner acceptance. Root owns the same PR's review and release decisions.

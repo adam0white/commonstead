@@ -27,7 +27,7 @@ import {
 import { eventText, residentName } from './display.ts';
 import { draw } from './draw.ts';
 import { prefillFeedbackChoice } from './feedback.ts';
-import { AssemblyObservation, goalForecast } from './goal-forecast.ts';
+import { AssemblyObservation, deliveryReading, goalForecast } from './goal-forecast.ts';
 import { STORM_MEALS, stormSummary } from './pressure.ts';
 import {
   apply,
@@ -527,7 +527,7 @@ function update() {
   assemblyObservation.observe(forecastWorld, s);
   const reading = document.getElementById('goal-reading-text');
   if (reading) {
-    const words = goalForecast(s, assemblyObservation.pace(forecastWorld, s));
+    const words = [...goalForecast(s, assemblyObservation.pace(forecastWorld, s)), ...deliveryReading(s)];
     const text = words.map((line) => `<p>${esc(line)}</p>`).join('');
     if (reading.innerHTML !== text) reading.innerHTML = text;
   }

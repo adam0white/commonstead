@@ -71,6 +71,44 @@ export class AssemblyObservation {
 const amount = (n: number) => Math.floor(n * 10) / 10;
 const duration = (seconds: number) => `${Math.ceil(seconds / 10) * 10} game seconds`;
 
+/** Read only after complete public steps on a fresh current host or replay-validated current import.
+ * Provenance supplies complete, untrimmed history; row shape cannot detect a deleted receipt.
+ */
+export function deliveryReading(s: State): string[] {
+  if (!s.settlement || s.ended) return [];
+  const unavailable = ['Recent delivery information is unavailable.'];
+  const t = s.tick;
+  if (!Number.isSafeInteger(t) || t < 0 || !Array.isArray(s.story?.work)) return unavailable;
+  let wood = 0,
+    stone = 0;
+  for (const item of s.story.work as unknown[]) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return unavailable;
+    const row = item as Record<string, unknown>;
+    if (typeof row.actor !== 'string' || typeof row.kind !== 'string' || typeof row.target !== 'string')
+      return unavailable;
+    if (row.kind !== 'delivery') continue;
+    if (!Number.isSafeInteger(row.at) || (row.at as number) < 1 || (row.at as number) > t) return unavailable;
+    if ((row.target !== 'wood' && row.target !== 'stone') || (row.at as number) <= Math.max(0, t - 60))
+      continue;
+    if (typeof row.amount !== 'number' || !Number.isFinite(row.amount) || row.amount < 0) return unavailable;
+    if (row.target === 'wood') wood += row.amount;
+    else stone += row.amount;
+    if (!Number.isFinite(wood) || !Number.isFinite(stone)) return unavailable;
+  }
+  if (!Number.isFinite(amount(wood)) || !Number.isFinite(amount(stone))) return unavailable;
+  if (t === 0) return ['No game time has passed.'];
+  const n = Math.min(t, 60);
+  const window = `${n} game second${n === 1 ? '' : 's'}`;
+  const fact =
+    wood === 0 && stone === 0
+      ? `No boards or ballast bags reached the shared store in the last ${window}.`
+      : `In the last ${window}, residents delivered ${amount(wood)} boards and ${amount(stone)} ballast bags to the shared store. Amounts are rounded down to one decimal place.`;
+  return [
+    fact,
+    'This records past deliveries. Supplies may have been spent since delivery. Future delivery times are unknown.',
+  ];
+}
+
 export function goalForecast(s: State, pace: AssemblyPace | null): string[] {
   const w = s.settlement;
   if (!w) return [];
