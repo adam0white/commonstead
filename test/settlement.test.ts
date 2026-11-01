@@ -39,14 +39,34 @@ describe('current settlement day focused headless controls', () => {
   test('full-day bodies, food, sleep and sourced duties advance with exact public replay', async () => {
     const s = day();
     const actions = new Set<string>();
-    let nearFull: unknown, nearCompact: unknown, expected1795: unknown;
+    let earlyFull: unknown, earlyCompact: unknown, expected125: unknown;
+    let earlyState = '',
+      earlyHash = '';
     for (let i = 0; i < 1800; i++) {
       step(s);
-      if (s.tick === 1790) {
-        nearFull = exportRun(s);
-        nearCompact = exportRun(s, true);
+      if (s.tick === 120) {
+        // Exercise both file forms during real activity, without replaying the whole day three times.
+        const native = archiveCommunity(resident(s, 'v1').person);
+        expect(s.villagers.some((v) => v.person.activity)).toBe(true);
+        expect(native.history.length).toBeGreaterThan(0);
+        expect(native.current.receipts.inputs.length).toBeGreaterThan(0);
+        earlyFull = exportRun(s);
+        earlyCompact = exportRun(s, true);
+        earlyState = JSON.stringify(s);
+        earlyHash = stateHash(s);
+        console.info(
+          'DAY_ACTIVITY_CHECKPOINT',
+          JSON.stringify({
+            tick: s.tick,
+            transactions: native.history.length,
+            acceptedInputs: native.current.receipts.inputs.length,
+            activities: s.villagers.map((v) => v.person.activity?.action ?? null),
+            hash: earlyHash,
+            nativeHash: native.hashes.full,
+          }),
+        );
       }
-      if (s.tick === 1795) expected1795 = exportRun(s);
+      if (s.tick === 125) expected125 = exportRun(s);
       if (i % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       for (const v of s.villagers) {
         const a = v.person.activity?.action;
@@ -69,12 +89,24 @@ describe('current settlement day focused headless controls', () => {
     expect(s.resources.food).toBeLessThan(100);
     const restored = importRun(exportRun(s));
     expect(restored).toEqual(s);
-    for (const source of [nearFull, nearCompact]) {
-      const near = importRun(source);
-      expect(near.tick).toBe(1790);
-      advance(near, 5);
-      expect(near.tick).toBe(1795);
-      expect(exportRun(near)).toEqual(expected1795);
+    expect(exportRun(restored)).toEqual(exportRun(s));
+    console.info(
+      'DAY_END_REPLAY',
+      JSON.stringify({
+        tick: s.tick,
+        hash: stateHash(s),
+        nativeHash: archiveCommunity(resident(s, 'v1').person).hashes.full,
+      }),
+    );
+    for (const source of [earlyFull, earlyCompact]) {
+      const early = importRun(source);
+      expect(early.tick).toBe(120);
+      expect(JSON.stringify(early)).toBe(earlyState);
+      expect(stateHash(early)).toBe(earlyHash);
+      expect(exportRun(early)).toEqual(earlyFull);
+      advance(early, 5);
+      expect(early.tick).toBe(125);
+      expect(exportRun(early)).toEqual(expected125);
     }
     advance(s, 3);
     advance(restored, 3);

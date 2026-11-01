@@ -44,7 +44,12 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test --shard=${{ matrix.shard }}/4
+      # Keep the two largest focused files out of the hash-based remainder partition.
+      - run: pnpm test --shard=${{ matrix.shard }}/4 --exclude=test/morning-workshop.test.ts --exclude=test/roof-break.test.ts
+      - if: matrix.shard == 1
+        run: pnpm test test/morning-workshop.test.ts
+      - if: matrix.shard == 2
+        run: pnpm test test/roof-break.test.ts
   ci:
     name: ci
     if: always()
