@@ -18,6 +18,14 @@ import {
   stageOutcome,
   tick as tickPerson,
 } from './hf4';
+import {
+  finishMorningWorkshop,
+  type MorningWorkshop,
+  morningWorkshopView,
+  registerMorningCabin,
+  startMorningWorkshop,
+  workshopDeadlineReached,
+} from './morning-workshop';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 import { openPlacementGround } from './placement.ts';
 import {
@@ -75,7 +83,7 @@ import {
   stageStories,
   stepStory,
 } from './story-records.ts';
-import { continueWorkshop } from './workshop-continuation.ts';
+import { continueWorkshop, retainWorkshopClosing } from './workshop-continuation.ts';
 
 export function taskLabel(target: string): string {
   return (
@@ -94,6 +102,7 @@ export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
   | PublicCommand
   | { kind: 'continue-workshop' }
+  | { kind: 'start-morning-workshop' }
   | { kind: 'remainder'; action: 'start' | 'stop' }
   | { kind: 'story-act'; ids: string[]; choice: StoryChoice | 'read-card' }
   | { kind: 'evening'; action: 'continue' | 'close' | 'keep-playing' }
@@ -160,6 +169,7 @@ export type RoofBreak = {
 export const ROOF_RETURN = 'roof-break-return/1';
 export type State = {
   policy: typeof CURRENT_POLICY;
+  morningWorkshop: MorningWorkshop | null;
   remainder?: { startedAt: number; running: boolean };
   story?: StoryState;
   continuedWorkshop?: {
@@ -284,6 +294,7 @@ export function createGame(
   }
   const state: State = {
     policy: CURRENT_POLICY,
+    morningWorkshop: null,
     seed,
     chapter: chapter ? structuredClone(chapter) : null,
     pauseRequested: false,
@@ -584,6 +595,13 @@ export function publicPlaceText(text: string): string {
 
 export function apply(s: State, c: GameCommand): void {
   if (publishing.has(s)) return;
+  if (c.kind === 'start-morning-workshop') {
+    exactKeys(c, ['kind']);
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+    startMorningWorkshop(s);
+    s.inputs.push({ tick: s.tick, command: { kind: 'start-morning-workshop' } });
+    return;
+  }
   if (c.kind === 'continue-workshop') {
     exactKeys(c, ['kind']);
     if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
@@ -664,8 +682,9 @@ export function apply(s: State, c: GameCommand): void {
       s.story.close = { requestedAt: s.tick };
       s.message = 'Ending the evening when current actions reach their next boundary.';
     } else {
-      delete s.story.close;
-      s.message = 'Continue tonight.';
+      if (s.settlement) delete s.story.close;
+      else retainWorkshopClosing(s);
+      s.message = s.morningWorkshop ? 'Continue the morning task.' : 'Continue tonight.';
     }
     s.inputs.push({ tick: s.tick, command: structuredClone(c) });
     return;
@@ -876,6 +895,7 @@ export function apply(s: State, c: GameCommand): void {
       complete: false,
     };
     s.buildings.push(b);
+    if (b.kind === 'house') registerMorningCabin(s, b.id);
     for (const v of selected)
       note(s, v.id, { asked: true, [c.building === 'house' ? 'cabin' : 'store']: true });
     for (const v of selected)
@@ -1133,7 +1153,12 @@ export function step(s: State): void {
           tick: s.tick,
           text: `The ${taskLabel(b.kind)} (${b.id}) was completed.`,
         });
-        s.message = `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? (s.rules ? 'The shared supplies will stay dry. Before the storm, save meals for the storm day, let tired people rest, and bring everyone under a roof.' : 'The shared supplies are ready for the storm.') : 'There is room for two more people.'}`;
+        const morning = morningWorkshopView(s);
+        s.message = morning
+          ? `The ${taskLabel(b.kind)} is finished. ${morning.cabinLine} ${morning.mealLine} ${morning.objective}`
+          : s.continuedWorkshop
+            ? `The ${taskLabel(b.kind)} is finished. The earlier storm result remains recorded.`
+            : `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? (s.rules ? 'The shared supplies will stay dry. Before the storm, save meals for the storm day, let tired people rest, and bring everyone under a roof.' : 'The shared supplies are ready for the storm.') : 'There is room for two more people.'}`;
       }
     }
     if (b?.complete) {
@@ -1147,7 +1172,7 @@ export function step(s: State): void {
   if (
     s.continuedWorkshop &&
     ((s.story?.close && s.villagers.every((v) => !v.person.activity && !activeStory(s, v.id))) ||
-      s.villagers[0]!.person.now * 60000 >= s.continuedWorkshop.endAtMs)
+      workshopDeadlineReached(s))
   ) {
     for (const v of s.villagers) {
       interruptStory(s, v.id, 'The continued workshop ended at its actual boundary.');
@@ -1156,7 +1181,10 @@ export function step(s: State): void {
     s.ended = true;
     s.chapterPaused = true;
     if (s.story?.close) s.story.close.committedAt = s.tick;
-    s.message = 'This continued workshop ended. Unfinished work remains unfinished.';
+    finishMorningWorkshop(s);
+    s.message = s.morningWorkshop
+      ? 'The morning task ended. Its actual cabin work and counted meals are shown in the result.'
+      : 'This continued workshop ended. Unfinished work remains unfinished.';
   }
   if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
     s.chapterPaused = true;
@@ -1469,6 +1497,7 @@ function* importRunSteps(raw: unknown, checked = false): Generator<number, State
             'evening',
             'remainder',
             'continue-workshop',
+            'start-morning-workshop',
           ].includes(input.command.kind)
         ) {
           if (input.command.kind === 'long-roof-break-return' || input.command.kind === 'roof-break-return')

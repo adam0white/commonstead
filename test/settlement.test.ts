@@ -442,7 +442,7 @@ function requiredPeerValue<T>(value: T | null | undefined): T {
 describe('fresh public route dialogue day', () => {
   test('current native schema retains each edition and refuses peer input without an actual witness', () => {
     const s = createGame(418, undefined, { edition: 'settlement-replies/2' } as never);
-    expect((exportRun(s) as { schema: number }).schema).toBe(13);
+    expect((exportRun(s) as { schema: number }).schema).toBe(14);
     expect(s.settlement?.replyScenes).toEqual({});
     expect(importRun(exportRun(s))).toEqual(s);
     expect(importRun(exportRun(s, true))).toEqual(s);

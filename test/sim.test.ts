@@ -268,7 +268,7 @@ test('current reply schema is closed and requires an actual disclosure in every 
   const config = { edition: 'settlement-replies/2' } as const;
   const s = createGame(42, undefined, config);
   const full = exportRun(s) as Record<string, unknown>;
-  expect(full.schema).toBe(13);
+  expect(full.schema).toBe(14);
   expect(importRun(full)).toEqual(s);
   expect(importRun(exportRun(s, true))).toEqual(s);
   for (const extra of [{ chapter: {} }, { surplus: true }, { compact: false }])

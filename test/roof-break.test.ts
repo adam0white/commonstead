@@ -39,7 +39,7 @@ test('recorded roof break walks, rests under the real roof, then re-offers each 
   expect(s.villagers.slice(0, 2).every((v) => !v.person.activity?.protest)).toBe(true);
   for (const compact of [false, true]) {
     const raw = exportRun(s, compact) as { schema: number };
-    expect(raw.schema).toBe(13);
+    expect(raw.schema).toBe(14);
     const loaded = importRun(JSON.parse(JSON.stringify(raw)));
     expect(loaded).toEqual(s);
     advance(loaded, 17);
@@ -169,6 +169,7 @@ test('complete source archives survive native and file loads; active run require
     run: exportRun(s),
     runId: 'synthetic',
     fileOrigin: false,
+    deniedIDs: [],
     heads: [],
     sources,
   });
@@ -235,7 +236,7 @@ test('long-day roof action delivers the actual held load once, rests at the hub,
   expect(aw.pendingRequest).not.toBe('insist');
   for (const compact of [false, true]) {
     const raw = exportRun(s, compact) as { schema: number; rules: string };
-    expect(raw.schema).toBe(13);
+    expect(raw.schema).toBe(14);
     expect(raw.rules).toBeNull(); // The current envelope binds the roof input through its full history.
     const copy = importRun(JSON.parse(JSON.stringify(raw)));
     expect(copy).toEqual(s);
@@ -343,7 +344,14 @@ test('schema10 keeps source archives through full, compact, gzip and native load
     } as never,
   );
   await c.loadLocal(
-    JSON.stringify({ run: exportRun(s), runId: 'synthetic-long', fileOrigin: false, heads: [], sources }),
+    JSON.stringify({
+      run: exportRun(s),
+      runId: 'synthetic-long',
+      fileOrigin: false,
+      deniedIDs: [],
+      heads: [],
+      sources,
+    }),
   );
   // Isolate the existing action-boundary control from the earlier live peer gate.
   // The unmocked refusal is covered in shared-write-capability.test.ts.

@@ -182,9 +182,22 @@ test('file short ending establishes a safe command-owned pause before retained c
   expect(c.state()?.chapterPaused).toBe(false);
   (c as unknown as { pauseAtEnd: () => void }).pauseAtEnd();
   expect(c.state()?.chapterPaused).toBe(true);
-  c.apply({ kind: 'continue-workshop' });
+  const stoppedRaw = c.snapshot()!;
+  c.invalidate(); // A loaded/stopped ending must also accept the explicit continuation.
+  c.continueAtEnd({ kind: 'continue-workshop' });
+  expect(c.running).toBe(true);
   expect(c.state()?.continuedWorkshop).toBeDefined();
   expect(c.state()?.tick).toBe(600);
   expect(c.original()).toEqual(original);
   expect(c.snapshot()).toEqual(exportRun(importRun(c.snapshot())));
+  // The same transaction must roll back a stopped-ending continuation when it cannot fit.
+  const size = new TextEncoder().encode(JSON.stringify(stoppedRaw)).byteLength;
+  const bounded = createFileSession({ currentBytes: size });
+  await bounded.select(file(stoppedRaw));
+  const prior = bounded.snapshot(),
+    priorOriginal = bounded.original();
+  expect(() => bounded.continueAtEnd({ kind: 'continue-workshop' })).toThrow(/capacity/);
+  expect(bounded.running).toBe(false);
+  expect(bounded.snapshot()).toEqual(prior);
+  expect(bounded.original()).toEqual(priorOriginal);
 });

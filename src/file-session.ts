@@ -183,6 +183,14 @@ export function createFileSession(
     apply(command: GameCommand) {
       if (running) stage((state) => apply(state, command));
     },
+    continueAtEnd(command: Extract<GameCommand, { kind: 'continue-workshop' | 'start-morning-workshop' }>) {
+      invalidate();
+      stage((state) => {
+        if (!state.ended) throw new Error('The chapter has not ended.');
+        apply(state, command);
+      });
+      running = true;
+    },
     advance(ticks: number) {
       if (!running) return;
       stage((state) => {

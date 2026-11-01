@@ -61,7 +61,7 @@ test('public work completes a real storehouse before the actual storm check', as
   expect(stormSummary(careful).join(' ')).toMatch(/dry store/);
 }, 120_000);
 
-test('pressure runs replay exactly through schema 8 and refuse leaving the day early', () => {
+test('pressure runs replay exactly through the current schema and refuse leaving the day early', () => {
   const s = createGame(418, undefined, undefined, PRESSURE);
   apply(s, { kind: 'order', ids: ['v1', 'v2'], target: 'wood' });
   for (let i = 0; i < 10; i++) step(s);
@@ -69,7 +69,7 @@ test('pressure runs replay exactly through schema 8 and refuse leaving the day e
   apply(s, { kind: 'order', ids: ['v2'], target: 'shelter' });
   for (let i = 0; i < 10; i++) step(s);
   const run = exportRun(s) as { schema: number };
-  expect(run.schema).toBe(13);
+  expect(run.schema).toBe(14);
   expect(stateHash(importRun(JSON.parse(JSON.stringify(run))))).toBe(stateHash(s));
   expect(() => apply(s, { kind: 'yield-day' })).toThrow();
   expect(() => importRun({ ...run, rules: 'pressure/0' })).toThrow();

@@ -2,8 +2,8 @@ import { FRAMEWORK_VERSION } from './engine';
 import { PRESSURE } from './pressure';
 
 /** One host policy, with two physical scenarios. This is not a save migration. */
-export const CURRENT_SCHEMA = 13;
-export const CURRENT_POLICY = 'commonstead-current/1';
+export const CURRENT_SCHEMA = 14;
+export const CURRENT_POLICY = 'commonstead-current/2';
 export const SETTLEMENT_EDITION = 'settlement-replies/2';
 export const KEEP_OR_START_FRESH =
   'This saved game uses an unsupported Commonstead history and cannot replay under the current policy. The file was not loaded. Keep the original file and start a fresh game.';

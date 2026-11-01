@@ -104,7 +104,16 @@ export function updateStoryControls(
       ['keep-playing', 'Keep playing'],
     ] as const) {
       if ((action === 'keep-playing') !== !!s.story?.close) continue;
-      rows.push({ id: `evening-${action}`, line, why: '', command: { kind: 'evening', action } });
+      rows.push({
+        id: `evening-${action}`,
+        line: s.morningWorkshop
+          ? action === 'close'
+            ? 'End my morning here.'
+            : 'Continue the morning task.'
+          : line,
+        why: '',
+        command: { kind: 'evening', action },
+      });
     }
   let panel = host.querySelector<HTMLElement>('#story-actions');
   if (!panel) {

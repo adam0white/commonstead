@@ -14,6 +14,21 @@ test('public fresh short constructor always starts the pressure scenario', () =>
   expect(createGame(42).rules).toBe(PRESSURE);
 });
 
+test('previous current schema13 is refused before reading its HF archive', async () => {
+  // A malformed sentinel tests the gate, not a relabeled historical replay fixture.
+  const previous = {
+    schema: 13,
+    policy: 'commonstead-current/1',
+    get hf(): never {
+      throw new Error('An unsupported archive must never be read.');
+    },
+  };
+  expect(() => importRun(previous)).toThrow(/Keep.*start a fresh/i);
+  await expect(importRunAsync(previous)).rejects.toThrow(/Keep.*start a fresh/i);
+  expect(previous.schema).toBe(13);
+  expect(previous.policy).toBe('commonstead-current/1');
+});
+
 test('actual same-pin schema12 history is refused before sync or cooperative replay', async () => {
   const raw = JSON.parse(oldFile('short-no-pressure').toString());
   const original = JSON.stringify(raw);

@@ -750,6 +750,14 @@ export function socialEvent(
 export function communityOwner(p: Old.Person): object {
   return community(p).run;
 }
+/** Retained Run clock, or its read-only minute projection in a detached UI snapshot. */
+export function communityTime(p: Old.Person): number {
+  return links.get(p)?.at ?? Math.round(p.now * MINUTE);
+}
+/** Mutating host transitions require a registered Run, never a detached display projection. */
+export function registeredCommunityTime(p: Old.Person): number {
+  return community(p).at;
+}
 export function archiveCommunity(p: Old.Person) {
   return archive(community(p).run);
 }
