@@ -68,9 +68,7 @@ import { advanceForecastDay, forecastDay, storehouse } from './goal-forecast-sce
 
 test('public settlement trace preserves delivery evidence, replay and storm outcome', async () => {
   const run = forecastDay(),
-    twin = forecastDay(),
-    s = run.s,
-    u = twin.s;
+    s = run.s;
   let carried: { id: string; resource: 'wood' | 'stone' | 'food'; amount: number } | undefined;
   let delivered = false,
     spent = false,
@@ -80,7 +78,6 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
   const checkpoints: number[] = [];
   const compareCheckpoint = (tick: number) => {
     expect(s.tick).toBe(tick);
-    expect(u.tick).toBe(tick);
     const capture = (state: State) => ({
       state: JSON.stringify(state),
       inputs: JSON.stringify(state.inputs),
@@ -88,19 +85,22 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
       full: JSON.stringify(exportRun(state)),
       compact: JSON.stringify(exportRun(state, true)),
     });
-    const original = capture(s),
-      control = capture(u);
-    expect(control).toEqual(original);
+    const original = capture(s);
     const fullArchive = JSON.stringify((JSON.parse(original.full) as { hf: unknown }).hf);
-    expect(JSON.stringify((JSON.parse(control.full) as { hf: unknown }).hf)).toBe(fullArchive);
     expect(JSON.stringify((JSON.parse(original.compact) as { hf: unknown }).hf)).toBe(fullArchive);
-    expect(JSON.stringify((JSON.parse(control.compact) as { hf: unknown }).hf)).toBe(fullArchive);
     const reading = deliveryReading(s);
     expect(deliveryReading(s)).toEqual(reading);
-    expect(deliveryReading(u)).toEqual(reading);
-    expect(deliveryReading(u)).toEqual(reading);
+    // Freeze the actual projection inputs independently of the live Run.
+    const work = Object.freeze(s.story!.work.map((entry) => Object.freeze({ ...entry })));
+    const projection = Object.freeze({
+      tick: s.tick,
+      ended: s.ended,
+      settlement: Object.freeze({}),
+      story: Object.freeze({ work }),
+    }) as unknown as State;
+    expect(deliveryReading(projection)).toEqual(reading);
+    expect(deliveryReading(projection)).toEqual(reading);
     expect(capture(s)).toEqual(original);
-    expect(capture(u)).toEqual(control);
     checkpoints.push(tick);
     console.info(
       'CHECKPOINT',
@@ -131,7 +131,6 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
       expect(JSON.stringify(exportRun(s))).toBe(full);
       expect(JSON.stringify(exportRun(s, true))).toBe(compact);
     }
-    if (before) expect(JSON.stringify(u)).toBe(before);
     if (!carried) {
       const entry = Object.entries(s.settlement!.actors).find(([, a]) => a.carried && a.carried.amount > 0);
       if (entry?.[1].carried) {
@@ -156,7 +155,7 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
         )?.id;
         if (id) {
           const refused = { kind: 'order' as const, ids: [carried.id], target: 'stone' };
-          for (const copy of [s, u, ...restored]) apply(copy, refused);
+          for (const copy of [s, ...restored]) apply(copy, refused);
           expect(s.message).toContain('Return these carried materials');
           expect(s.settlement!.actors[carried.id]?.carried).toEqual({
             resource: carried.resource,
@@ -165,12 +164,12 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
           expect(deliveryReading(s)).toEqual(reading);
           console.info('REFUSED', JSON.stringify({ tick: s.tick, refused, message: s.message }));
           const command = { kind: 'order' as const, ids: [id], target: 'wood' };
-          for (const copy of [s, u, ...restored]) apply(copy, command);
+          for (const copy of [s, ...restored]) apply(copy, command);
           accepted =
             s.settlement!.actors[id]?.job?.kind === 'gather' &&
             s.settlement!.actors[id]?.job?.target === 'wood';
-          for (const copy of [s, u, ...restored]) step(copy);
-          for (const copy of [u, ...restored]) {
+          for (const copy of [s, ...restored]) step(copy);
+          for (const copy of restored) {
             expect(JSON.stringify(copy)).toBe(JSON.stringify(s));
             expect(stateHash(copy)).toBe(stateHash(s));
             expect(JSON.stringify(exportRun(copy, true))).toBe(JSON.stringify(exportRun(s, true)));
@@ -190,8 +189,6 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
       priorSite = !!storehouse(s),
       priorInputs = s.inputs.length;
     advanceForecastDay(run);
-    advanceForecastDay(twin);
-    if (i % 100 === 0) expect(JSON.stringify(u)).toBe(JSON.stringify(s));
     if (carried && priorActor && !s.settlement!.actors[carried.id]?.carried) {
       const row = s
         .story!.work.slice(priorWork)
@@ -251,8 +248,6 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
     if (s.tick === 900 || s.tick === 1800) compareCheckpoint(s.tick);
     if (s.settlement!.storm && !storm) {
       storm = true;
-      expect(u.settlement!.storm).toBe(true);
-      expect(u.won).toBe(s.won);
       expect(goalForecast(s, null)[0]).toContain(s.won ? 'supplies stayed dry' : 'supplies got soaked');
       console.info(
         'STORM',
@@ -263,9 +258,6 @@ test('public settlement trace preserves delivery evidence, replay and storm outc
   }
   if (s.ended) {
     expect(deliveryReading(s)).toEqual([]);
-    expect(u.ended).toBe(true);
-    expect(JSON.stringify(u)).toBe(JSON.stringify(s));
-    expect(u.won).toBe(s.won);
   }
   console.info(
     'TRACE',

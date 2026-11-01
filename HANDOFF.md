@@ -1,3 +1,9 @@
+# Focused supply trace candidate — 2026-11-01
+
+Remaining: independent exact-source review, green CI, merged CI and clean hosted release; Adam accepts after playing. The delivery-reading control now advances one full public settlement trace to ticks 900 and 1800. At each checkpoint it compares the whole state, input log, hash and full/compact exports, including the complete HF archive, before and after repeated reads. It also reads frozen copies of the real projection inputs. Full and compact cold imports still receive the same refused and accepted inputs at the carried-load boundary and continue equally; the actual spending branch remains.
+
+The previous independently stepped two-world trace passed unchanged at source `7aa046b` in 110236.404 ms and its original test body and raw result are retained in private evidence. The second full-world comparison is no longer in this focused CI test. Current replay controls remain in `test/hf4-protocol.test.ts` (active whole-game and unresolved-boundary continuation), `test/residual.test.ts` (full/compact continuation of physical yield), and `test/pressure.test.ts` (current-schema replay). Those controls do not reproduce the removed full-horizon twin comparison. This test-only scope change does not establish green CI, fix HF runtime performance or close the separately open positive-work UI proof.
+
 # Current morning-task candidate — 2026-11-01
 
 Remaining: independent Codex review at the signed source, exact source and merged CI, normal deployment and matching clean live release. Adam accepts play readiness separately. The current merge gate is one independent exact-SHA Codex CLEAR plus green CI; historical Opus holds below are superseded during the Claude pause through 2026-11-03 08:00Z.
