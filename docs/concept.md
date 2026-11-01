@@ -6,6 +6,16 @@ Eight residents at a contemporary residential workshop near Mill Bridge must ass
 
 Owner Decision desk 2026-10-21 F-418 lifts direct control, real time and numeric HUD for this game. The owner permits eating, drinking and prayer in place. Framework and game remain separate. This increment ends with one playable map, a private repository, green required ci, a stamped static Worker deployment, two addressed concept reviews, deterministic replay/export controls and live Chromium checks at 360×690 and 1280×800. The owner accepts the game after playing; builder delivery is not owner acceptance.
 
+## Morning task source candidate — 2026-10-31
+
+Remaining: authorized runtime proof, complete independent review, normal lane, signed source, exact source and merged CI, matching clean hosted release, and Adam's separate play acceptance. Source baseline is `4f034526eda66609241f41f239174dcd46566828` in the retained PR18 tree. All new checks are UNRUN. The known private CI startup blocker is unchanged; recheck capacity on2026-11-01 without an unchanged retry or account action.
+
+After the real short storm, the same workshop can continue to its next08:00 boundary. An early evening close can resume through the ordinary continuation action; its actual close remains recorded. At08:00 the player can start a public morning task, download, or end. The task asks for one further prepared guest cabin and at least40 counted meal units in the shared store by10:00. The first newly admitted cabin site owns that target and spends the existing40 boards once. Refused requests and older cabins do not satisfy it. Earlier unfinished work and actual entry stocks remain. Residents still choose what they can manage. The result shows actual progress and counted meals, including unmet targets, without a reward or invented motive. Preparing the existing cabin adds beds; it does not build a new dwelling or establish a visitor or physiological need.
+
+This source uses one current schema14/policy2. Previous schema13 and older histories remain unsupported, with keep-original/start-fresh refusal before reconstruction. The full settlement scenario keeps its existing rules. HF keeps the actual Run, clock, people, bodies, work history, calendar and obligations. Recorded ingress milliseconds may put the ordinary ending step just past08:00; the exact retained time is recorded and the deadline remains calendar10:00. No new short-run prayer calendar or faith result is authored. See [the current policy](current-policy.md) for the persisted boundary and source-only control.
+
+This slice does not close each-resident later speech, longer personal closing, cross-resident consequences, the empty long-day night, Nia's second response, F763/F765/F778/F776, compound asks or public source/cast contracts. Keep their existing source clauses and conditional return terms; recheck remaining engineering on2026-11-03. Friends' rounds and Show HN remain paused. No synthetic trace establishes taste, difficulty or owner acceptance. The delivery artifact remains the reviewed deployable slice with exact merged CI and a matching clean release manifest. Adam accepts after playing.
+
 ## Opening minute
 
 | Time at Steady | What the player sees and does                                                                                                                                                                                                                                               |
@@ -44,6 +54,8 @@ Grammar exception: an RTS needs a larger map than the 120–260px scene guidance
 ## Deferred
 
 Current status is qualified in the combined residual candidate section at the end. Earlier dated entries remain historical evidence.
+
+Positive-work morning UI proof remains OPEN. The retained winning-day fixture advances 120 ticks after paid cabin admission but residents refuse for capacity and recover, leaving progress zero. Preserve the original failing positive control and raw exports. The separate exhausted-fixture lifecycle/refusal control does not prove positive construction or both morning goals. Game maintainer rechecks a justified ordinary public preparation recipe on 2026-11-03; do not force assent, edit fixtures, lower thresholds or enlarge the bound.
 
 - 2026-10-29, composed residual preparation: all retained physical host, complete-save, continuation and public-voice source is composed with merged59954e7 on HF4.8.1/client0.5.7/kit0.5.24. This is an unmerged candidate. The director must resolve delivery after PR15 merged separately; no second PR, hosted review or deployment is authorized here. Available host work is implemented and undergoing current-source verification, not deferred by date. Unknown peers still block portable writes through the released SDK. Shared owner must verify live peer adoption and supply missing source/role/custody contracts by2026-10-29; no local substitute or invented certificate. Literal29 batch and9 voice clauses remain bounded within114 inventory rows; compound asks and whole-game completion remain open. Owner/player feel, actual requested return and human accessibility acceptance require their original inputs; review2026-11-03, player rounds/friends/ShowHN stay paused.
 
@@ -299,3 +311,9 @@ The actual967-tick trace is the fixed engineering control. Browser execution rem
 
 
 The consolidated source-review correction keeps stable story-control DOM nodes while binding each click to the current selected residents. A second reply uses the matching completed first reply's exact sheet ID and version through an interrupted retry and completion. An independently prepared sheet remains a separate, legitimately paid object. Sevim's standalone draft stores the actual acknowledgement from the original first-reply definition; its completion speech remains separate. A blank-only first sheet stays unsendable. These causal controls use public fixed42 actions and a labelled minimal-DOM renderer check, not browser or player acceptance.
+
+## HF4 current-only policy correction — 2026-10-29
+
+The current host follows the owner HF4 rule: no behavior opt-ins and no legacy host continuation. Two genuine scenarios remain: short pressure and long settlement. The title no longer offers separate private-reply or trolley variants. The single long scenario keeps their complete applicable behavior and one actor synchronization strategy. Schema13 and its reconstructed current-policy tag distinguish this history from schema12; old files are refused without migration or replacement. Keep the original and start fresh. [The exact contract](current-policy.md) records the canonical reply owner, physical sheet and second-response semantics, current replay and custody boundaries.
+
+All earlier source, playtest, night and delivery receipts above retain their own identities. They do not certify this candidate. Shared peer/source/retirement/object-custody exclusions keep the owners and dates in the Deferred table. The director owns the same PR18, one assessment, exact CI and later delivery. Adam accepts after playing.

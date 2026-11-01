@@ -12,6 +12,7 @@ import {
   reviewed,
   stageOutcome,
 } from './hf4';
+import { workshopEndTick } from './morning-workshop';
 import type { Place, Point } from './paths.ts';
 import { openPlacementGround } from './placement';
 import { indoors } from './pressure.ts';
@@ -112,6 +113,7 @@ export type StoryState = {
     people: { actor: string; map: Place; point: Point; underRoof: boolean | null }[];
   };
   close?: { requestedAt: number; committedAt?: number; reason?: string };
+  closeHistory?: { requestedAt: number; committedAt?: number; reason?: string }[];
 };
 export type StoryHost = {
   body: (s: State, v: Villager) => Affordance[];
@@ -134,8 +136,7 @@ export const ensureStory = (s: State) =>
   });
 const long = (s: State) => !!s.settlement;
 const unit = (s: State) => (long(s) ? 0.8 : 0.5);
-export const storyEnd = (s: State) =>
-  s.continuedWorkshop ? s.continuedWorkshop.endTick : long(s) ? 1800 : 600;
+export const storyEnd = (s: State) => (long(s) ? 1800 : workshopEndTick(s));
 const end = storyEnd;
 const person = (s: State, id: string) => s.villagers.find((v) => v.id === id)!;
 export function recordDisclosure(s: State, v: Villager, collaboration = false, completed?: StoryEvent) {
@@ -1206,13 +1207,20 @@ export function storyClock(s: State, t: number) {
 }
 export function requireSupportedProducer(s: State) {
   if (
+    s.morningWorkshop ||
     s.continuedWorkshop ||
     s.story?.attempts.length ||
     s.story?.objects.length ||
     s.inputs.some((i) =>
-      ['public-exchange', 'story-act', 'yield-return', 'evening', 'reply', 'continue-workshop'].includes(
-        i.command.kind,
-      ),
+      [
+        'public-exchange',
+        'story-act',
+        'yield-return',
+        'evening',
+        'reply',
+        'continue-workshop',
+        'start-morning-workshop',
+      ].includes(i.command.kind),
     )
   )
     throw new Error(

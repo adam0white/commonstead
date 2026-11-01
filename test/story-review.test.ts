@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { afterEach, expect, test, vi } from 'vitest';
 import { apply, createGame, exportRun, importRun, step } from '../src/sim.ts';
 import { updateStoryControls } from '../src/story-ui.ts';
@@ -58,7 +59,7 @@ test('cached evening controls retain the node and dispatch the current selected 
 
 for (const id of ['v1', 'v7'] as const) {
   test(`actual preparation and first reply retain both spent sheets; ${id} second reply owns its exact first sheet`, () => {
-    const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+    const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
     apply(s, { kind: 'order', ids: [id], target: 'move', x: 525, y: 475 });
     while (s.tick < 60) step(s);
     apply(s, { kind: 'settlement', ids: [id], action: 'story' });
@@ -114,7 +115,7 @@ for (const id of ['v1', 'v7'] as const) {
 test('long public reply routes share paid retry, completed lock, departure provenance and transcript', async () => {
   const { publicTranscript } = await import('../src/public-history');
   const { prepareDeparture } = await import('../src/departure-source');
-  const s = createGame(42, undefined, { edition: 'settlement-replies/1' }),
+  const s = createGame(42, undefined, { edition: 'settlement-replies/2' }),
     id = 'v1';
   apply(s, { kind: 'order', ids: [id], target: 'move', x: 525, y: 475 });
   while (s.tick < 60) step(s);
@@ -148,7 +149,7 @@ test('long public reply routes share paid retry, completed lock, departure prove
 // CS-R7: interrupt an actually paid activity, then retry through the other public route.
 test('both long first-reply command directions retain the same paid sheet on retry', () => {
   for (const firstRoute of ['reply', 'story-act'] as const) {
-    const s = createGame(42, undefined, { edition: 'settlement-replies/1' });
+    const s = createGame(42, undefined, { edition: 'settlement-replies/2' });
     apply(s, { kind: 'order', ids: ['v1'], target: 'move', x: 525, y: 475 });
     while (s.tick < 60) step(s);
     apply(s, { kind: 'settlement', ids: ['v1'], action: 'story' });

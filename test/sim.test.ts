@@ -1,19 +1,10 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { describe, expect, test } from 'vitest';
 import { DISCOVERIES } from '../src/cast';
 import { FRAMEWORK_VERSION } from '../src/engine';
 import { archiveCommunity } from '../src/hf4';
-import {
-  apply,
-  createGame,
-  exportRun,
-  importRun,
-  NODES,
-  publicPlaceText,
-  replay,
-  stateHash,
-  step,
-  stepYieldBatch,
-} from '../src/sim';
+import { apply, createGame, exportRun, importRun, NODES, replay, stateHash, step } from '../src/sim';
+import { collectTrainingMeals, fundedShort } from './current-short-control';
 
 const memory = (person: Parameters<typeof archiveCommunity>[0]) =>
   archiveCommunity(person).current.people[person.id]!.memory;
@@ -33,7 +24,7 @@ describe('Commonstead fixed-tick simulation', () => {
     const s = createGame(42);
     expect(s.villagers).toHaveLength(8);
     expect(s.villagers.every((v) => v.person.id.startsWith('hf.cast.') && v.person.body.alive)).toBe(true);
-    expect(s.resources).toEqual({ food: 100, wood: 80, stone: 0 });
+    expect(s.resources).toEqual({ food: 30, wood: 80, stone: 0 });
   });
   test('private workshop discoveries require a chosen break and invitation, and replay', () => {
     const s = createGame(42);
@@ -76,7 +67,7 @@ describe('Commonstead fixed-tick simulation', () => {
     ).toBe(true);
   });
   test('episode helpers never duplicate the canonical roster', () => {
-    const s = createGame(7);
+    const s = fundedShort(7);
     apply(s, { kind: 'train' });
     advance(s, 15);
     const helper = s.villagers.at(-1);
@@ -86,7 +77,7 @@ describe('Commonstead fixed-tick simulation', () => {
     expect(new Set(s.villagers.map((v) => v.person.id)).size).toBe(9);
   });
   test('replays changed orders, recovery and training byte identically', () => {
-    const s = createGame(42);
+    const s = fundedShort(42);
     apply(s, { kind: 'order', ids: ['v1', 'v2'], target: 'wood' });
     advance(s, 75);
     apply(s, { kind: 'order', ids: ['v1'], target: 'rest' });
@@ -164,6 +155,7 @@ describe('Commonstead fixed-tick simulation', () => {
     apply(s, { kind: 'build', ids: ['v1', 'v2', 'v3'], building: 'house', x: 600, y: 450 });
     advance(s, 100);
     expect(s.buildings.find((b) => b.kind === 'house')?.complete).toBe(true);
+    collectTrainingMeals(s);
     for (let i = 0; i < 2; i++) {
       apply(s, { kind: 'train' });
       advance(s, 15);
@@ -177,18 +169,19 @@ describe('Commonstead fixed-tick simulation', () => {
     const satiety = v.person.body.satiety;
     apply(s, { kind: 'order', ids: [v.id], target: 'meal' });
     advance(s, 8);
-    expect(s.resources.food).toBe(98);
+    expect(s.resources.food).toBe(28);
     expect(v.person.body.satiety).toBeGreaterThan(satiety);
   });
   test('meal stock is reserved before training can spend it', () => {
-    const s = createGame(4);
+    const s = fundedShort(4);
+    const meals = s.resources.food;
     apply(s, { kind: 'order', ids: ['v1', 'v2', 'v3', 'v4', 'v5'], target: 'meal' });
-    expect(s.resources.food).toBe(90);
+    expect(s.resources.food).toBe(meals - 10);
     apply(s, { kind: 'train' });
     apply(s, { kind: 'train' });
     apply(s, { kind: 'train' });
     advance(s, 8);
-    expect(s.resources.food).toBe(55);
+    expect(s.resources.food).toBe(meals - 10 - 35);
   });
   test('moving interrupts a break and never uses gathering exertion', () => {
     const s = createGame(4);
@@ -200,10 +193,11 @@ describe('Commonstead fixed-tick simulation', () => {
     expect(v.person.activity?.effort).toBeLessThan(0.3);
   });
   test('training reserves food and completes once after fifteen ticks', () => {
-    const s = createGame(3);
+    const s = fundedShort(3);
+    const meals = s.resources.food;
     apply(s, { kind: 'train' });
     apply(s, { kind: 'train' });
-    expect(s.resources.food).toBe(65);
+    expect(s.resources.food).toBe(meals - 35);
     expect(s.villagers).toHaveLength(8);
     advance(s, 14);
     expect(s.villagers).toHaveLength(8);
@@ -237,7 +231,7 @@ describe('Commonstead fixed-tick simulation', () => {
 
 describe('published HF plain narration', () => {
   test('opts every fresh canonical resident and episode helper into persisted plain narration', () => {
-    const s = createGame(7);
+    const s = fundedShort(7);
     expect(s.villagers.every((v) => v.person.lexicon?.plainEnglish === true)).toBe(true);
     expect(s.villagers.every((v) => v.person.engine === FRAMEWORK_VERSION)).toBe(true);
     apply(s, { kind: 'train' });
@@ -271,15 +265,15 @@ describe('published HF plain narration', () => {
 });
 
 test('current reply schema is closed and requires an actual disclosure in every opening', () => {
-  const config = { edition: 'settlement-replies/1' } as const;
+  const config = { edition: 'settlement-replies/2' } as const;
   const s = createGame(42, undefined, config);
   const full = exportRun(s) as Record<string, unknown>;
-  expect(full.schema).toBe(12);
+  expect(full.schema).toBe(14);
   expect(importRun(full)).toEqual(s);
   expect(importRun(exportRun(s, true))).toEqual(s);
   for (const extra of [{ chapter: {} }, { surplus: true }, { compact: false }])
     expect(() => importRun({ ...full, ...extra })).toThrow(/replay/);
-  for (const legacy of [createGame(42), createGame(42, undefined, { edition: 'settlement-day/1' })]) {
+  for (const legacy of [createGame(42), createGame(42, undefined, { edition: 'settlement-replies/2' })]) {
     const before = JSON.stringify(legacy);
     expect(() => apply(legacy, { kind: 'reply', ids: ['v1'], branch: 'nora-restore-drawing' })).toThrow();
     expect(JSON.stringify(legacy)).toBe(before);
@@ -300,7 +294,7 @@ test('current reply schema is closed and requires an actual disclosure in every 
 
 test('reply day preserves existing building orders and pointer coordinates', () => {
   const jobs = [];
-  for (const edition of ['settlement-day/1', 'settlement-replies/1'] as const) {
+  for (const edition of ['settlement-replies/2'] as const) {
     for (const coordinates of [{}, { x: 650, y: 500 }]) {
       const s = createGame(42, undefined, { edition });
       apply(s, { kind: 'build', ids: ['v1'], building: 'house', x: 650, y: 500 });
@@ -313,7 +307,7 @@ test('reply day preserves existing building orders and pointer coordinates', () 
       jobs.push(job);
       expect(importRun(exportRun(s))).toEqual(s);
       expect(importRun(exportRun(s, true))).toEqual(s);
-      if (edition !== 'settlement-replies/1') continue;
+      if (edition !== 'settlement-replies/2') continue;
       for (const invalid of [
         { target: 'b999' },
         { target: undefined },
@@ -336,7 +330,7 @@ test('reply day preserves existing building orders and pointer coordinates', () 
 });
 
 test('native6 is closed, rejects stale route bindings and refuses peer commands in schema3/4/5 before installation', () => {
-  const editions = [undefined, 'settlement-day/1', 'settlement-replies/1', 'settlement-replies/2'] as const;
+  const editions = [undefined, 'settlement-replies/2'] as const;
   for (const edition of editions) {
     const s = createGame(418, undefined, edition ? { edition } : undefined);
     const raw = JSON.parse(JSON.stringify(exportRun(s)));
@@ -364,134 +358,11 @@ test('native6 is closed, rejects stale route bindings and refuses peer commands 
   expect(() => importRun(wrongInput)).toThrow(/not loaded/);
 });
 
-function completedShort(seed = 42) {
-  const s = createGame(seed);
-  const ids = s.villagers.map((v) => v.id);
-  apply(s, { kind: 'order', ids, target: 'wood' });
-  while (s.resources.wood < 180 && s.tick < 180) step(s);
-  apply(s, { kind: 'order', ids, target: 'stone' });
-  while (s.resources.stone < 120 && s.tick < 300) step(s);
-  apply(s, { kind: 'build', ids, building: 'storehouse', x: 600, y: 450 });
-  while (!s.buildings.some((b) => b.kind === 'storehouse' && b.complete) && s.tick < 599) step(s);
-  expect(s.buildings.some((b) => b.kind === 'storehouse' && b.complete)).toBe(true);
-  expect(s.tick).toBeLessThan(600);
-  return s;
-}
-
-test('short yield preserves the current host fields and HF archive with one exact game continuation', () => {
-  const yielded = completedShort(),
-    before = structuredClone(yielded);
-  const archiveBefore = archiveCommunity(first(yielded).person),
-    prefix = structuredClone(yielded.inputs);
-  apply(yielded, { kind: 'yield-day' });
-  expect((exportRun(yielded) as { schema: number }).schema).toBe(12);
-  expect(yielded.shortYield?.cutover).toBe(before.tick);
-  expect(yielded.inputs.slice(0, -1)).toEqual(prefix);
-  const { shortYield: _receipt, ...host } = yielded;
-  expect({ ...host, inputs: host.inputs.filter((input) => input.command.kind !== 'yield-day') }).toEqual(
-    before,
-  );
-  expect(archiveCommunity(first(yielded).person)).toEqual(archiveBefore);
-  advance(yielded, 5);
-  const restored = importRun(exportRun(yielded));
-  expect(restored).toEqual(yielded);
-  for (let i = 0; i < 5; i++) {
-    step(yielded);
-    step(restored);
-  }
-  expect(restored).toEqual(yielded);
-  expect(archiveCommunity(first(restored).person)).toEqual(archiveCommunity(first(yielded).person));
-}, 180_000);
-
-test('short yield rejects malformed cutovers and preserves pause and legacy boundaries', () => {
-  const checkpoint = completedShort();
-  for (const state of [
-    createGame(42),
-    createGame(42, undefined, { edition: 'settlement-day/1' }),
-    createGame(42, undefined, { edition: 'settlement-replies/1' }),
-    createGame(42, undefined, { edition: 'settlement-replies/2' }),
-  ]) {
-    const before = structuredClone(state);
-    expect(() => apply(state, { kind: 'yield-day' })).toThrow();
-    expect(state).toEqual(before);
-  }
-  const paused = importRun(exportRun(checkpoint));
-  apply(paused, { kind: 'pause-chapter' });
-  const beforePaused = structuredClone(paused);
-  expect(() => apply(paused, { kind: 'yield-day' })).toThrow();
-  expect(paused).toEqual(beforePaused);
-  apply(checkpoint, { kind: 'yield-day' });
-  for (const command of [
-    { kind: 'yield-day' },
-    { kind: 'yield-day', surplus: true },
-    { kind: 'train' },
-    { kind: 'order', ids: ['v1'], target: 'wood' },
-  ]) {
-    const before = structuredClone(checkpoint);
-    expect(() => apply(checkpoint, command as Parameters<typeof apply>[1])).toThrow();
-    expect(checkpoint).toEqual(before);
-  }
-  apply(checkpoint, { kind: 'pause-chapter' });
-  for (let i = 0; i < 100 && !checkpoint.chapterPaused; i++) step(checkpoint);
-  expect(checkpoint.chapterPaused).toBe(true);
-  const held = structuredClone(checkpoint);
-  step(checkpoint);
-  expect(checkpoint).toEqual(held);
-  expect(importRun(exportRun(checkpoint, true))).toEqual(held);
-  apply(checkpoint, { kind: 'resume-chapter' });
-  const raw = exportRun(checkpoint) as Record<string, unknown>;
-  const compact = exportRun(checkpoint, true) as Record<string, unknown>;
-  const inputs = checkpoint.inputs;
-  for (const bad of [
-    { ...raw, schema: 3 },
-    { ...raw, unknown: true },
-    { ...raw, config: { edition: 'settlement-day/1' } },
-    { ...raw, extension: { version: 'short-yield/2', cutover: held.shortYield?.cutover } },
-    { ...raw, extension: { version: 'short-yield/1', cutover: 0 } },
-    { ...raw, state: { ...checkpoint, won: true } },
-    { ...compact, compact: false },
-    { ...compact, state: checkpoint },
-    { ...compact, inputs: [...inputs, { tick: checkpoint.tick, command: { kind: 'yield-day' } }] },
-    { ...compact, inputs: [...inputs, { tick: checkpoint.tick, command: { kind: 'train' } }] },
-    { ...compact, inputs: inputs.map((i, n) => (n === 0 ? { ...i, unknown: true } : i)) },
-    { ...compact, inputs: inputs.map((i, n) => (n === 0 ? { ...i, command: { kind: 'unknown' } } : i)) },
-    {
-      ...compact,
-      inputs: inputs.map((i, n) => (n === 0 ? { ...i, command: { ...i.command, ids: ['v1', 'v1'] } } : i)),
-    },
-    { ...compact, tick: Number.MAX_SAFE_INTEGER + 1 },
-    { ...compact, hash: 'x'.repeat(20_000_001) },
-    JSON.parse(JSON.stringify(compact).replace('"hash":', '"__proto__":{},"hash":')),
-  ]) {
-    const before = JSON.stringify(bad);
-    expect(() => importRun(bad)).toThrow(/not loaded/);
-    expect(JSON.stringify(bad)).toBe(before);
-  }
-  while (!checkpoint.ended) step(checkpoint);
-  const ended = structuredClone(checkpoint);
-  expect(() => apply(checkpoint, { kind: 'yield-day' })).toThrow();
-  expect(checkpoint).toEqual(ended);
-});
-
-test('short yield batches honor inactive and recorded pause boundaries and display rename preserves raw bytes', () => {
-  const s = completedShort();
-  const originalMessage = createGame(42).message;
-  expect(originalMessage).toContain('Alder Quay');
-  expect(publicPlaceText(originalMessage)).toContain('Mill Bridge');
-  apply(s, { kind: 'yield-day' });
-  const held = structuredClone(s);
-  expect(stepYieldBatch(s, false)).toBe(0);
-  expect(s).toEqual(held);
-  expect(stepYieldBatch(s, true)).toBe(12);
-  expect(s.tick).toBe(held.tick + 12);
-  apply(s, { kind: 'pause-chapter' });
-  while (!s.chapterPaused) stepYieldBatch(s, true);
-  const paused = structuredClone(s);
-  expect(stepYieldBatch(s, true)).toBe(0);
-  expect(s).toEqual(paused);
-  apply(s, { kind: 'resume-chapter' });
-  while (!s.ended) expect(stepYieldBatch(s, true)).toBeLessThanOrEqual(12);
-  expect(s.tick).toBe(600);
-  expect(stepYieldBatch(s, true)).toBe(0);
-  expect(s.shortYield?.chronicle.at(-1)).toEqual({ tick: 600, text: s.message });
+// Historical no-pressure yield controls are retained in the immutable c98 source packet.
+// HF4 refuses that history. The current remainder action is covered by remaining-host.test.ts.
+test('current short pressure refuses the historical yield-day command before changing state', () => {
+  const s = createGame(42);
+  const before = JSON.stringify(s);
+  expect(() => apply(s, { kind: 'yield-day' })).toThrow();
+  expect(JSON.stringify(s)).toBe(before);
 });

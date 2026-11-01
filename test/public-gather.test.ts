@@ -1,10 +1,11 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test, vi } from 'vitest';
 import * as hf from '../src/hf4';
 import { CACHE_POINT, settlementPublicHost } from '../src/settlement';
 import { apply, createGame, step } from '../src/sim';
 
 function atCache() {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1'], target: 'move', ...CACHE_POINT });
   while (s.tick < 80 && s.settlement!.actors.v1!.job) step(s);
   expect(
@@ -131,7 +132,7 @@ for (const changed of [false, true])
   });
 
 test('retained travel toward a blocked gather neither witnesses conflict nor reserves the trolley', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' }),
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' }),
     v = s.villagers[0]!,
     w = s.settlement!;
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });

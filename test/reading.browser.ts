@@ -2,11 +2,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import type { Browser } from '@playwright/test';
-import { REPLY_EDITION } from '../src/settlement-scenes.ts';
+import { EDITION } from '../src/settlement.ts';
 import { createGame, exportRun, importRun, step } from '../src/sim.ts';
 
 export async function control(browser: Browser, url: string) {
-  const s = createGame(418, undefined, { edition: REPLY_EDITION });
+  const s = createGame(418, undefined, { edition: EDITION });
   const context = await browser.newContext({ viewport: { width: 360, height: 690 }, acceptDownloads: true });
   await context.route('**/*', (r) => (r.request().url().startsWith(url) ? r.continue() : r.abort()));
   await context.addInitScript((run) => {

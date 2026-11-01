@@ -11,3 +11,7 @@ An optional closing word uses a matching completed native result, explicitly dat
 New state appears only after an accepted public-exchange command. Current-version schema12 files without that command keep their original input path. Older HF files may refuse before adoption. Unsupported outgoing publication still refuses before writes. Whole-game acceptance, final compatibility files and final native/durable proofs remain separate gates.
 
 The short yard uses the ordinary fifteen-unit arrival boundary for public meetings. Long meetings retain their five-unit boundary. Rejected build requests keep the native invitation and prior work owner; a replay-derived refusal receipt prevents the rejected input from replacing a valid earlier work source. Edited refusal receipts are not import authority.
+
+## Current host policy, 2026-10-29
+
+The schema12 continuation statement above is historical. Current public words use the single applicable behavior set in schema13/current policy1. Older host files are refused with keep-original/start-fresh wording. Existing actual invitation, work, speech, attention and source guards remain; no legacy feature path is offered. See current-policy.md.

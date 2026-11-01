@@ -1,5 +1,6 @@
 import { canonicalPersona } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES, openingProfile } from './cast.ts';
+import { CURRENT_POLICY, CURRENT_SCHEMA, requireCurrentRun, requireCurrentScenario } from './current-policy';
 import { admissionLine, assignmentText, nextTask, residentName } from './display.ts';
 import { FRAMEWORK_VERSION } from './engine';
 import {
@@ -17,6 +18,14 @@ import {
   stageOutcome,
   tick as tickPerson,
 } from './hf4';
+import {
+  finishMorningWorkshop,
+  type MorningWorkshop,
+  morningWorkshopView,
+  registerMorningCabin,
+  startMorningWorkshop,
+  workshopDeadlineReached,
+} from './morning-workshop';
 import { admitResident, type Chapter, checkChapter, lifeAdmission } from './passport.ts';
 import { openPlacementGround } from './placement.ts';
 import {
@@ -40,7 +49,7 @@ import type { PublicCommand } from './public-voice-content';
 import {
   applySettlement,
   initSettlement,
-  LONG_ROOF_RETURN,
+  type LONG_ROOF_RETURN,
   type LongRoofAttempt,
   longRoofUnavailable,
   requestLongRoof,
@@ -54,14 +63,8 @@ import {
   validateReply,
   type YieldReturn,
 } from './settlement.ts';
-import {
-  activePeer,
-  hasReplies,
-  PEER_EDITION,
-  type PeerCommand,
-  validatePeer,
-} from './settlement-dialogue.ts';
-import { REPLIES, REPLY_EDITION, type ReplyBranch } from './settlement-scenes.ts';
+import { activePeer, type PeerCommand, validatePeer } from './settlement-dialogue.ts';
+import { REPLIES, type ReplyBranch } from './settlement-scenes.ts';
 import { STORY_CHOICES, type StoryChoice } from './story-content.ts';
 import {
   activeStory,
@@ -80,7 +83,7 @@ import {
   stageStories,
   stepStory,
 } from './story-records.ts';
-import { continueWorkshop } from './workshop-continuation.ts';
+import { continueWorkshop, retainWorkshopClosing } from './workshop-continuation.ts';
 
 export function taskLabel(target: string): string {
   return (
@@ -99,6 +102,7 @@ export type Resource = 'food' | 'wood' | 'stone';
 export type Command =
   | PublicCommand
   | { kind: 'continue-workshop' }
+  | { kind: 'start-morning-workshop' }
   | { kind: 'remainder'; action: 'start' | 'stop' }
   | { kind: 'story-act'; ids: string[]; choice: StoryChoice | 'read-card' }
   | { kind: 'evening'; action: 'continue' | 'close' | 'keep-playing' }
@@ -164,6 +168,8 @@ export type RoofBreak = {
 };
 export const ROOF_RETURN = 'roof-break-return/1';
 export type State = {
+  policy: typeof CURRENT_POLICY;
+  morningWorkshop: MorningWorkshop | null;
   remainder?: { startedAt: number; running: boolean };
   story?: StoryState;
   continuedWorkshop?: {
@@ -260,7 +266,8 @@ export function createGame(
   rules?: typeof PRESSURE,
 ): State {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error('Invalid seed');
-  if (rules !== undefined && (rules !== PRESSURE || config)) throw new Error('Invalid rules');
+  requireCurrentScenario(config, rules);
+  if (!config) rules = PRESSURE;
   openCommunity(seed, !!config);
   const villagers = Array.from({ length: 8 }, (_, i) => makeVillager(seed, i + 1));
   if (chapter) {
@@ -286,6 +293,8 @@ export function createGame(
     }
   }
   const state: State = {
+    policy: CURRENT_POLICY,
+    morningWorkshop: null,
     seed,
     chapter: chapter ? structuredClone(chapter) : null,
     pauseRequested: false,
@@ -586,6 +595,13 @@ export function publicPlaceText(text: string): string {
 
 export function apply(s: State, c: GameCommand): void {
   if (publishing.has(s)) return;
+  if (c.kind === 'start-morning-workshop') {
+    exactKeys(c, ['kind']);
+    if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
+    startMorningWorkshop(s);
+    s.inputs.push({ tick: s.tick, command: { kind: 'start-morning-workshop' } });
+    return;
+  }
   if (c.kind === 'continue-workshop') {
     exactKeys(c, ['kind']);
     if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
@@ -634,7 +650,7 @@ export function apply(s: State, c: GameCommand): void {
       throw new Error('Choose one resident and an available reply.');
     if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
     // CS-R7: reply editions use the same actual owner for both public first-reply commands.
-    if (s.settlement && hasReplies(s.settlement.config.edition) && Object.hasOwn(REPLIES, c.choice)) {
+    if (s.settlement && Object.hasOwn(REPLIES, c.choice)) {
       const reply = { kind: 'reply' as const, ids: c.ids, branch: c.choice as ReplyBranch };
       validateReply(s, reply);
       requestReply(s, reply);
@@ -666,8 +682,9 @@ export function apply(s: State, c: GameCommand): void {
       s.story.close = { requestedAt: s.tick };
       s.message = 'Ending the evening when current actions reach their next boundary.';
     } else {
-      delete s.story.close;
-      s.message = 'Continue tonight.';
+      if (s.settlement) delete s.story.close;
+      else retainWorkshopClosing(s);
+      s.message = s.morningWorkshop ? 'Continue the morning task.' : 'Continue tonight.';
     }
     s.inputs.push({ tick: s.tick, command: structuredClone(c) });
     return;
@@ -741,7 +758,7 @@ export function apply(s: State, c: GameCommand): void {
     if (s.inputs.length >= 10000) throw new Error('The run input limit has been reached.');
   }
   if (c.kind === 'peer') validatePeer(s, c);
-  if (s.settlement && hasReplies(s.settlement.config.edition)) {
+  if (s.settlement) {
     if (c.kind !== 'peer') validateReplyCommand(s, c);
     if (
       'ids' in c &&
@@ -878,6 +895,7 @@ export function apply(s: State, c: GameCommand): void {
       complete: false,
     };
     s.buildings.push(b);
+    if (b.kind === 'house') registerMorningCabin(s, b.id);
     for (const v of selected)
       note(s, v.id, { asked: true, [c.building === 'house' ? 'cabin' : 'store']: true });
     for (const v of selected)
@@ -1135,7 +1153,12 @@ export function step(s: State): void {
           tick: s.tick,
           text: `The ${taskLabel(b.kind)} (${b.id}) was completed.`,
         });
-        s.message = `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? (s.rules ? 'The shared supplies will stay dry. Before the storm, save meals for the storm day, let tired people rest, and bring everyone under a roof.' : 'The shared supplies are ready for the storm.') : 'There is room for two more people.'}`;
+        const morning = morningWorkshopView(s);
+        s.message = morning
+          ? `The ${taskLabel(b.kind)} is finished. ${morning.cabinLine} ${morning.mealLine} ${morning.objective}`
+          : s.continuedWorkshop
+            ? `The ${taskLabel(b.kind)} is finished. The earlier storm result remains recorded.`
+            : `The ${taskLabel(b.kind)} is finished. ${b.kind === 'storehouse' ? (s.rules ? 'The shared supplies will stay dry. Before the storm, save meals for the storm day, let tired people rest, and bring everyone under a roof.' : 'The shared supplies are ready for the storm.') : 'There is room for two more people.'}`;
       }
     }
     if (b?.complete) {
@@ -1149,7 +1172,7 @@ export function step(s: State): void {
   if (
     s.continuedWorkshop &&
     ((s.story?.close && s.villagers.every((v) => !v.person.activity && !activeStory(s, v.id))) ||
-      s.villagers[0]!.person.now * 60000 >= s.continuedWorkshop.endAtMs)
+      workshopDeadlineReached(s))
   ) {
     for (const v of s.villagers) {
       interruptStory(s, v.id, 'The continued workshop ended at its actual boundary.');
@@ -1158,7 +1181,10 @@ export function step(s: State): void {
     s.ended = true;
     s.chapterPaused = true;
     if (s.story?.close) s.story.close.committedAt = s.tick;
-    s.message = 'This continued workshop ended. Unfinished work remains unfinished.';
+    finishMorningWorkshop(s);
+    s.message = s.morningWorkshop
+      ? 'The morning task ended. Its actual cabin work and counted meals are shown in the result.'
+      : 'This continued workshop ended. Unfinished work remains unfinished.';
   }
   if (s.pauseRequested && s.villagers.every((v) => !v.person.activity)) {
     s.chapterPaused = true;
@@ -1214,228 +1240,6 @@ export function stateHash(s: State): string {
   }
   return (h >>> 0).toString(16).padStart(8, '0');
 }
-function* replaySteps(
-  seed: number,
-  inputs: Input[],
-  tick: number,
-  chapter?: Chapter,
-  config?: SettlementConfig,
-  allowYield = false,
-  rules?: typeof PRESSURE,
-  allowRoof = false,
-  allowLongRoof = false,
-): Generator<number, State, void> {
-  const limit = config ? 1800 : 600;
-  if (!Number.isInteger(tick) || tick < 0 || tick > limit || !Array.isArray(inputs) || inputs.length > 10000)
-    throw new Error('Invalid replay bounds');
-  if (!allowLongRoof && inputs.some((i) => i?.command?.kind === 'long-roof-break-return'))
-    throw new Error('Long roof command requires its native extension');
-  if (!allowRoof && inputs.some((i) => i?.command?.kind === 'roof-break-return'))
-    throw new Error('Roof command requires its native extension');
-  if (!allowYield && inputs.some((i) => i?.command?.kind === 'yield-day'))
-    throw new Error('Yield command in legacy schema');
-  if (!hasReplies(config?.edition ?? '') && inputs.some((i) => i?.command?.kind === 'reply'))
-    throw new Error('Reply command in legacy edition');
-  if (config?.edition !== PEER_EDITION && inputs.some((i) => i?.command?.kind === 'peer'))
-    throw new Error('Peer command in legacy edition');
-  const s = createGame(seed, chapter, config, rules);
-  let previous = -1;
-  for (const input of inputs) {
-    if (allowLongRoof) {
-      exactKeys(input, ['tick', 'command']);
-      if (input.command.kind === 'long-roof-break-return')
-        validateRoofCommand({ ...input.command, kind: 'roof-break-return' });
-      else validateLongBaseInput(input.command);
-    }
-    if (allowYield || rules) {
-      exactKeys(input, ['tick', 'command']);
-      validateShortInput(input.command, allowRoof);
-    }
-    if (hasReplies(config?.edition ?? '')) {
-      exactKeys(input, ['tick', 'command']);
-    }
-    if (
-      !Number.isInteger(input.tick) ||
-      input.tick < previous ||
-      input.tick > tick ||
-      input.tick < 0 ||
-      (input.tick >= limit && input.command.kind !== 'pause-chapter')
-    )
-      throw new Error('Invalid replay input tick');
-    while (s.tick < input.tick) {
-      const before = s.tick;
-      step(s);
-      yield s.tick;
-      if (before === s.tick) throw new Error('Replay advances a paused chapter');
-    }
-    apply(s, input.command);
-    previous = input.tick;
-  }
-  while (s.tick < tick) {
-    const before = s.tick;
-    step(s);
-    yield s.tick;
-    if (before === s.tick) throw new Error('Replay advances a paused chapter');
-  }
-  return s;
-}
-function gameEnvelope(s: State, compact = false): unknown {
-  if (s.longRoofBreak)
-    return {
-      schema: 10,
-      framework: FRAMEWORK_VERSION,
-      rules: LONG_ROOF_RETURN,
-      ...(s.chapter ? { chapter: structuredClone(s.chapter) } : {}),
-      config: structuredClone(s.settlement!.config),
-      extension: { version: LONG_ROOF_RETURN },
-      seed: s.seed,
-      tick: s.tick,
-      inputs: structuredClone(s.inputs),
-      hash: stateHash(s),
-      ...(compact ? { compact: true } : { state: JSON.parse(JSON.stringify(s)) }),
-    };
-  if (s.roofBreak)
-    return {
-      schema: 9,
-      framework: FRAMEWORK_VERSION,
-      rules: ROOF_RETURN,
-      baseRules: PRESSURE,
-      extension: { version: ROOF_RETURN },
-      chapter: structuredClone(s.chapter),
-      seed: s.seed,
-      tick: s.tick,
-      inputs: structuredClone(s.inputs),
-      hash: stateHash(s),
-      ...(compact ? { compact: true } : { state: structuredClone(s) }),
-    };
-  if (s.rules)
-    return {
-      schema: 8,
-      framework: FRAMEWORK_VERSION,
-      rules: s.rules,
-      chapter: structuredClone(s.chapter),
-      seed: s.seed,
-      tick: s.tick,
-      inputs: structuredClone(s.inputs),
-      hash: stateHash(s),
-      ...(compact ? { compact: true } : { state: structuredClone(s) }),
-    };
-  if (s.shortYield)
-    return {
-      schema: 7,
-      framework: FRAMEWORK_VERSION,
-      chapter: structuredClone(s.chapter),
-      seed: s.seed,
-      tick: s.tick,
-      inputs: structuredClone(s.inputs),
-      hash: stateHash(s),
-      extension: { version: s.shortYield.version, cutover: s.shortYield.cutover },
-      ...(compact ? { compact: true } : { state: structuredClone(s) }),
-    };
-  if (s.settlement)
-    return {
-      schema:
-        s.settlement.config.edition === PEER_EDITION
-          ? 6
-          : s.settlement.config.edition === REPLY_EDITION
-            ? 5
-            : 4,
-      framework: FRAMEWORK_VERSION,
-      ...(s.chapter ? { chapter: structuredClone(s.chapter) } : {}),
-      config: structuredClone(s.settlement.config),
-      seed: s.seed,
-      tick: s.tick,
-      inputs: structuredClone(s.inputs),
-      hash: stateHash(s),
-      ...(compact
-        ? { compact: true }
-        : {
-            state: hasReplies(s.settlement.config.edition)
-              ? JSON.parse(JSON.stringify(s))
-              : structuredClone(s),
-          }),
-    };
-  return {
-    schema: 3,
-    framework: FRAMEWORK_VERSION,
-    chapter: structuredClone(s.chapter),
-    seed: s.seed,
-    tick: s.tick,
-    inputs: structuredClone(s.inputs),
-    state: structuredClone(s),
-    hash: stateHash(s),
-  };
-}
-function* importGameEnvelopeSteps(raw: unknown): Generator<number, State, void> {
-  try {
-    if (!raw || typeof raw !== 'object') throw new Error('format');
-    if ((raw as { schema?: unknown }).schema === 10) return yield* importLongRoofSteps(raw);
-    if ((raw as { schema?: unknown }).schema === 9) return yield* importRoofBreakSteps(raw);
-    if ((raw as { schema?: unknown }).schema === 7) return yield* importShortYieldSteps(raw);
-    if ((raw as { schema?: unknown }).schema === 8) return yield* importPressureSteps(raw);
-    const r = raw as {
-      chapter: Chapter | null;
-      schema: number;
-      config?: SettlementConfig;
-      compact?: boolean;
-      framework: string;
-      seed: number;
-      tick: number;
-      inputs: Input[];
-      state: State;
-      hash: string;
-    };
-    if (
-      r.framework !== FRAMEWORK_VERSION ||
-      ![3, 4, 5, 6].includes(r.schema) ||
-      (r.schema === 4 &&
-        (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== 'settlement-day/1')) ||
-      (r.schema === 5 &&
-        (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== REPLY_EDITION)) ||
-      (r.schema === 6 &&
-        (!r.config || Object.keys(r.config).length !== 1 || r.config.edition !== PEER_EDITION)) ||
-      (r.schema === 3 && r.config)
-    )
-      throw new Error('version');
-    if (r.schema === 5 || r.schema === 6) {
-      requireJson(raw);
-      exactKeys(
-        raw,
-        [
-          'schema',
-          'framework',
-          'config',
-          'seed',
-          'tick',
-          'inputs',
-          'hash',
-          r.compact === true ? 'compact' : 'state',
-        ],
-        ['chapter'],
-      );
-      if (r.compact !== undefined && r.compact !== true) throw new Error('compact');
-    }
-    const s = yield* replaySteps(
-      r.seed,
-      r.inputs,
-      r.tick,
-      r.chapter ?? undefined,
-      r.schema >= 4 ? r.config : undefined,
-    );
-    if (
-      (r.compact !== true && stable(s) !== stable(r.state)) ||
-      (r.compact === true && (![4, 5, 6].includes(r.schema) || r.state !== undefined)) ||
-      stateHash(s) !== r.hash
-    )
-      throw new Error('state mismatch');
-    return s;
-  } catch {
-    throw new Error(
-      'This file does not replay the same way in this version of Commonstead. It may come from an older version. The file was not loaded. Start a new game instead.',
-    );
-  }
-}
-
 function exactKeys(
   raw: unknown,
   required: string[],
@@ -1495,20 +1299,6 @@ function validateReplyCommand(s: State, raw: unknown): void {
   } else throw new Error('Unknown reply-day command');
 }
 
-function requireJson(value: unknown): void {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
-  if (typeof value === 'number' && Number.isFinite(value)) return;
-  if (Array.isArray(value)) {
-    for (const v of value) requireJson(v);
-    return;
-  }
-  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
-    for (const v of Object.values(value)) requireJson(v);
-    return;
-  }
-  throw new Error('Only complete JSON data is accepted in reply notebooks');
-}
-
 function requireShortJson(value: unknown, depth = 0): void {
   if (depth > 100) throw new Error('JSON nesting limit');
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
@@ -1532,145 +1322,6 @@ function requireShortJson(value: unknown, depth = 0): void {
   throw new Error('Only complete JSON data is accepted in reply notebooks');
 }
 
-/** Closed native schema; archive ownership metadata is validated by Continuity separately. */
-function* importShortYieldSteps(raw: unknown): Generator<number, State, void> {
-  requireShortJson(raw);
-  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized short run');
-  const r = raw as Record<string, unknown>;
-  exactKeys(r, [
-    'schema',
-    'framework',
-    'chapter',
-    'seed',
-    'tick',
-    'inputs',
-    'hash',
-    'extension',
-    r.compact === true ? 'compact' : 'state',
-  ]);
-  if (r.framework !== FRAMEWORK_VERSION || (r.compact !== undefined && r.compact !== true))
-    throw new Error('version');
-  exactKeys(r.extension, ['version', 'cutover']);
-  if (
-    r.extension.version !== 'short-yield/1' ||
-    !Number.isSafeInteger(r.extension.cutover) ||
-    (r.extension.cutover as number) < 0 ||
-    (r.extension.cutover as number) >= 600
-  )
-    throw new Error('cutover');
-  if (r.chapter !== null) checkChapter(r.chapter as Chapter);
-  const inputs = r.inputs as Input[];
-  if (!Array.isArray(inputs) || inputs.length > 10000) throw new Error('inputs');
-  const yields = inputs.filter((i) => i?.command?.kind === 'yield-day');
-  if (yields.length !== 1 || yields[0]?.tick !== r.extension.cutover) throw new Error('cutover');
-  const s = yield* replaySteps(
-    r.seed as number,
-    inputs,
-    r.tick as number,
-    (r.chapter as Chapter | null) ?? undefined,
-    undefined,
-    true,
-  );
-  if (
-    !s.shortYield ||
-    stable(s.inputs) !== stable(inputs) ||
-    stable({ version: s.shortYield.version, cutover: s.shortYield.cutover }) !== stable(r.extension) ||
-    stateHash(s) !== r.hash ||
-    (r.compact !== true && stable(s) !== stable(r.state))
-  )
-    throw new Error('state mismatch');
-  return s;
-}
-
-/** Closed native schema 8: the default short chapter under `pressure/1`. */
-function* importPressureSteps(raw: unknown): Generator<number, State, void> {
-  requireShortJson(raw);
-  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
-  const r = raw as Record<string, unknown>;
-  exactKeys(r, [
-    'schema',
-    'framework',
-    'rules',
-    'chapter',
-    'seed',
-    'tick',
-    'inputs',
-    'hash',
-    r.compact === true ? 'compact' : 'state',
-  ]);
-  if (
-    r.framework !== FRAMEWORK_VERSION ||
-    r.rules !== PRESSURE ||
-    (r.compact !== undefined && r.compact !== true)
-  )
-    throw new Error('version');
-  if (r.chapter !== null) checkChapter(r.chapter as Chapter);
-  const inputs = r.inputs as Input[];
-  if (!Array.isArray(inputs) || inputs.length > 10000) throw new Error('inputs');
-  const s = yield* replaySteps(
-    r.seed as number,
-    inputs,
-    r.tick as number,
-    (r.chapter as Chapter | null) ?? undefined,
-    undefined,
-    false,
-    PRESSURE,
-  );
-  if (
-    stable(s.inputs) !== stable(inputs) ||
-    stateHash(s) !== r.hash ||
-    (r.compact !== true && stable(s) !== stable(r.state))
-  )
-    throw new Error('state mismatch');
-  return s;
-}
-
-function* importRoofBreakSteps(raw: unknown): Generator<number, State, void> {
-  requireShortJson(raw);
-  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
-  const r = raw as Record<string, unknown>;
-  exactKeys(r, [
-    'schema',
-    'framework',
-    'rules',
-    'baseRules',
-    'extension',
-    'chapter',
-    'seed',
-    'tick',
-    'inputs',
-    'hash',
-    r.compact === true ? 'compact' : 'state',
-  ]);
-  exactKeys(r.extension, ['version']);
-  if (
-    r.framework !== FRAMEWORK_VERSION ||
-    r.rules !== ROOF_RETURN ||
-    r.baseRules !== PRESSURE ||
-    r.extension.version !== ROOF_RETURN ||
-    (r.compact !== undefined && r.compact !== true)
-  )
-    throw new Error('version');
-  if (r.chapter !== null) checkChapter(r.chapter as Chapter);
-  const s = yield* replaySteps(
-    r.seed as number,
-    r.inputs as Input[],
-    r.tick as number,
-    (r.chapter as Chapter | null) ?? undefined,
-    undefined,
-    false,
-    PRESSURE,
-    true,
-  );
-  if (
-    !s.roofBreak ||
-    stable(s.inputs) !== stable(r.inputs) ||
-    stateHash(s) !== r.hash ||
-    (r.compact !== true && stable(s) !== stable(r.state))
-  )
-    throw new Error('state mismatch');
-  return s;
-}
 function validateShortInput(raw: unknown, allowRoof = false, actualIds?: string[]): void {
   if (allowRoof && (raw as { kind?: string })?.kind === 'roof-break-return') {
     validateRoofCommand(raw);
@@ -1709,58 +1360,6 @@ function validateShortInput(raw: unknown, allowRoof = false, actualIds?: string[
     if (!['house', 'storehouse'].includes(c.building) || !Number.isFinite(c.x) || !Number.isFinite(c.y))
       throw new Error('build');
   } else throw new Error('Unknown short command');
-}
-
-/** Closed schema10, independently named from pressure/1 and the old supported passports. */
-function* importLongRoofSteps(raw: unknown): Generator<number, State, void> {
-  requireShortJson(raw);
-  if (JSON.stringify(raw).length > 20_000_000) throw new Error('Oversized run');
-  const r = raw as Record<string, unknown>;
-  exactKeys(
-    r,
-    [
-      'schema',
-      'framework',
-      'rules',
-      'config',
-      'extension',
-      'seed',
-      'tick',
-      'inputs',
-      'hash',
-      r.compact === true ? 'compact' : 'state',
-    ],
-    ['chapter'],
-  );
-  if (r.chapter !== undefined && r.chapter !== null) checkChapter(r.chapter as Chapter);
-  exactKeys(r.extension, ['version']);
-  exactKeys(r.config, ['edition']);
-  if (
-    r.framework !== FRAMEWORK_VERSION ||
-    r.rules !== LONG_ROOF_RETURN ||
-    r.extension.version !== LONG_ROOF_RETURN ||
-    (r.compact !== undefined && r.compact !== true)
-  )
-    throw new Error('version');
-  const s = yield* replaySteps(
-    r.seed as number,
-    r.inputs as Input[],
-    r.tick as number,
-    (r.chapter as Chapter | null) ?? undefined,
-    r.config as SettlementConfig,
-    false,
-    undefined,
-    false,
-    true,
-  );
-  if (
-    !s.longRoofBreak ||
-    stable(s.inputs) !== stable(r.inputs) ||
-    stateHash(s) !== r.hash ||
-    (r.compact !== true && stable(s) !== stable(r.state))
-  )
-    throw new Error('state mismatch');
-  return s;
 }
 
 /** Shape validation only: base-day targets can already be complete or refused. Their ordinary
@@ -1808,39 +1407,61 @@ function validateLongBaseInput(raw: unknown, actualIds?: string[]): void {
 
 /** Full and compact files retain HF's exact archive as well as the host input log. */
 export function exportRun(s: State, compact = false): unknown {
-  if (s.yieldReturn || s.story)
-    return {
-      schema: 12,
-      framework: FRAMEWORK_VERSION,
-      seed: s.seed,
-      tick: s.tick,
-      chapter: s.chapter,
-      config: s.settlement?.config ?? null,
-      rules: s.rules ?? null,
-      inputs: structuredClone(s.inputs),
-      hash: stateHash(s),
-      ...(compact ? { compact: true } : { state: JSON.parse(JSON.stringify(s)) }),
-      hf: archiveCommunity(s.villagers[0]!.person),
-    };
+  if (s.policy !== CURRENT_POLICY) throw new Error('Only the current host policy can be exported.');
+  const config = s.settlement?.config;
+  requireCurrentScenario(config, s.rules);
+  if (!config && s.rules !== PRESSURE) throw new Error('The short scenario requires pressure rules.');
   return {
-    ...(gameEnvelope(s, compact) as Record<string, unknown>),
+    schema: CURRENT_SCHEMA,
+    policy: CURRENT_POLICY,
+    framework: FRAMEWORK_VERSION,
+    seed: s.seed,
+    tick: s.tick,
+    chapter: s.chapter,
+    config: config ?? null,
+    rules: s.rules ?? null,
+    inputs: structuredClone(s.inputs),
+    hash: stateHash(s),
+    ...(compact ? { compact: true } : { state: JSON.parse(JSON.stringify(s)) }),
     hf: archiveCommunity(s.villagers[0]!.person),
   };
 }
 function* importRunSteps(raw: unknown, checked = false): Generator<number, State, void> {
-  if (!raw || typeof raw !== 'object' || !('hf' in raw))
-    throw new Error(
-      'This file was saved by an older Commonstead version. Keep the file and start a fresh game.',
-    );
+  requireCurrentRun(raw);
   const { hf, ...host } = raw as Record<string, unknown>;
   try {
     let s: State;
-    if (host.schema === 12) {
+    {
+      requireShortJson(host);
       exactKeys(
         host,
         host.compact === true
-          ? ['schema', 'framework', 'seed', 'tick', 'chapter', 'config', 'rules', 'inputs', 'hash', 'compact']
-          : ['schema', 'framework', 'seed', 'tick', 'chapter', 'config', 'rules', 'inputs', 'hash', 'state'],
+          ? [
+              'schema',
+              'policy',
+              'framework',
+              'seed',
+              'tick',
+              'chapter',
+              'config',
+              'rules',
+              'inputs',
+              'hash',
+              'compact',
+            ]
+          : [
+              'schema',
+              'policy',
+              'framework',
+              'seed',
+              'tick',
+              'chapter',
+              'config',
+              'rules',
+              'inputs',
+              'hash',
+              'state',
+            ],
       );
       if (
         host.framework !== FRAMEWORK_VERSION ||
@@ -1876,6 +1497,7 @@ function* importRunSteps(raw: unknown, checked = false): Generator<number, State
             'evening',
             'remainder',
             'continue-workshop',
+            'start-morning-workshop',
           ].includes(input.command.kind)
         ) {
           if (input.command.kind === 'long-roof-break-return' || input.command.kind === 'roof-break-return')
@@ -1914,17 +1536,15 @@ function* importRunSteps(raw: unknown, checked = false): Generator<number, State
         (host.state !== undefined && stable(host.state) !== stable(s))
       )
         throw new Error('Current run differs from its actual input history.');
-    } else s = yield* importGameEnvelopeSteps(host);
-    if (checked) {
-      // The worker checked public HF admission. Keep the actual replay-created Run
-      // only when its entire archive equals the selected archive, including journals.
-      if (stable(archiveCommunity(s.villagers[0]!.person)) !== stable(hf))
-        throw new Error('The game log and complete HF archive disagree.');
-    } else restoreCommunity(s.villagers[0]!.person, hf as Parameters<typeof restoreCommunity>[1]);
+    }
+    // Both entry modes compare the entire independently reconstructed archive.
+    if (stable(archiveCommunity(s.villagers[0]!.person)) !== stable(hf))
+      throw new Error('The game log and complete HF archive disagree.');
+    if (!checked) restoreCommunity(s.villagers[0]!.person, hf as Parameters<typeof restoreCommunity>[1]);
     return s;
   } catch {
     throw new Error(
-      'This file does not replay the same way in this version of Commonstead. It may come from an older version. The file was not loaded. Start a new game instead.',
+      'This file does not replay the same way in this version of Commonstead. It may come from an older version. The file was not loaded. Keep the original file. Start a new game instead.',
     );
   }
 }
@@ -2001,8 +1621,34 @@ function finishReplay(steps: Generator<number, State, void>): State {
     if (result.done) return result.value;
   }
 }
-export function replay(...args: Parameters<typeof replaySteps>): State {
-  return finishReplay(replaySteps(...args));
+export function replay(
+  seed: number,
+  inputs: Input[],
+  tick: number,
+  chapter?: Chapter,
+  config?: SettlementConfig,
+): State {
+  const s = createGame(seed, chapter, config);
+  let previous = -1;
+  if (!Array.isArray(inputs) || inputs.length > 10000 || !Number.isInteger(tick) || tick < 0 || tick > 10000)
+    throw new Error('Invalid replay bounds');
+  for (const input of inputs) {
+    if (!Number.isInteger(input.tick) || input.tick < previous || input.tick > tick)
+      throw new Error('Invalid replay input');
+    while (s.tick < input.tick) {
+      const before = s.tick;
+      step(s);
+      if (s.tick === before) throw new Error('Replay cannot advance this stopped run.');
+    }
+    apply(s, input.command);
+    previous = input.tick;
+  }
+  while (s.tick < tick) {
+    const before = s.tick;
+    step(s);
+    if (s.tick === before) throw new Error('Replay cannot advance this stopped run.');
+  }
+  return s;
 }
 export function importRun(raw: unknown): State {
   return finishReplay(importRunSteps(raw));
@@ -2016,6 +1662,7 @@ export async function importRunAsync(
   } = {},
 ): Promise<State> {
   options.signal?.throwIfAborted();
+  requireCurrentRun(raw);
   const candidate = structuredClone(raw);
   const { validateArchiveOffThread } = await import('./validation-client.ts');
   await validateArchiveOffThread(candidate, options);

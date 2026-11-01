@@ -1,9 +1,10 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { apply, createGame, step } from '../src/sim.ts';
 import { observedEvents } from '../src/work-observation.ts';
 
 test('ordinary long actual route witness can own a public pair exchange without a new edition', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v1', 'v2'], target: 'wood' });
   while (s.tick < 17) step(s);
   expect(s.settlement!.dispute).toEqual(['v2', 'v1']);

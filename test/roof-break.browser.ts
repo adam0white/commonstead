@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 // One actual-App synthetic sequence. Isolated storage, local network only, no owner browser state.
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -195,7 +196,7 @@ async function longControl(browser: Browser, url: string) {
         }
       };
     },
-    exportRun(createGame(418, undefined, { edition: 'settlement-day/1' })),
+    exportRun(createGame(418, undefined, { edition: 'settlement-replies/2' })),
   );
   const page = await context.newPage();
   const errors: string[] = [];

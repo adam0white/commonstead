@@ -1,4 +1,13 @@
-import { database, decodeSave, encodeSave, FILE_AGGREGATE_BYTES, type SaveRecord } from './save-store';
+import { CAST } from './cast';
+import { requireCurrentRun } from './current-policy';
+import {
+  COMPLETE_BYTES,
+  database,
+  decodeSave,
+  encodeSave,
+  FILE_AGGREGATE_BYTES,
+  type SaveRecord,
+} from './save-store';
 
 export type PreparedAdmission = {
   id: string;
@@ -159,19 +168,109 @@ export class AdmissionStore {
     );
     return unchanged ? 'unclaimed' : 'unresolved';
   }
-  // CS-R4: only a never-forwarded, unchanged preparation can release the old save.
-  async discardUnforwarded(
+  // A forwarded empty CAS cannot claim anyone. Its pinned candidate must also be empty.
+  private async unusedForwarded(intent: Intent): Promise<boolean> {
+    if (
+      !Array.isArray(intent.claims) ||
+      intent.claims.length !== 0 ||
+      !Array.isArray(intent.accepted) ||
+      intent.accepted.length !== 0
+    )
+      return false;
+    const ids = CAST.map((c) => c.castId);
+    if (
+      !intent.expectedHeads ||
+      Object.keys(intent.expectedHeads).length !== ids.length ||
+      ids.some(
+        (id) =>
+          !Object.hasOwn(intent.expectedHeads, id) ||
+          (intent.expectedHeads[id] !== null && !/^[a-f0-9]{64}$/.test(intent.expectedHeads[id] ?? '')),
+      ) ||
+      !Array.isArray(intent.nonaccepted) ||
+      !same([...intent.nonaccepted].sort(), [...ids].sort())
+    )
+      return false;
+    try {
+      const saved = JSON.parse(await decodeSave(intent.candidate));
+      const run = saved.run;
+      requireCurrentRun(run);
+      const state = run.state as
+        | {
+            chapter?: unknown;
+            inputs?: unknown;
+            tick?: unknown;
+            ended?: unknown;
+            chapterPaused?: unknown;
+            pauseRequested?: unknown;
+            trainingUntil?: unknown;
+          }
+        | undefined;
+      const empty = (chapter: unknown) => {
+        const c = chapter as { claims?: unknown[]; inputs?: unknown[] } | null;
+        return (
+          !!c &&
+          Array.isArray(c.claims) &&
+          c.claims.length === 0 &&
+          Array.isArray(c.inputs) &&
+          c.inputs.length === 0
+        );
+      };
+      return (
+        saved.fileOrigin === false &&
+        Array.isArray(saved.heads) &&
+        saved.heads.length === 0 &&
+        Array.isArray(saved.sources) &&
+        saved.sources.length === 0 &&
+        run?.tick === 0 &&
+        Array.isArray(run.inputs) &&
+        run.inputs.length === 0 &&
+        state?.tick === 0 &&
+        Array.isArray(state.inputs) &&
+        state.inputs.length === 0 &&
+        state.ended === false &&
+        state.chapterPaused === false &&
+        state.pauseRequested === false &&
+        state.trainingUntil === null &&
+        empty(run.chapter) &&
+        empty(state?.chapter) &&
+        same(run.chapter, state?.chapter)
+      );
+    } catch {
+      return false;
+    }
+  }
+  // Exact source/candidate pin, current heads and previous save still own deletion.
+  async discardUnused(
     expected: AdmissionPin,
     heads: Record<string, unknown>,
     current: () => boolean,
   ): Promise<boolean> {
+    const snapshot = await this.read();
+    if (
+      !snapshot ||
+      !same(admissionPin(snapshot), expected) ||
+      !current() ||
+      (snapshot.phase !== 'prepared' &&
+        (snapshot.phase !== 'forwarded' || !(await this.unusedForwarded(snapshot))))
+    )
+      return false;
+    // Blob values are immutable, but JSON metadata does not identify their content.
+    // Preserve the verified snapshot's actual bytes, then compare under the deletion lock.
+    let verifiedBytes: Uint8Array;
+    try {
+      if (!(snapshot.candidate.bytes instanceof Blob) || snapshot.candidate.bytes.size > COMPLETE_BYTES)
+        return false;
+      verifiedBytes = new Uint8Array(await snapshot.candidate.bytes.arrayBuffer());
+    } catch {
+      return false;
+    }
     return this.transaction<boolean>((tx, done) => {
       const req = tx.objectStore('admission').get('intent');
       req.onsuccess = () => {
         const intent = req.result as Intent | undefined;
         if (
           !intent ||
-          intent.phase !== 'prepared' ||
+          !same(intent, snapshot) ||
           !same(admissionPin(intent), expected) ||
           !current() ||
           Object.entries(intent.expectedHeads).some(
@@ -186,18 +285,83 @@ export class AdmissionStore {
           done(false);
           return;
         }
-        const prior = tx.objectStore('current').get('save');
-        prior.onsuccess = () => {
-          if (!current() || prior.result?.revision !== intent.previousRevision) {
-            done(false);
+        if (
+          !(intent.candidate.bytes instanceof Blob) ||
+          intent.candidate.bytes.size !== verifiedBytes.byteLength
+        ) {
+          done(false);
+          return;
+        }
+        // A Blob read resolves outside IDB callbacks. Keep this same read/write
+        // transaction open, then finish only inside an active request callback.
+        // Both limits and current() abort a stalled or cancelled read without writes.
+        let content: ArrayBuffer | null | undefined;
+        let active = true;
+        let requests = 0;
+        const deadline = performance.now() + 10_000;
+        tx.addEventListener('abort', () => {
+          active = false;
+        });
+        tx.addEventListener('complete', () => {
+          active = false;
+        });
+        void intent.candidate.bytes.arrayBuffer().then(
+          (bytes) => {
+            if (active) content = bytes;
+          },
+          () => {
+            if (active) content = null;
+          },
+        );
+        const keepAlive = () => {
+          if (!active) return;
+          if (!current() || performance.now() >= deadline || ++requests > 16_384) {
+            active = false;
+            tx.abort();
             return;
           }
-          const remove = tx.objectStore('admission').delete('intent');
-          remove.onsuccess = () => {
-            if (!current()) tx.abort();
+          const pulse = tx.objectStore('admission').count('intent');
+          pulse.onsuccess = () => {
+            if (!active) return;
+            if (!current() || performance.now() >= deadline) {
+              active = false;
+              tx.abort();
+              return;
+            }
+            if (content === undefined) {
+              keepAlive();
+              return;
+            }
+            active = false;
+            const bytes = content === null ? null : new Uint8Array(content);
+            if (
+              !current() ||
+              !bytes ||
+              bytes.length !== verifiedBytes.length ||
+              !bytes.every((byte, i) => byte === verifiedBytes[i])
+            ) {
+              done(false);
+              return;
+            }
+            const prior = tx.objectStore('current').get('save');
+            prior.onsuccess = () => {
+              if (!current() || prior.result?.revision !== intent.previousRevision) {
+                done(false);
+                return;
+              }
+              if (performance.now() >= deadline) {
+                tx.abort();
+                return;
+              }
+              const remove = tx.objectStore('admission').delete('intent');
+              remove.onsuccess = () => {
+                if (!current() || performance.now() >= deadline) tx.abort();
+              };
+              done(true);
+            };
           };
-          done(true);
         };
+        keepAlive();
       };
     });
   }

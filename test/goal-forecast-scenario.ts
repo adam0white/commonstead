@@ -1,8 +1,9 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { apply, createGame, type State, step } from '../src/sim.ts';
 
 // One fixed public long-day schedule. Requests use ordinary HF decisions; no Person or RNG edits.
 export function forecastDay() {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   const crew = s.villagers.slice(0, 4).map((v) => v.id);
   for (const [i, id] of crew.entries())
     apply(s, { kind: 'order', ids: [id], target: i < crew.length / 2 ? 'wood' : 'stone' });

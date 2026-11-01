@@ -1,4 +1,5 @@
 import { restoreRun } from '@adam0white/human-framework';
+import { requireCurrentRun } from './current-policy';
 /** Termination cancels synchronous public archive validation without blocking the UI. */
 export async function validateArchiveOffThread(
   raw: unknown,
@@ -8,7 +9,8 @@ export async function validateArchiveOffThread(
   } = {},
 ): Promise<void> {
   options.signal?.throwIfAborted();
-  const hf = (raw as { hf?: unknown })?.hf;
+  requireCurrentRun(raw);
+  const hf = raw.hf;
   if (typeof Worker === 'undefined') {
     const result = restoreRun(hf);
     if (!result.ok)
@@ -43,6 +45,6 @@ export async function validateArchiveOffThread(
       stop();
       reject(new Error(event.message));
     };
-    worker.postMessage(hf);
+    worker.postMessage(raw);
   });
 }

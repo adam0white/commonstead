@@ -1,5 +1,10 @@
 /** Complete memory-only session. No native storage, ownership or browser Shelf effects. */
-import { validateRunEnvelopes, validateYieldSources } from './continuity.ts';
+import {
+  validateDenialAgreement,
+  validateDeniedIDs,
+  validateRunEnvelopes,
+  validateYieldSources,
+} from './continuity.ts';
 import { COMPLETE_BYTES, FILE_AGGREGATE_BYTES } from './save-store.ts';
 import {
   apply,
@@ -130,7 +135,8 @@ export function createFileSession(
         const source: Record<string, unknown> = JSON.parse(
           new TextDecoder('utf-8', { fatal: true }).decode(decoded),
         );
-        const { castSources, ...native } = source;
+        const deniedIDs = validateDeniedIDs(source.castDeniedIDs);
+        const { castSources, castDeniedIDs: _deniedIDs, ...native } = source;
         // Same production archive validator; its count and UTF16-unit limits are not byte limits.
         const sourceArchives = castSources ?? [];
         validateYieldSources(sourceArchives);
@@ -139,6 +145,7 @@ export function createFileSession(
         const state = await importRunAsync(native, { signal: controller.signal, progress: bounds.progress });
         if (!current()) return false;
         await validateRunEnvelopes(state);
+        validateDenialAgreement(deniedIDs, state, []);
         if (!current()) return false;
         const next = { state, source };
         capacity(next, bytes.byteLength);
@@ -175,6 +182,14 @@ export function createFileSession(
     },
     apply(command: GameCommand) {
       if (running) stage((state) => apply(state, command));
+    },
+    continueAtEnd(command: Extract<GameCommand, { kind: 'continue-workshop' | 'start-morning-workshop' }>) {
+      invalidate();
+      stage((state) => {
+        if (!state.ended) throw new Error('The chapter has not ended.');
+        apply(state, command);
+      });
+      running = true;
     },
     advance(ticks: number) {
       if (!running) return;

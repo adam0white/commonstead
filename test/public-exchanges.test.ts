@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { publicCommands } from '../src/public-voice-content';
 import { apply, createGame, type GameCommand } from '../src/sim';
@@ -110,8 +111,8 @@ test('invalid competing story request preserves the exact pending public invitat
 import { publicTranscript } from '../src/public-history';
 
 test('transcript separates absent supply accounts and completed new speech from narration', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
-  apply(s, { kind: 'settlement', ids: ['v4', 'v8'], action: 'talk', target: 'yard' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
+  apply(s, { kind: 'settlement', ids: ['v4', 'v8'], action: 'talk' });
   while (s.tick < 40) step(s);
   const lines = publicTranscript(s, 'v4');
   expect(lines.some((l) => l.text === 'No outward supply account was recorded.')).toBe(true);
@@ -127,7 +128,7 @@ test('transcript separates absent supply accounts and completed new speech from 
 
 // Actual 418 public Yield source is independent of its failed walk and dispute narration.
 test('partner response requires the completed native Yield and current source', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   for (const [i, id] of ['v1', 'v2', 'v3'].entries())
     apply(s, { kind: 'order', ids: [id], target: i < 2 ? 'wood' : 'stone' });
   while (s.tick < 17) step(s);
@@ -236,7 +237,7 @@ test('continue then refused invitation retains the actual continuation and no fa
 
 // A cancelled carrier remains a real carrier. A public invitation must use ordinary return/delivery.
 test('invitation returns an actual held load before speaking without losing or creating stock', () => {
-  const s = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const s = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(s, { kind: 'order', ids: ['v3'], target: 'stone' });
   while (s.tick < 180 && !s.settlement!.actors.v3!.carried) step(s);
   expect(s.settlement!.actors.v3!.carried).not.toBeNull();

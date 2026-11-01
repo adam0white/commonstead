@@ -1,4 +1,5 @@
 import { DISCOVERIES } from './cast.ts';
+import { SETTLEMENT_EDITION } from './current-policy';
 import {
   type Affordance,
   begin,
@@ -21,9 +22,7 @@ import { blocked, MAPS, type Place, type Point, route } from './paths.ts';
 import { type PublicHost, stagePublicExchanges, stepPublicExchange } from './public-exchanges';
 import {
   activePeer,
-  hasReplies,
   interruptPeer,
-  PEER_EDITION,
   type PeerState,
   requestPeer,
   startPeerPair,
@@ -32,7 +31,6 @@ import {
 } from './settlement-dialogue.ts';
 import {
   REPLIES,
-  type REPLY_EDITION,
   type ReplyAttempt,
   type ReplyScene,
   SCENES,
@@ -62,8 +60,8 @@ import {
  * HF3 owns bodies, duties, attention, testimony, assent and social responses. No generic planner,
  * private-knowledge renderer, physiology, real outreach or real accessibility acceptance lives here.
  */
-export const EDITION = 'settlement-day/1';
-export type SettlementConfig = { edition: typeof EDITION | typeof REPLY_EDITION | typeof PEER_EDITION };
+export const EDITION = SETTLEMENT_EDITION;
+export type SettlementConfig = { edition: typeof EDITION };
 export const DAY_MINUTES = 0.8;
 export type Job = {
   kind: 'gather' | 'build' | 'move' | 'map' | 'inspect' | 'scene' | 'talk' | 'spar' | 'yield' | 'story';
@@ -115,11 +113,11 @@ export type Settlement = {
   };
 };
 export function initSettlement(s: State, config: SettlementConfig): void {
-  if (Object.keys(config).length !== 1 || (config.edition !== EDITION && !hasReplies(config.edition)))
+  if (Object.keys(config).length !== 1 || config.edition !== EDITION)
     throw new Error('Unknown settlement edition.');
   s.settlement = {
     config: { edition: config.edition },
-    ...(hasReplies(config.edition) ? { replyScenes: {} } : {}),
+    replyScenes: {},
     peer: { witnesses: [], attempts: [] },
     actors: Object.fromEntries(
       s.villagers.map((v) => [
@@ -1139,15 +1137,10 @@ export function stepSettlement(s: State): void {
   }
   stageStories(s);
   stagePublicExchanges(s);
-  // New edition only: catch up all actors before any shared act or hearing.
-  const shared =
-    s.story?.publicExchanges?.some((a) => ['requested', 'active'].includes(a.status)) ||
-    w.config.edition === PEER_EDITION ||
-    w.peer?.attempts.some((a) => ['requested', 'talking', 'speaking'].includes(a.status));
-  if (shared) for (const v of s.villagers) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
+  // One current strategy: advance every resident before processing shared acts or hearing.
+  for (const v of s.villagers) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
   for (const v of s.villagers) {
     const aw = actor(s, v);
-    if (!shared) tickPerson(v.person, 480 + s.tick * DAY_MINUTES);
     if (!v.person.body.alive) {
       cancel(s, v);
       v.status = 'has died.';
@@ -1425,8 +1418,8 @@ export function validateReply(s: State, c: Extract<Command, { kind: 'reply' }>):
   const w = world(s),
     branch = REPLIES[c.branch];
   const v = s.villagers.find((v) => v.id === c.ids[0]);
-  if (!hasReplies(w.config.edition) || !branch || c.ids.length !== 1 || branch.actor !== c.ids[0] || !v)
-    throw new Error('Choose one matching resident and reply line in the fresh reply day.');
+  if (!branch || c.ids.length !== 1 || branch.actor !== c.ids[0] || !v)
+    throw new Error('Choose one matching resident and reply line in this settlement day.');
   const scene = w.replyScenes?.[v.id];
   if (!scene) throw new Error('Wait for the actual completed private disclosure.');
   if (s.ended || s.pauseRequested || s.chapterPaused || !v.person.body.alive || v.availableAt > s.tick)
@@ -1773,7 +1766,7 @@ export function longRoofUnavailable(s: State, ids: readonly string[]): string {
     return 'A selected resident is unavailable or has an unfinished conversation. Finish it or cancel it explicitly first.';
   return '';
 }
-/** Scope: one opt-in long-day Job/delivery/roof/rest/re-offer sequence. Existing native world
+/** Scope: one recorded long-day Job/delivery/roof/rest/re-offer sequence. Existing native world
  * travel, stock delivery and released HF choices/commitments remain authoritative. No planner,
  * physiology, private mind, assent guarantee, new calendar or portable passport is introduced.
  */

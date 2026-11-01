@@ -41,6 +41,8 @@ export function updateStoryControls(
     }
     for (const [choice, d] of Object.entries(STORY_CHOICES)) {
       if (d.actor !== id) continue;
+      // The settlement reply panel owns first answers; second answers use their exact result here.
+      if (s.settlement && d.group === 'first') continue;
       if (d.group === 'first' && s.story?.firstResults.some((e) => e.actor === id)) continue;
       if (d.group === 'collaboration' && s.villagers.find((v) => v.id === id)?.discovery !== 1) continue;
       if (d.group === 'second') {
@@ -102,7 +104,16 @@ export function updateStoryControls(
       ['keep-playing', 'Keep playing'],
     ] as const) {
       if ((action === 'keep-playing') !== !!s.story?.close) continue;
-      rows.push({ id: `evening-${action}`, line, why: '', command: { kind: 'evening', action } });
+      rows.push({
+        id: `evening-${action}`,
+        line: s.morningWorkshop
+          ? action === 'close'
+            ? 'End my morning here.'
+            : 'Continue the morning task.'
+          : line,
+        why: '',
+        command: { kind: 'evening', action },
+      });
     }
   let panel = host.querySelector<HTMLElement>('#story-actions');
   if (!panel) {

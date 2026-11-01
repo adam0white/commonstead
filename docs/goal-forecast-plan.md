@@ -1,3 +1,9 @@
+# Current completed-delivery reading candidate — 2026-10-31
+
+The existing stock, carried-load and conditional assembly reading below stays. A separate read-only addition reports completed public wood and ballast deliveries within `(max(0,T-60),T]` from the current trusted host history. Quantities round down to tenths; raw positive totals select the positive wording even below0.1. Missing or malformed history is unavailable. This projection adds no source inventory, arrival estimate, future choice, guaranteed completion or private-person information.
+
+Actual current-host controls preserve full state and HF archives across the display reads and exact replay checkpoints. The new source/test body has scoped Codex clearance; these documentation additions still need review. Exact-source Opus, CI, two-size browser checks, delivery and acceptance remain. The branch depends on unmerged PR18/source82ce568; account-capacity recheck is2026-11-01. F776 remains open with a2026-11-03 checkpoint, alongside broader source/forecast and next-day work. Earlier delivery receipts below retain their own source and limits.
+
 # Long-day forecast — technical delivery parent-verified, 2026-10-28
 
 Delivered composed parent:9899c3e914f45c542d661d9090bf0e5b518bb1ca. Root verified foreign source29929577, exact source CI40631235645/main CI40631367334, clean live9899, five served public files byte-exact, all23 archived members SHA/bytes/modes/full-read, actual two-size Chrome and cleanup. Receipt: ~/code/.lab-scratch/games-deferred/resume-commonstead-goal-forecast-delivery-parent-receipt.json. The original f26 forecast main-CI5000ms timeout and foreign merge's missing final trailer stay exceptions; no future CI guarantee follows.

@@ -2,20 +2,19 @@ import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
 import { CAST, DISCOVERIES } from './cast.ts';
 import { Continuity, LOCAL_KEY, resumeForPlay, watchShelfPreference } from './continuity.ts';
 import { createFileSession } from './file-session.ts';
+import { morningWorkshopEligibility, morningWorkshopView } from './morning-workshop.ts';
 import { MAPS, type Place } from './paths.ts';
 import { openPlacementGround } from './placement.ts';
 import { closingSpeech, continueAndAskClosing, publicEnding } from './public-ending';
 import { publicTranscript } from './public-history.ts';
 import { NativeSaveStore } from './save-store.ts';
 import { dayClock, EDITION, longRoofUnavailable } from './settlement.ts';
-import { PEER_EDITION } from './settlement-dialogue.ts';
-import { REPLY_EDITION } from './settlement-scenes.ts';
 import { mountSettlementControls, updateSettlementControls } from './settlement-ui.ts';
 import { buildingPanel, stormPanel } from './storm-view.ts';
 import { storyClock, storyClosing } from './story-records.ts';
 import { updateStoryControls } from './story-ui.ts';
 import { ModalFocus } from './ui-focus.ts';
-import { continuedClock } from './workshop-continuation.ts';
+import { canContinueWorkshop, continuedClock } from './workshop-continuation.ts';
 import './style.css';
 import { createLab, FEEDBACK_LABELS, PRIVACY_URL } from '@adam0white/lab-client';
 import {
@@ -29,7 +28,7 @@ import {
 import { eventText, residentName } from './display.ts';
 import { draw } from './draw.ts';
 import { prefillFeedbackChoice } from './feedback.ts';
-import { AssemblyObservation, goalForecast } from './goal-forecast.ts';
+import { AssemblyObservation, deliveryReading, goalForecast } from './goal-forecast.ts';
 import { STORM_MEALS, stormSummary } from './pressure.ts';
 import {
   apply,
@@ -197,7 +196,11 @@ function save(): Promise<boolean> {
 }
 function downloadStoredRun(name: string, text: string) {
   const saved = JSON.parse(text);
-  downloadJson(name, { ...saved.run, castSources: saved.sources });
+  downloadJson(name, {
+    ...saved.run,
+    castSources: saved.sources,
+    ...(saved.deniedIDs === undefined ? {} : { castDeniedIDs: saved.deniedIDs }),
+  });
 }
 function download() {
   if (fileSession) {
@@ -288,14 +291,14 @@ function title() {
   canvas = null;
   paused = false;
   lab?.screen('title');
-  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">New game</button><h2>Other ways to begin</h2><details><summary>A full day and night</summary><p>Thirty minutes at Steady, with a full day and night for eight residents. Supported saved histories carry over automatically. The storm arrives at 20:00. Supplies, travel, conversations and sleep take time. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><details><summary>Private stories</summary><p>Start a new day with eight residents. Supported saved histories carry over automatically. After Nora or Sevim shares a private story, you may offer one of two specific replies and a timed paper activity. This does not continue a disclosure from your short chapter. You answer the resident where they are, once they are free of other tasks. Your saved game is replaced only after this day is ready.</p><button id="new-replies">Start a fresh day with replies</button></details><details><summary>Conversations about the trolley</summary><p>Eight residents can discuss an earlier wait for the trolley route. Each person may speak or remain quiet. Talking takes time and does not open the route. Nora and Sevim also keep their personal reply choices. Supported saved histories carry over automatically. This day begins new conversations.</p><button id="new-peer">Start a fresh day with resident conversations</button></details><button id="title-feedback">Feedback</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a></div><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><div id="prepared-recovery"></div><p id="load-status" class="status" role="status"></p></section></main>`;
+  root.innerHTML = `<main class="title"><header><a href="https://human.adamwhite.work/games/">All games</a></header><section class="title-body"><p class="eyebrow">The residents share a workshop near Mill Bridge.</p><h1>Commonstead</h1><p>Finish a storehouse before the storm.<br>Work with eight residents. Each person has limits.</p><svg class="title-art" viewBox="0 0 600 140" role="img" aria-label="A storehouse and the people building it"><path d="M0 120 Q160 85 300 115 T600 113" fill="none" stroke="#aaa38c"/><path d="M239 65 L300 17 L361 65 Z" fill="#a97659" stroke="#574b38" stroke-width="2"/><path d="M250 66 H350 V116 H250Z" fill="#e9dfcb" stroke="#574b38" stroke-width="2"/><path d="M290 116 V87 H310 V116" fill="#6e665a"/><g fill="#4f6b3a" stroke="#23201b" stroke-width="2"><path d="M174 84 h16 v29 h-16Z"/><circle cx="182" cy="74" r="8" fill="#d5b48d"/><path d="M399 80 h16 v29 h-16Z"/><circle cx="407" cy="70" r="8" fill="#d5b48d"/></g></svg><p class="small">Use prepared boards, small ballast bags, and hand tools. The ballast bags serve as weights. Use trolleys to carry loads. Residents choose what they can manage. Open the menu to pause.</p>${stored(SAVE) ? '<button class="primary" id="continue">Resume</button>' : ''}<button class="${stored(SAVE) ? '' : 'primary'}" id="new">Start a short storm day</button><h2>Choose a scenario</h2><details><summary>A full day and night</summary><p>Thirty minutes at Steady, with a full day and night for eight residents. Supported saved histories carry over automatically. The storm arrives at 20:00. Supplies, travel, private replies, trolley conversations and sleep take time. Conversations depend on what actually happens in this day. Your saved chapter is replaced only after this day is ready.</p><button id="new-day">Start a settlement day</button></details><button id="title-feedback">Feedback</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a></div><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><div id="prepared-recovery"></div><p id="load-status" class="status" role="status"></p></section></main>`;
   void continuity!.admissions
     .read()
     .then((intent) => {
       const panel = document.getElementById('prepared-recovery');
       if (!intent || screen !== 'title' || !panel) return;
       panel.innerHTML =
-        '<p>A prepared chapter is retained. The previous complete game remains available. Recovery checks current resident custody.</p><button id="recover-prepared">Check and recover prepared chapter</button><button id="discard-unforwarded">Discard a never-forwarded preparation</button><button id="download-prepared">Download prepared chapter</button><button id="download-previous">Download previous complete game</button>';
+        '<p>A prepared chapter is retained. The previous complete game remains available. Recovery checks current resident custody.</p><button id="recover-prepared">Check and recover prepared chapter</button><button id="discard-unused">Clear unused preparation</button><button id="download-prepared">Download prepared chapter</button><button id="download-previous">Download previous complete game</button>';
       bind('download-prepared', () => {
         void continuity!.admissions.preparedText().then((text) => {
           if (text) downloadStoredRun('commonstead-prepared-chapter.json', text);
@@ -304,13 +307,19 @@ function title() {
       bind('download-previous', () => {
         if (nativeText) downloadStoredRun('commonstead-previous-complete.json', nativeText);
       });
-      bind('discard-unforwarded', () => {
+      bind('discard-unused', () => {
         void continuity!
-          .discardUnforwarded()
-          .then(() => title())
-          .catch((error) => {
+          .discardUnused()
+          .then(() => {
+            title();
             const status = document.getElementById('load-status');
-            if (status) status.textContent = String(error);
+            if (status) status.textContent = 'The unused preparation was cleared. Your saved game was kept.';
+          })
+          .catch(() => {
+            const status = document.getElementById('load-status');
+            if (status)
+              status.textContent =
+                'The preparation could not be cleared safely. Your saved game and both downloads are still available.';
           });
       });
       bind('recover-prepared', () => {
@@ -329,13 +338,13 @@ function title() {
       });
     })
     .catch(() => {});
-  const begin = async (day: false | true | typeof REPLY_EDITION | typeof PEER_EDITION = false) => {
+  const begin = async (day = false) => {
     const generation = continuity!.beginEntry();
     const status = document.getElementById('load-status');
     try {
       const prepared = await continuity!.fresh(
         418,
-        day ? { edition: day === true ? EDITION : day } : undefined,
+        day ? { edition: EDITION } : undefined,
         undefined,
         generation,
       );
@@ -355,38 +364,6 @@ function title() {
         message.textContent = 'The new game could not start. Your saved game is unchanged. Try again.';
     }
   };
-  bind('new-peer', () => {
-    continuity!.beginEntry();
-    if (!stored(SAVE)) {
-      void begin(PEER_EDITION);
-      return;
-    }
-    const button = document.getElementById('new-peer');
-    if (!button || document.getElementById('replace-peer')) return;
-    button.insertAdjacentHTML(
-      'afterend',
-      '<p>Replace your saved game with this new day? Earlier disclosures stay in the old game only.</p><button id="replace-peer">Replace with resident conversation day</button>',
-    );
-    bind('replace-peer', () => {
-      void begin(PEER_EDITION);
-    });
-  });
-  bind('new-replies', () => {
-    continuity!.beginEntry();
-    if (!stored(SAVE)) {
-      void begin(REPLY_EDITION);
-      return;
-    }
-    const button = document.getElementById('new-replies');
-    if (!button || document.getElementById('replace-replies')) return;
-    button.insertAdjacentHTML(
-      'afterend',
-      '<p>Replace your saved game with this new day? Earlier disclosures will stay in the old game only.</p><button id="replace-replies">Replace with fresh reply day</button>',
-    );
-    bind('replace-replies', () => {
-      void begin(REPLY_EDITION);
-    });
-  });
   bind('new-day', () => {
     continuity!.beginEntry();
     if (!stored(SAVE)) {
@@ -447,7 +424,9 @@ function title() {
         console.error(error);
         if (el)
           el.textContent =
-            'The saved game could not open. It is unchanged. Try again or choose Feedback to report the problem.';
+            error instanceof Error
+              ? error.message
+              : 'The saved game could not open. Keep the original save and start a fresh game.';
       } finally {
         cancel.remove();
       }
@@ -455,6 +434,7 @@ function title() {
   });
 }
 function start(s: State) {
+  if (fileSession) cancelFileCallbacks();
   assemblyObservation.reset();
   forecastWorld = {};
   if (!fileSession) resumeForPlay(s);
@@ -508,10 +488,34 @@ function start(s: State) {
     if (objective)
       objective.textContent =
         'Remote supplies must be carried back. The day continues until tomorrow at 08:00.';
+  } else if (s.continuedWorkshop) {
+    const objective = document.querySelector('.objective .details');
+    const morning = morningWorkshopView(s);
+    if (objective)
+      objective.textContent = morning
+        ? `${morning.objective} Choosing a new cabin site costs 40 boards. Travel, work, meals and rest take time. A request can be refused.`
+        : 'The earlier storm result remains recorded. Continue this workshop until 08:00, or end here. Earlier work and supplies remain.';
+    const workHelp = document.querySelector('.work-help');
+    if (workHelp)
+      workHelp.innerHTML =
+        '<summary>Dividing work and adding builders</summary><p class="small">Different groups can collect meals and boards or prepare a cabin. Travel takes time. Each person can do one task at a time and may choose a break.</p><p class="small">To add builders, select people, choose Move / add builders, then select the unfinished site.</p>';
   } else if (s.rules) {
     const objective = document.querySelector('.objective .details');
     if (objective)
       objective.textContent = `Tired people work slowly; a break helps. The storm keeps everyone indoors tomorrow, so the dry store needs ${STORM_MEALS} meals per person. At 10:00, everyone should be under a roof: the workshop hub or a finished building. A cabin prepared with 40 boards makes room for two more people. Invite helpers at the workshop hub.`;
+  }
+  if (continuity?.admissionBlocked.length) {
+    const notice = document.createElement('p');
+    notice.id = 'continuity-status';
+    notice.className = 'small';
+    notice.setAttribute('role', 'status');
+    notice.textContent = continuity.admissionBlocked
+      .map(
+        (entry) =>
+          `${CAST.find((c) => c.castId === entry.castId)?.name}: the saved history could not carry over. They start fresh here. The earlier saved history stays as it was.`,
+      )
+      .join(' ');
+    document.querySelector('.objective')?.append(notice);
   }
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-speed]'))
     b.onclick = () => {
@@ -524,6 +528,7 @@ function start(s: State) {
     paused = !fileSession.running;
     if (s.ended) end();
     else if (paused) menu();
+    else scheduleFileFrame();
   } else if (s.ended) end();
   else if (s.shortYield && continuity!.playPaused) {
     menu();
@@ -533,10 +538,11 @@ function start(s: State) {
 function update() {
   if (!state || screen !== 'play') return;
   const s = state;
+  const morning = morningWorkshopView(s);
   assemblyObservation.observe(forecastWorld, s);
   const reading = document.getElementById('goal-reading-text');
   if (reading) {
-    const words = goalForecast(s, assemblyObservation.pace(forecastWorld, s));
+    const words = [...goalForecast(s, assemblyObservation.pace(forecastWorld, s)), ...deliveryReading(s)];
     const text = words.map((line) => `<p>${esc(line)}</p>`).join('');
     if (reading.innerHTML !== text) reading.innerHTML = text;
   }
@@ -549,28 +555,42 @@ function update() {
   const stock = document.getElementById('stock');
   if (stock)
     stock.innerHTML = `<span><b>Meals</b> ${Math.floor(s.resources.food)}</span><span><b>Boards</b> ${Math.floor(s.resources.wood)}</span><span><b>Ballast bags</b> ${Math.floor(s.resources.stone)}</span><span><b>People</b> ${s.villagers.length} / ${capacity} housing spaces</span><span><b>Paper</b> ${s.story!.paper} of 4 opening sheets remain</span>`;
-  put('supply-readiness', supplyReadiness(s));
+  put('supply-readiness', morning ? morning.cabinLine : supplyReadiness(s));
   put(
     'storm-meals',
-    s.rules && !s.ended
-      ? s.resources.food < STORM_MEALS * s.villagers.length
-        ? `Storm meals short: ${Math.ceil(STORM_MEALS * s.villagers.length - s.resources.food)} more needed for ${s.villagers.length} people.`
-        : 'Storm meals are enough for the current residents.'
-      : '',
+    morning
+      ? morning.mealLine
+      : s.rules && !s.ended && !s.continuedWorkshop
+        ? s.resources.food < STORM_MEALS * s.villagers.length
+          ? `Storm meals short: ${Math.ceil(STORM_MEALS * s.villagers.length - s.resources.food)} more needed for ${s.villagers.length} people.`
+          : 'Storm meals are enough for the current residents.'
+        : '',
   );
   const store = s.buildings.find((b) => b.kind === 'storehouse');
-  put('goal', store?.complete ? 'The storehouse is ready.' : 'Keep the shared supplies dry.');
+  put(
+    'goal',
+    morning
+      ? morning.objective
+      : store?.complete
+        ? 'The storehouse is ready.'
+        : 'Keep the shared supplies dry.',
+  );
   put(
     'deadline',
-    s.settlement
-      ? `${dayClock(s)}. ${milestone(s)} View: ${MAPS[viewedMap].name}.`
-      : `The time is ${t}. ${s.continuedWorkshop ? `Same workshop after its storm. Resident time ${continuedClock(s)}; its short scenario deadline was10:00.` : milestone(s)}`,
+    morning
+      ? `Resident time ${continuedClock(s)}. The morning task ends at 10:00. ${morning.resultLine}`
+      : s.settlement
+        ? `${dayClock(s)}. ${milestone(s)} View: ${MAPS[viewedMap].name}.`
+        : `The time is ${t}. ${s.continuedWorkshop ? `Same workshop after its storm. Resident time ${continuedClock(s)}; its short scenario deadline was10:00.` : milestone(s)}`,
   );
   const finishDay = document.getElementById('finish-day');
   const finishMode =
     s.shortYield || s.remainder?.running
       ? 'yielded'
-      : !s.settlement && !s.ended && s.buildings.some((b) => b.kind === 'storehouse' && b.complete)
+      : !s.settlement &&
+          !s.continuedWorkshop &&
+          !s.ended &&
+          s.buildings.some((b) => b.kind === 'storehouse' && b.complete)
         ? 'eligible'
         : '';
   if (finishDay && finishDay.dataset.mode !== finishMode) {
@@ -889,10 +909,15 @@ function storehouseWhy(
     ? 'You have the materials. Choose Storehouse, then tap open ground.'
     : 'You have the materials. Select the builders, then choose Storehouse.';
 }
-/** What eating costs against the storm-day store, and what actually cures tiredness. */
+/** Eating costs against the current public target; rest does not promise recovery. */
 function mealWhy(s: State, selectedCount: number): string {
   const meals = Math.floor(s.resources.food);
   if (!s.rules) return `Eating uses 2 meals per person. The store has ${meals}.`;
+  const morning = morningWorkshopView(s);
+  if (s.continuedWorkshop) {
+    const cost = 2 * selectedCount;
+    return `${selectedCount && cost <= meals ? `Eating now uses ${cost} meals and leaves ${meals - cost}.` : 'Eating uses 2 meals per person.'} ${morning ? morning.mealLine : `The store has ${meals} counted meal units.`} ${morning ? `The target at 10:00 stays ${morning.mealTarget} meal units, regardless of how many people are here.` : 'The earlier storm result remains recorded.'} Meals do not lower tiredness. One rest may not be enough. Residents may choose another break.`;
+  }
   const need = STORM_MEALS * s.villagers.length;
   const cost = 2 * selectedCount;
   return `${
@@ -1106,6 +1131,15 @@ function info() {
     bind('close-info', closeModal);
     return;
   }
+  if (state?.continuedWorkshop) {
+    const morning = morningWorkshopView(state);
+    sheet(
+      `<h2>Controls · game paused</h2><p>${morning ? esc(morning.objective) : 'The earlier storm result remains recorded. This workshop continues until 08:00. You can end here instead.'}</p>${morning ? `<p>${esc(morning.cabinLine)} ${esc(morning.mealLine)} Only the first new guest-cabin site chosen this morning is the target. Earlier cabins keep their actual progress. Choosing a new cabin site uses 40 boards.</p>` : '<p>Earlier work and supplies remain. At 08:00 you can choose the morning task, download this run, or end.</p>'}<p>Select people, then choose Meals, Boards or Ballast bags. To prepare a guest cabin, select builders, choose Prepare cabin, then choose open ground. To add builders to an unfinished site, select people, choose Move / add builders, then select that site. Travel and work take time. Residents may refuse a request.</p><p>Eat and drink uses 2 meal units per person from the shared store. A planned rest takes 35 game seconds and retains the current work request. One rest may not be enough. Residents may choose another break. Going under a roof replaces the work request; give a new work request afterward. Read Now for the actual activity. Earlier words and events remain historical.</p><p>Open the menu to pause. Slow, Steady and Fast change how quickly time passes. You can end at the next action boundary. ${morning ? 'If you end before 10:00, the 10:00 targets are not assessed.' : ''}</p><button class="primary" id="close-info">Back to the workshop</button>`,
+      true,
+    );
+    bind('close-info', closeModal);
+    return;
+  }
   sheet(
     `<h2>Controls · game paused</h2><p>Finish the storehouse before 10:00 to keep the shared supplies dry. If it is unfinished, the supplies get soaked. Preparing a guest cabin adds room for two people.</p><p>Tap names to add or remove people from your selection. A map tap replaces the selection. Select names, then choose Meals, Boards or Ballast bags. Select the workshop hub on the map to invite a local helper.</p><p>On a computer, drag a box to select people. Right-click a destination to give an order. On a phone, tap a person to select that person. Drag a box to select a group. Hold a destination to give an order.</p><p>After the game clock reaches 1:00, offer one person a break. Wait five game seconds during that break so the conversation invitation becomes available. This wait does not mean the person has recovered. No shared location or earlier conversation is required. Choose Invite conversation beside the resident. The person may share something private. A small collaboration is optional.</p><p>A planned rest takes 35 game seconds. When it ends, the Now line says how tired the person felt before and after it. One break may not be enough. Read Now for the current activity. Last words and Last order or event can describe earlier events. People may still report tiredness or choose another break. Eat and drink uses meals where each person is standing. Insist on work asks people to continue even if they object. They may remember the pressure.</p><p>The storehouse costs 180 boards and 120 ballast bags. Select builders. Choose Storehouse, then tap open ground. To add builders later, select people, choose Move / add builders, then tap the unfinished storehouse. Different groups can collect boards and ballast at the same time. Travel takes time; collecting and building occupy the same people. Opening the menu pauses the game. Slow, Steady and Fast change how quickly time passes.</p>${state?.rules ? `<p>Tired people work slowly. A very tired person works at about a quarter of their usual pace. A rest lowers tiredness; meals do not. Everyone rests gives a break to all who are not already resting. Insisting on work makes people slower and they remember it. Once the storehouse is ready, the day is not over. The storm keeps everyone indoors tomorrow, so the dry store needs ${STORM_MEALS} meals per person. Eating uses 2 meals per person from that same store. Before 10:00, choose Go under a roof or Everyone under a roof, or keep people beside a finished building. Residents caught outside get soaked. Meals are slower to gather than boards. At the end, each resident says what this day was like for them. You can also continue the workshop and ask for a timed closing conversation.</p>` : ''}<button class="primary" id="close-info">Back to the workshop</button>`,
     true,
@@ -1311,17 +1345,24 @@ function end() {
     void continuity!.checkpointAll();
   }
   save();
-  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">${state.settlement ? `This run ended at ${storyClock(state, state.tick)}. The storm arrived at 20:00.` : 'The storm arrived at 10:00.'}</p><h1>${state.won ? 'The supplies stayed dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p>${state.shortYield ? `<h2>Public chronicle</h2><ol>${state.shortYield.chronicle.map((entry) => `<li>${Math.floor(entry.tick / 60)}:${String(entry.tick % 60).padStart(2, '0')} · ${esc(publicPlaceText(entry.text))}</li>`).join('')}</ol>` : ''}${
-    state.rules
+  const morning = morningWorkshopView(state);
+  const morningOffer = morningWorkshopEligibility(state).eligible
+    ? '<section><h2>The morning workshop</h2><p>Prepare a further guest cabin and keep at least 40 meal units in the shared store by 10:00. Choosing a new cabin site costs 40 boards. Earlier work and supplies remain. Residents choose what they can manage.</p><button id="start-morning-workshop">Start the morning task</button></section>'
+    : '';
+  const morningResult = morning
+    ? `<section><h2>The morning workshop</h2><p>This task ended at ${esc(continuedClock(state))}.</p><p>${esc(morning.objective)}</p><p>${esc(morning.cabinLine)}</p><p>${esc(morning.mealLine)}</p><p>${esc(morning.resultLine)}</p></section>`
+    : '';
+  root.innerHTML = `<main class="title">${top('Commonstead')}<section class="end-card"><p class="eyebrow">${state.settlement ? `This run ended at ${storyClock(state, state.tick)}. The storm arrived at 20:00.` : state.continuedWorkshop ? `This workshop stopped at ${esc(continuedClock(state))}. The earlier storm arrived at 10:00.` : 'The storm arrived at 10:00.'}</p><h1>${morning ? 'The morning task ended.' : state.won ? 'The supplies stayed dry.' : 'The supplies got soaked.'}</h1><p>${state.won ? 'The storehouse was finished before the rain.' : 'The storehouse was unfinished when the rain came.'}</p>${morningResult}${morningOffer}${state.shortYield ? `<h2>Public chronicle</h2><ol>${state.shortYield.chronicle.map((entry) => `<li>${Math.floor(entry.tick / 60)}:${String(entry.tick % 60).padStart(2, '0')} · ${esc(publicPlaceText(entry.text))}</li>`).join('')}</ol>` : ''}${
+    state.rules && !morning
       ? stormSummary(state)
           .map((line) => `<p>${esc(line)}</p>`)
           .join('')
       : ''
-  }${stormPanel(state)}${buildingPanel(state)}<h2>Residents at the end of this run</h2><p class="small">${state.rules ? 'Each resident says what this day was like for them. These closing reflections are separate from timed conversations.' : 'Narrator facts and earlier words are separate from completed speech. Asking for a closing word takes ordinary game time.'}</p><div>${state.villagers
+  }${stormPanel(state)}${buildingPanel(state)}<h2>Residents at the end of this run</h2><p class="small">${state.rules && !morning ? 'Each resident says what this day was like for them. These closing reflections are separate from timed conversations.' : 'Narrator facts and earlier words are separate from completed speech. Asking for a closing word takes ordinary game time.'}</p><div>${state.villagers
     .map((v) => {
       if (state?.story) {
         const ending = publicEnding(state, v.id);
-        return `<section><h2>${esc(residentName(v))}</h2>${closingSpeech(state, v, esc)}<h3>This run</h3>${ending.narration.map((line) => `<p>${esc(line)}</p>`).join('')}<h3>Spoken in this run</h3>${ending.spoken.length ? ending.spoken.map((u) => `<p>Completed speech at ${storyClock(state!, u.at)}</p><p class="speech">“${esc(u.text)}”</p>`).join('') : '<p>No new public speaking act completed.</p>'}<h3>Earlier words</h3>${ending.earlier.length ? ending.earlier.map((u) => `<p>At ${storyClock(state!, u.at)}: ${esc(u.text)}</p>`).join('') : '<p>No earlier authored words were recorded.</p>'}${!state.settlement && !state.continuedWorkshop ? `<button data-closing="${esc(v.id)}">Continue this workshop to ask ${esc(residentName(v))} for a closing word</button>` : ''}</section>`;
+        return `<section><h2>${esc(residentName(v))}</h2>${morning ? '' : closingSpeech(state, v, esc)}<h3>This run</h3>${ending.narration.map((line) => `<p>${esc(line)}</p>`).join('')}<h3>Spoken in this run</h3>${ending.spoken.length ? ending.spoken.map((u) => `<p>Completed speech at ${storyClock(state!, u.at)}</p><p class="speech">“${esc(u.text)}”</p>`).join('') : '<p>No new public speaking act completed.</p>'}<h3>Earlier words</h3>${ending.earlier.length ? ending.earlier.map((u) => `<p>At ${storyClock(state!, u.at)}: ${esc(u.text)}</p>`).join('') : '<p>No earlier authored words were recorded.</p>'}${!state.settlement && !state.continuedWorkshop ? `<button data-closing="${esc(v.id)}">Continue this workshop to ask ${esc(residentName(v))} for a closing word</button>` : ''}</section>`;
       }
       if (state?.rules)
         return `<section><h2>${esc(residentName(v))}</h2>${closingSpeech(state, v, esc)}</section>`;
@@ -1331,18 +1372,20 @@ function end() {
     })
     .join(
       '',
-    )}</div><details><summary>See the tally</summary><p>${state.villagers.length} people · ${state.buildings.filter((b) => b.complete && b.kind !== 'town').length} completed ${state.buildings.filter((b) => b.complete && b.kind !== 'town').length === 1 ? 'building' : 'buildings'}</p></details><div class="row"><button id="end-feedback">Feedback</button><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><button id="end-download">Download this run</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a></div>${!state.settlement && !state.continuedWorkshop ? '<button id="continue-workshop">Continue this workshop day with these people</button>' : ''}<button class="primary" id="end-title">To the title page</button></div></section></main>`;
+    )}</div><details><summary>See the tally</summary><p>${state.villagers.length} people · ${state.buildings.filter((b) => b.complete && b.kind !== 'town').length} completed ${state.buildings.filter((b) => b.complete && b.kind !== 'town').length === 1 ? 'building' : 'buildings'}</p></details><div class="row"><button id="end-feedback">Feedback</button><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><button id="end-download">Download this run</button><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a></div>${canContinueWorkshop(state) ? '<button id="continue-workshop">Continue this workshop day with these people</button>' : ''}<button class="primary" id="end-title">To the title page</button></div></section></main>`;
   shellBindings();
   bind('end-feedback', feedback);
   bind('end-download', download);
   bind('end-title', () => void saveAndTitle('end-title'));
-  bind('continue-workshop', () => {
+  const continueFromEnd = (
+    command: Extract<Command, { kind: 'continue-workshop' | 'start-morning-workshop' }>,
+  ) => {
     if (!state) return;
     try {
       if (fileSession) {
-        fileSession.apply({ kind: 'continue-workshop' });
+        fileSession.continueAtEnd(command);
         state = fileSession.state();
-      } else apply(state, { kind: 'continue-workshop' });
+      } else apply(state, command);
       if (state && !state.ended) {
         save();
         start(state);
@@ -1352,7 +1395,9 @@ function end() {
       p.textContent = error instanceof Error ? error.message : 'This workshop could not continue.';
       document.querySelector('.end-card')?.append(p);
     }
-  });
+  };
+  bind('continue-workshop', () => continueFromEnd({ kind: 'continue-workshop' }));
+  bind('start-morning-workshop', () => continueFromEnd({ kind: 'start-morning-workshop' }));
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-closing]'))
     button.onclick = () => {
       if (!state) return;
@@ -1363,7 +1408,8 @@ function end() {
           button.dataset.closing!,
           (c) => {
             if (fileSession) {
-              fileSession.apply(c);
+              if (c.kind === 'continue-workshop') fileSession.continueAtEnd(c);
+              else fileSession.apply(c);
               state = fileSession.state();
             } else apply(state!, c);
           },

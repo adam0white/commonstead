@@ -1,3 +1,4 @@
+// HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { PRESSURE } from '../src/pressure.ts';
@@ -32,7 +33,7 @@ test('rest retains eight orders, roof replaces them, and the public notice never
   const observer = new WorkObservation();
   expect(observer.summary(s, s.villagers[0]!)).toContain('No work request is retained');
   expect(s.villagers.every((v) => !v.order && v.status === 'waiting')).toBe(true);
-  const occupied = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const occupied = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(occupied, { kind: 'order', ids: ['v1'], target: 'wood' });
   for (let n = 0; n < 20; n++) step(occupied);
   const actorBefore = JSON.stringify(occupied.settlement?.actors.v1);
@@ -43,7 +44,7 @@ test('rest retains eight orders, roof replaces them, and the public notice never
   expect(orderConsequences(occupied, ['v1'])).toContain('ask again');
   for (let n = 0; n < 6; n++) step(occupied);
   expect(occupied.settlement?.actors.v1?.carried?.resource).toBe('wood');
-  const d = createGame(418, undefined, { edition: 'settlement-day/1' });
+  const d = createGame(418, undefined, { edition: 'settlement-replies/2' });
   apply(d, { kind: 'order', ids: ids.slice(0, 4), target: 'wood' });
   apply(d, { kind: 'order', ids: ids.slice(4), target: 'stone' });
   while (!d.settlement?.dispute && d.tick < 100) step(d);
@@ -86,27 +87,16 @@ test('rest retains eight orders, roof replaces them, and the public notice never
 
 // Pre-edit production exports are external evidence, not rewritten fixture expectations.
 // Enabled only by the author's explicit evidence path; the normal suite needs no private files.
-test('literal pre-edit full and compact exports keep the same raw state and legal continuation', () => {
+test('historical pre-edit full and compact files are refused without changing their source', () => {
   const prefix = process.env.COMMONSTEAD_ORDER_BASELINE;
   if (!prefix) return;
   for (const name of ['short', 'day']) {
-    const fullText = readFileSync(`${prefix}-${name}-baseline-full.json`, 'utf8');
-    const compactText = readFileSync(`${prefix}-${name}-baseline-compact.json`, 'utf8');
-    const full = importRun(JSON.parse(fullText)),
-      compact = importRun(JSON.parse(compactText));
-    expect(JSON.stringify(exportRun(full))).toBe(fullText);
-    expect(JSON.stringify(exportRun(compact, true))).toBe(compactText);
-    expect(JSON.stringify(full)).toBe(JSON.stringify(compact));
-    const observer = new WorkObservation();
-    for (let n = 0; n < 17; n++) {
-      observer.observeState(full);
-      for (const v of full.villagers) observer.summary(full, v);
-      currentNotice(full);
-      step(full);
-      step(compact);
+    for (const shape of ['full', 'compact']) {
+      const text = readFileSync(`${prefix}-${name}-baseline-${shape}.json`, 'utf8');
+      const raw = JSON.parse(text),
+        before = JSON.stringify(raw);
+      expect(() => importRun(raw)).toThrow(/Keep.*start a fresh/i);
+      expect(JSON.stringify(raw)).toBe(before);
     }
-    const expected = readFileSync(`${prefix}-${name}-baseline-continuation.json`, 'utf8');
-    expect(JSON.stringify(full)).toBe(expected);
-    expect(JSON.stringify(compact)).toBe(expected);
   }
 });

@@ -1,3 +1,4 @@
+import { SETTLEMENT_EDITION } from './current-policy';
 import {
   type Affordance,
   beginTogether,
@@ -10,7 +11,6 @@ import {
 } from './hf4';
 import type { Place } from './paths.ts';
 import type { Job } from './settlement.ts';
-import { REPLY_EDITION } from './settlement-scenes.ts';
 import type { State, Villager } from './sim.ts';
 
 /** The actual witnessed pair owns this bounded public route exchange in every current long chapter.
@@ -23,8 +23,7 @@ function requiredPeerValue<T>(value: T | null | undefined): T {
   return value;
 }
 
-export const PEER_EDITION = 'settlement-replies/2';
-export const hasReplies = (edition: string) => edition === REPLY_EDITION || edition === PEER_EDITION;
+export const PEER_EDITION = SETTLEMENT_EDITION;
 export type PeerCommand = {
   kind: 'peer';
   ids: string[];

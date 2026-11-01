@@ -190,7 +190,8 @@ export function milestone(s: State): string {
     return s.won
       ? 'The storm arrived. The supplies stayed dry.'
       : 'The storm arrived. The supplies got soaked.';
-  if (store?.complete && s.rules) return `The storehouse is ready. ${beforeStorm(s)}`;
+  if (store?.complete && s.rules)
+    return `The storehouse is ready. The storm still arrives at 10:00. ${beforeStorm(s)}`;
   if (store?.complete)
     return `The storehouse is ready. The storm still arrives at ${storm}. Preparation is complete; the storm outcome is still ahead. Continue to watch it, or open the pause menu to save this place and stop here.`;
   return `Finish the storehouse before the storm at ${storm}.${store ? ` It is ${Math.floor(store.progress * 100)}% complete.` : ' It needs 180 boards and 120 ballast bags.'}`;
