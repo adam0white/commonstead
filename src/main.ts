@@ -123,11 +123,7 @@ let tutorialRenderedStep: TutorialStep | null = null;
 const TUTORIAL_KEY = 'commonstead-tutorial-seen';
 function finishTutorial() {
   tutorialStep = null;
-  try {
-    localStorage.setItem(TUTORIAL_KEY, '1');
-  } catch {
-    /* This tab still keeps the choice. */
-  }
+  remember(TUTORIAL_KEY, '1');
   renderTutorial();
 }
 function renderTutorial() {
@@ -1381,18 +1377,27 @@ function menu() {
     if (!state) return;
     tutorialTarget = null;
     tutorialOutcome = '';
+    const activeOrder = state.villagers.find(
+      (v) => selected.includes(v.id) && (v.order?.target === 'wood' || v.order?.target === 'stone'),
+    )?.order?.target;
     tutorialStep =
       state.settlement || state.continuedWorkshop || state.ended
         ? 'unavailable'
         : state.buildings.some((b) => b.kind === 'storehouse')
           ? 'done'
-          : selected.some((id) => state?.villagers.some((v) => v.id === id))
-            ? state.resources.wood < 180
-              ? 'wood'
-              : state.resources.stone < 120
-                ? 'stone'
-                : 'store'
-            : 'select';
+          : activeOrder === 'wood'
+            ? 'wood-progress'
+            : activeOrder === 'stone'
+              ? 'stone-progress'
+              : selected.some((id) => state?.villagers.some((v) => v.id === id))
+                ? state.resources.wood < 180
+                  ? 'wood'
+                  : state.resources.stone < 120
+                    ? 'stone'
+                    : 'store'
+                : 'select';
+    if (activeOrder === 'wood') tutorialBaseline = state.resources.wood;
+    if (activeOrder === 'stone') tutorialBaseline = state.resources.stone;
     update();
   });
   bind('download', download);

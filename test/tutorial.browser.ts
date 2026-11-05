@@ -54,6 +54,11 @@ export async function control(browser: Browser, url: string) {
     await page.locator('#menu').click();
     await page.getByRole('button', { name: 'Replay tutorial' }).click();
     assert.equal(await page.locator('.tutorial-prompt').count(), 1);
+    assert.match(
+      await page.locator('.tutorial-prompt').innerText(),
+      /Ballast bags:/,
+      'replay follows the active request',
+    );
     await page.locator('[data-resource="wood"]').click();
     await page.locator('[data-resource="stone"]').click();
     assert.match(await page.locator('.tutorial-prompt').innerText(), /Ballast bags:/);
@@ -83,6 +88,21 @@ export async function control(browser: Browser, url: string) {
     });
     assert(visibleTogether, 'prompt and next control fit inside the scrolling panel');
     await page.getByRole('button', { name: 'Skip tutorial' }).click();
+    await page.evaluate(() => localStorage.setItem('commonstead-tutorial-seen', 'native-sentinel'));
+    await page.goto(new URL('/file/', url).href);
+    await page
+      .locator('#file-load')
+      .setInputFiles({
+        name: 'run.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(run)),
+      });
+    await page.locator('#resume').click();
+    await page.getByRole('button', { name: 'Skip tutorial' }).click();
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('commonstead-tutorial-seen')),
+      'native-sentinel',
+    );
   } finally {
     await context.close();
   }
