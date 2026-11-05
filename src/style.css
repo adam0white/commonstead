@@ -1247,3 +1247,38 @@ a:focus-visible {
   max-height: 24rem;
   height: auto;
 }
+
+.tutorial-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  color: #30220e;
+  background: #fff2c9;
+  border: 2px solid #845c18;
+  border-radius: 6px;
+}
+.tutorial-prompt strong {
+  flex-basis: 100%;
+}
+.tutorial-target {
+  outline: 3px solid #b46e00;
+  outline-offset: 2px;
+}
+.game:not(.placing) .tutorial-prompt {
+  order: 8;
+}
+.game:not(.placing) .tutorial-prompt[data-step="select"] {
+  order: 2;
+}
+.game:not(.placing) .tutorial-prompt[data-step="done"],
+.game:not(.placing) .tutorial-prompt[data-step="unavailable"] {
+  order: 1;
+}
+.actions .tutorial-prompt {
+  grid-column: 1 / -1;
+}
+.game:not(.placing) .actions .tutorial-prompt {
+  order: -1;
+}

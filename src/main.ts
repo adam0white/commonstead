@@ -104,6 +104,118 @@ let state: State | null = null,
   paused = false,
   placing: 'house' | 'storehouse' | '' = '',
   moveMode = false;
+type TutorialStep =
+  | 'select'
+  | 'wood'
+  | 'wood-progress'
+  | 'stone'
+  | 'stone-progress'
+  | 'store'
+  | 'site'
+  | 'confirm-site'
+  | 'done'
+  | 'unavailable';
+let tutorialStep: TutorialStep | null = null;
+let tutorialBaseline = 0;
+let tutorialOutcome = '';
+let tutorialTarget: HTMLElement | null = null;
+let tutorialRenderedStep: TutorialStep | null = null;
+const TUTORIAL_KEY = 'commonstead-tutorial-seen';
+function finishTutorial() {
+  tutorialStep = null;
+  remember(TUTORIAL_KEY, '1');
+  renderTutorial();
+}
+function renderTutorial() {
+  const existing = document.querySelector<HTMLElement>('.tutorial-prompt');
+  if (!tutorialStep || !state || screen !== 'play' || modal) {
+    existing?.remove();
+    document.querySelectorAll('.tutorial-target').forEach((el) => {
+      el.classList.remove('tutorial-target');
+    });
+    tutorialRenderedStep = null;
+    return;
+  }
+  const selectors: Record<TutorialStep, string> = {
+    select: '[data-person]',
+    wood: '[data-resource="wood"]:not(:disabled)',
+    'wood-progress': '#stock',
+    stone: '[data-resource="stone"]:not(:disabled)',
+    'stone-progress': '#stock',
+    store: !selected.some((id) => state?.villagers.some((v) => v.id === id))
+      ? '[data-person]'
+      : state.resources.wood < 180
+        ? '[data-resource="wood"]:not(:disabled)'
+        : state.resources.stone < 120
+          ? '[data-resource="stone"]:not(:disabled)'
+          : '#store:not(:disabled)',
+    site: '#named-site',
+    'confirm-site': '#confirm-site',
+    done: '#deadline',
+    unavailable: '#deadline',
+  };
+  const target = document.querySelector<HTMLElement>(selectors[tutorialStep]);
+  const panel = document.createElement('aside');
+  panel.className = 'tutorial-prompt';
+  panel.setAttribute('aria-label', 'Tutorial');
+  panel.dataset.step = tutorialStep;
+  const goal = document.createElement('strong');
+  goal.textContent = state.settlement
+    ? 'Storehouse before the storm · unfinished → wet supplies'
+    : 'Storehouse by 10:00 · unfinished → wet supplies';
+  const line = document.createElement('span');
+  const messages: Record<TutorialStep, string> = {
+    select: 'Select a person.',
+    wood: 'Choose Boards.',
+    'wood-progress': `Boards: ${Math.floor(state.resources.wood)} / 180 · wait for a delivery or try another order.`,
+    stone: `${tutorialOutcome} Choose Ballast bags.`,
+    'stone-progress': `Ballast bags: ${Math.floor(state.resources.stone)} / 120 · wait for a delivery or try another order.`,
+    store: `${tutorialOutcome} Boards ${Math.floor(state.resources.wood)}/180 · bags ${Math.floor(state.resources.stone)}/120`,
+    site: 'Choose an open site, or tap open ground on the map.',
+    'confirm-site': 'Confirm this site, or tap open ground on the map.',
+    done: 'The storehouse is on the map. Watch its progress before the storm.',
+    unavailable: 'This guide is for the opening of a short storm day. Skip to continue.',
+  };
+  if (existing && tutorialRenderedStep === tutorialStep && tutorialTarget === target) {
+    const currentLine = existing.querySelector('span');
+    if (currentLine) currentLine.textContent = messages[tutorialStep];
+    return;
+  }
+  existing?.remove();
+  document.querySelectorAll('.tutorial-target').forEach((el) => {
+    el.classList.remove('tutorial-target');
+  });
+  line.textContent = messages[tutorialStep];
+  const skip = document.createElement('button');
+  skip.type = 'button';
+  skip.textContent = tutorialStep === 'done' ? 'Done' : 'Skip tutorial';
+  skip.addEventListener('click', finishTutorial);
+  if (tutorialStep === 'select') panel.append(goal);
+  panel.append(line, skip);
+  if (tutorialStep === 'select')
+    document.querySelectorAll('[data-person], #all').forEach((el) => {
+      el.classList.add('tutorial-target');
+    });
+  else target?.classList.add('tutorial-target');
+  const anchor =
+    tutorialStep === 'select'
+      ? document.querySelector('.unit-list')
+      : tutorialStep === 'done' || tutorialStep === 'unavailable'
+        ? document.querySelector('.objective')
+        : document.querySelector('.actions');
+  if (anchor && !['select', 'done', 'unavailable'].includes(tutorialStep)) anchor.prepend(panel);
+  else if (anchor) anchor.insertAdjacentElement('beforebegin', panel);
+  else document.querySelector('.side')?.prepend(panel);
+  if (
+    target &&
+    (tutorialRenderedStep !== tutorialStep || tutorialTarget !== target) &&
+    ['select', 'wood', 'stone', 'store', 'site', 'confirm-site'].includes(tutorialStep)
+  ) {
+    panel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  tutorialTarget = target;
+  tutorialRenderedStep = tutorialStep;
+}
 let placementFeedback = '';
 let placementPoint = { x: 650, y: 500 };
 let residentKey = '';
@@ -249,6 +361,7 @@ function issue(cmd: Command) {
     update();
     return;
   }
+  const tutorialBuildingsBefore = state.buildings.length;
   workObservation.observeState(state);
   try {
     if (fileSession) {
@@ -262,6 +375,15 @@ function issue(cmd: Command) {
     return;
   }
   if (state) workObservation.observeState(state);
+  if (
+    (tutorialStep === 'site' || tutorialStep === 'confirm-site') &&
+    state &&
+    state.buildings.length > tutorialBuildingsBefore &&
+    cmd.kind === 'build' &&
+    cmd.building === 'storehouse' &&
+    state?.buildings.some((b) => b.kind === 'storehouse' && b.x === cmd.x && b.y === cmd.y)
+  )
+    tutorialStep = 'done';
   save();
   update();
 }
@@ -446,6 +568,12 @@ function start(s: State) {
   state = s;
   viewedMap = 'yard';
   screen = 'play';
+  tutorialStep = null;
+  tutorialTarget = null;
+  tutorialRenderedStep = null;
+  tutorialOutcome = '';
+  if (s.tick === 0 && !stored(TUTORIAL_KEY))
+    tutorialStep = s.settlement || s.continuedWorkshop ? 'unavailable' : 'select';
   selected = [];
   paused = false;
   carry = 0;
@@ -538,6 +666,33 @@ function start(s: State) {
 function update() {
   if (!state || screen !== 'play') return;
   const s = state;
+  if ((tutorialStep === 'site' || tutorialStep === 'confirm-site') && !placing) tutorialStep = 'store';
+  if (
+    (tutorialStep === 'wood' || tutorialStep === 'stone') &&
+    !selected.some((id) => s.villagers.some((v) => v.id === id))
+  )
+    tutorialStep = 'select';
+  if (tutorialStep === 'select' && selected.some((id) => s.villagers.some((v) => v.id === id))) {
+    const active = s.villagers.find(
+      (v) => selected.includes(v.id) && (v.order?.target === 'wood' || v.order?.target === 'stone'),
+    )?.order?.target;
+    if (active === 'wood') {
+      tutorialBaseline = s.resources.wood;
+      tutorialStep = 'wood-progress';
+    } else if (active === 'stone') {
+      tutorialBaseline = s.resources.stone;
+      tutorialStep = 'stone-progress';
+    } else tutorialStep = s.resources.wood < 180 ? 'wood' : s.resources.stone < 120 ? 'stone' : 'store';
+  }
+  if (tutorialStep === 'wood-progress' && Math.floor(s.resources.wood) > Math.floor(tutorialBaseline)) {
+    tutorialOutcome = `Boards ${Math.floor(tutorialBaseline)} → ${Math.floor(s.resources.wood)}.`;
+    tutorialStep = 'stone';
+  }
+  if (tutorialStep === 'stone-progress' && Math.floor(s.resources.stone) > Math.floor(tutorialBaseline)) {
+    tutorialOutcome = `Ballast bags ${Math.floor(tutorialBaseline)} → ${Math.floor(s.resources.stone)}.`;
+    tutorialStep = 'store';
+  }
+
   const morning = morningWorkshopView(s);
   assemblyObservation.observe(forecastWorld, s);
   const reading = document.getElementById('goal-reading-text');
@@ -828,6 +983,7 @@ function update() {
       placementFeedback = '';
       placementPoint = { x: 650, y: 500 };
       placing = 'storehouse';
+      if (tutorialStep === 'store') tutorialStep = 'site';
       update();
     });
     bind('named-site', () => {
@@ -839,10 +995,12 @@ function update() {
             break;
           }
       if (namedSite) {
+        if (tutorialStep === 'site') tutorialStep = 'confirm-site';
         placementPoint = namedSite;
         const e = document.getElementById('named-site-fact');
         if (e)
           e.textContent = `Candidate centre ${namedSite.x}, ${namedSite.y}. The same footprint and costs apply. Confirm to request it.`;
+        renderTutorial();
       }
     });
     bind('confirm-site', () => {
@@ -857,6 +1015,7 @@ function update() {
       }
     });
     bind('cancel', () => {
+      if (tutorialStep === 'site' || tutorialStep === 'confirm-site') tutorialStep = 'store';
       namedSite = null;
       placing = '';
       moveMode = false;
@@ -888,6 +1047,7 @@ function update() {
       b.disabled = true;
   for (const b of document.querySelectorAll<HTMLButtonElement>('[data-speed]'))
     b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === speed));
+  renderTutorial();
 }
 /** Why the Storehouse button is unavailable, in counts the player can act on. */
 function storehouseWhy(
@@ -927,12 +1087,26 @@ function mealWhy(s: State, selectedCount: number): string {
   } The store has ${meals}; the storm day needs ${need} (${STORM_MEALS} per person). Meals do not lower tiredness. A rest does, though one rest may not be enough. Very tired people work much more slowly.`;
 }
 function order(target: string, x?: number, y?: number) {
+  const before = state?.resources[target === 'wood' ? 'wood' : 'stone'] ?? 0;
+  const priorStep = tutorialStep;
   issue({
     kind: 'order',
     ids: selected.filter((id) => state?.villagers.some((v) => v.id === id)),
     target,
     ...(x === undefined ? {} : { x, y }),
   });
+  const accepted =
+    state && selected.some((id) => state?.villagers.find((v) => v.id === id)?.order?.target === target);
+  if (
+    accepted &&
+    ['wood', 'stone'].includes(target) &&
+    priorStep &&
+    ['wood', 'wood-progress', 'stone', 'stone-progress', 'store'].includes(priorStep)
+  ) {
+    tutorialBaseline = before;
+    tutorialStep = target === 'wood' ? 'wood-progress' : 'stone-progress';
+    update();
+  }
 }
 function point(e: PointerEvent) {
   const r = canvas?.getBoundingClientRect();
@@ -1173,7 +1347,7 @@ async function saveAndTitle(id: string) {
 }
 function menu() {
   sheet(
-    `<h2>Paused</h2><p>${fileSession ? 'This file session stays in memory. Download it before leaving.' : esc(nativeSaveMessage || 'Saving this game on this device…')}</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div><button id="menu-title">Back to the title page</button><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><button id="download">Download this run</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><div id="compact-download"></div></details></div>`,
+    `<h2>Paused</h2><p>${fileSession ? 'This file session stays in memory. Download it before leaving.' : esc(nativeSaveMessage || 'Saving this game on this device…')}</p><button class="primary" id="resume">Resume</button><button id="feedback">Feedback</button><button id="replay-tutorial">Replay tutorial</button><button id="fullscreen">Full screen</button><a href="https://human.adamwhite.work/games/">All games</a><div id="toggle"></div><button id="new-menu">New game</button><div id="menu-confirm"></div><button id="menu-title">Back to the title page</button><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES}</a><button id="download">Download this run</button><a href="/file/">Open a saved file</a><div class="menu-footer"><a href="${PRIVACY_URL}">Lab privacy</a><details class="debug"><summary>Debug</summary><div id="compact-download"></div></details></div>`,
   );
   if (state?.shortYield) save();
   if (lab) document.getElementById('toggle')?.append(telemetryToggle(lab));
@@ -1191,6 +1365,45 @@ function menu() {
     if (fileSession) removeModal();
     else closeModal();
     if (fileSession) scheduleFileFrame();
+  });
+  bind('replay-tutorial', () => {
+    if (!state || screen !== 'play') return;
+    if (fileSession) {
+      try {
+        fileSession.resume();
+        state = fileSession.state();
+      } catch (error) {
+        fileError(error);
+        return;
+      }
+      removeModal();
+      scheduleFileFrame();
+    } else closeModal();
+    if (!state) return;
+    tutorialTarget = null;
+    tutorialOutcome = '';
+    const activeOrder = state.villagers.find(
+      (v) => selected.includes(v.id) && (v.order?.target === 'wood' || v.order?.target === 'stone'),
+    )?.order?.target;
+    tutorialStep =
+      state.settlement || state.continuedWorkshop || state.ended
+        ? 'unavailable'
+        : state.buildings.some((b) => b.kind === 'storehouse')
+          ? 'done'
+          : activeOrder === 'wood'
+            ? 'wood-progress'
+            : activeOrder === 'stone'
+              ? 'stone-progress'
+              : selected.some((id) => state?.villagers.some((v) => v.id === id))
+                ? state.resources.wood < 180
+                  ? 'wood'
+                  : state.resources.stone < 120
+                    ? 'stone'
+                    : 'store'
+                : 'select';
+    if (activeOrder === 'wood') tutorialBaseline = state.resources.wood;
+    if (activeOrder === 'stone') tutorialBaseline = state.resources.stone;
+    update();
   });
   bind('download', download);
   if (!fileSession && state) {
