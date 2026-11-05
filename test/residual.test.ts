@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 // HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { archiveCommunity } from '../src/hf4.ts';
@@ -70,8 +71,8 @@ test('standard Dai completes an actual card; player viewing alone never supplies
     'old temporary solution: not checked',
   );
   expect(s.story?.reads).toHaveLength(0);
-  const offers = archiveCommunity(s.villagers[2]!.person)
-    .history.flatMap((tx) => tx.inputs)
+  const offers = readRunHistory(archiveCommunity(s.villagers[2]!.person))
+    .flatMap((tx) => tx.inputs)
     .filter((i) => i.kind === 'offers.received')
     .find((i) => i.kind === 'offers.received' && i.payload.offers.some((o) => o.id.startsWith('story:')));
   if (!offers || offers.kind !== 'offers.received') throw new Error('Missing actual story offers');

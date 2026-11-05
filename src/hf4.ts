@@ -19,6 +19,7 @@ import {
   type Run,
   type RunArchive,
   type RunSpec,
+  readRunHistory,
   replay,
   restoreRun,
   type StepResult,
@@ -937,8 +938,8 @@ export function actionResolutions(
   p: Old.Person,
   activityId: string,
 ): Extract<Input, { kind: 'action.resolved' }>[] {
-  return archiveCommunity(p)
-    .history.flatMap((transaction) => transaction.inputs)
+  return readRunHistory(archiveCommunity(p))
+    .flatMap((transaction) => transaction.inputs)
     .filter(
       (input): input is Extract<Input, { kind: 'action.resolved' }> =>
         input.kind === 'action.resolved' &&

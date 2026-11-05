@@ -9,10 +9,10 @@ import {
 } from '../src/source-archives';
 
 const source = { game: 'commonstead', build: 'control', engine: FRAMEWORK_VERSION, rules: 'commonstead-4' };
-test('gzip sources retain every original byte once and reject altered or incomplete archives', async () => {
+test.each([5, 7])('gzip format %s sources retain bytes and reject altered archives', async (version) => {
   const snapshot = {
     format: 'hf-run',
-    version: 5,
+    version,
     hashes: { full: 'control' },
     transactions: [
       { inputs: ['complete source bytes', 'Turkish: ı İ ş; 😀', 'journal data '.repeat(10000)] },
@@ -50,6 +50,7 @@ test('gzip sources retain every original byte once and reject altered or incompl
     { fullHash: 'altered' },
     { sha256: '0'.repeat(64) },
     { archiveVersion: 4 },
+    { archiveVersion: version === 5 ? 7 : 5 },
     { decodedBytes: 1 },
     { decodedBytes: MAX_SOURCE_ARCHIVE_BYTES + 1 },
     { data: '!invalid base64!' },

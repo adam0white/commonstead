@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 // HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test, vi } from 'vitest';
 import * as hf from '../src/hf4';
@@ -60,7 +61,7 @@ for (const blocking of ['dispute', 'owner'] as const)
       if (person === v.person && offers.some((o) => o.id === 'public:1:speak:v1')) {
         const a = offers.find((o) => o.action === 'work')!;
         expect(a).toBeDefined();
-        beforeInputs = hf.archiveCommunity(person).history.flatMap((t) => t.inputs).length;
+        beforeInputs = readRunHistory(hf.archiveCommunity(person)).flatMap((t) => t.inputs).length;
         const d = original(person, [a]);
         expect(d.chosenAffordanceId).toBe(a.id);
         if (blocking === 'dispute') w.dispute = ['v1', 'v2'];
@@ -86,9 +87,8 @@ for (const blocking of ['dispute', 'owner'] as const)
       expect(w.actors.v1!.running?.purpose).not.toBe('job');
       expect(w.caches).toEqual(cache);
       expect(w.trolley).toBe(blocking === 'owner' ? 'v2' : null);
-      const rejected = hf
-        .archiveCommunity(v.person)
-        .history.flatMap((t) => t.inputs)
+      const rejected = readRunHistory(hf.archiveCommunity(v.person))
+        .flatMap((t) => t.inputs)
         .slice(beforeInputs)
         .filter(
           (i) =>

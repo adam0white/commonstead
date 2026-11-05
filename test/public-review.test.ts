@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 // HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test, vi } from 'vitest';
 import * as hf from '../src/hf4';
@@ -10,8 +11,8 @@ test('native speech choices include the still-valid retained ordinary work', () 
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   apply(s, { kind: 'public-exchange', ids: ['v1'], topic: 'role' });
   while (s.tick < 80 && !s.story!.publicExchanges![0]!.participants[0]!.decision) step(s);
-  const offered = archiveCommunity(s.villagers[0]!.person)
-    .history.flatMap((t) => t.inputs)
+  const offered = readRunHistory(archiveCommunity(s.villagers[0]!.person))
+    .flatMap((t) => t.inputs)
     .filter(
       (i) => i.kind === 'offers.received' && i.payload.offers.some((o) => o.id === 'public:1:speak:v1'),
     );
@@ -108,7 +109,7 @@ for (const longer of [false, true])
           p,
           activity: v.person.activity,
           decision: actualDecision,
-          tail: archiveCommunity(v.person).history.slice(-3),
+          tail: readRunHistory(archiveCommunity(v.person)).slice(-3),
         }),
       ).toBe('continued-work');
       expect(p.reoffered).toBe(true);

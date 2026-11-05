@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 import { CAST } from './cast';
 import { assignmentText, nextTask, residentName } from './display';
 import { archiveCommunity } from './hf4';
@@ -146,7 +147,7 @@ function applicable(s: State, v: Villager, c: PublicCommand): PublicFact {
     const reply = s.settlement?.replyScenes?.[v.id]?.attempts.find(
       (a) => a.id === first?.attemptId && a.status === 'completed' && a.resultId === result.id,
     );
-    const history = archiveCommunity(v.person).history.flatMap((t) => t.inputs);
+    const history = readRunHistory(archiveCommunity(v.person)).flatMap((t) => t.inputs);
     const completed = history.some(
       (i) =>
         i.kind === 'action.resolved' &&
@@ -173,7 +174,7 @@ function applicable(s: State, v: Villager, c: PublicCommand): PublicFact {
     };
   }
   const archive = archiveCommunity(v.person);
-  const inputs = archive.history.flatMap((t) => t.inputs);
+  const inputs = readRunHistory(archive).flatMap((t) => t.inputs);
   const resolution = inputs.find((i) => i.id === c.sourceId && i.kind === 'action.resolved');
   if (
     !resolution ||
@@ -307,7 +308,7 @@ export function publicCommands(s: State, ids: string[]): { line: string; command
       }
     if (s.yieldReturn?.some((a) => a.completedAt !== undefined)) {
       const v = s.villagers.find((v) => v.id === id)!;
-      for (const t of archiveCommunity(v.person).history)
+      for (const t of readRunHistory(archiveCommunity(v.person)))
         for (const input of t.inputs)
           if (
             input.kind === 'action.resolved' &&
