@@ -51,9 +51,11 @@ export async function control(browser: Browser, url: string) {
     assert.match(await page.locator('.tutorial-prompt').innerText(), /Ballast bags:/);
     await page.getByRole('button', { name: 'Skip tutorial' }).click();
     assert.equal(await page.locator('.tutorial-prompt').count(), 0);
+    await page.locator('#clear').click();
     await page.locator('#menu').click();
     await page.getByRole('button', { name: 'Replay tutorial' }).click();
     assert.equal(await page.locator('.tutorial-prompt').count(), 1);
+    await page.locator('.tutorial-target[data-person]').first().click();
     assert.match(
       await page.locator('.tutorial-prompt').innerText(),
       /Ballast bags:/,

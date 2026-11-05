@@ -666,13 +666,24 @@ function start(s: State) {
 function update() {
   if (!state || screen !== 'play') return;
   const s = state;
+  if ((tutorialStep === 'site' || tutorialStep === 'confirm-site') && !placing) tutorialStep = 'store';
   if (
     (tutorialStep === 'wood' || tutorialStep === 'stone') &&
     !selected.some((id) => s.villagers.some((v) => v.id === id))
   )
     tutorialStep = 'select';
-  if (tutorialStep === 'select' && selected.some((id) => s.villagers.some((v) => v.id === id)))
-    tutorialStep = s.resources.wood < 180 ? 'wood' : s.resources.stone < 120 ? 'stone' : 'store';
+  if (tutorialStep === 'select' && selected.some((id) => s.villagers.some((v) => v.id === id))) {
+    const active = s.villagers.find(
+      (v) => selected.includes(v.id) && (v.order?.target === 'wood' || v.order?.target === 'stone'),
+    )?.order?.target;
+    if (active === 'wood') {
+      tutorialBaseline = s.resources.wood;
+      tutorialStep = 'wood-progress';
+    } else if (active === 'stone') {
+      tutorialBaseline = s.resources.stone;
+      tutorialStep = 'stone-progress';
+    } else tutorialStep = s.resources.wood < 180 ? 'wood' : s.resources.stone < 120 ? 'stone' : 'store';
+  }
   if (tutorialStep === 'wood-progress' && Math.floor(s.resources.wood) > Math.floor(tutorialBaseline)) {
     tutorialOutcome = `Boards ${Math.floor(tutorialBaseline)} → ${Math.floor(s.resources.wood)}.`;
     tutorialStep = 'stone';
@@ -1077,7 +1088,6 @@ function mealWhy(s: State, selectedCount: number): string {
 }
 function order(target: string, x?: number, y?: number) {
   const before = state?.resources[target === 'wood' ? 'wood' : 'stone'] ?? 0;
-  const previousOrders = new Map(state?.villagers.map((v) => [v.id, JSON.stringify(v.order)]) ?? []);
   const priorStep = tutorialStep;
   issue({
     kind: 'order',
@@ -1086,12 +1096,7 @@ function order(target: string, x?: number, y?: number) {
     ...(x === undefined ? {} : { x, y }),
   });
   const accepted =
-    state &&
-    selected.some(
-      (id) =>
-        state?.villagers.find((v) => v.id === id)?.order?.target === target &&
-        JSON.stringify(state?.villagers.find((v) => v.id === id)?.order) !== previousOrders.get(id),
-    );
+    state && selected.some((id) => state?.villagers.find((v) => v.id === id)?.order?.target === target);
   if (
     accepted &&
     ['wood', 'stone'].includes(target) &&
