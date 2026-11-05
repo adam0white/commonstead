@@ -1,3 +1,7 @@
+# Upkeep candidate — 2026-11-05
+
+Remaining: qualify the 4.17 history-reader port with the full suite, review, integration of current Clarity work and exact CI before deployment. Recheck F-763, F-765, F-776 and F-778 on 2026-11-12: their compound source, delivery and next-day clauses remain open and this dependency update did not prove them. Recheck peer certification and the unavailable source/role contracts on 2026-11-12; a dependency pin does not certify live peers. Owner feel and accessibility remain separate.
+
 # Settlement replay and CI routing candidate — 2026-11-01
 
 Remaining: independent exact-source review, green source CI, merged CI and clean hosted release. Source CI `41293637404` at `f85081d` failed the full-day settlement case (286728 ms) before shard 4 hit its twenty-minute job limit. The focused supply control was not that failure. An unchanged focused settlement diagnostic passed locally in 102.012 seconds; its original body, raw CI failure and actual worker profile remain in private evidence.
@@ -190,18 +194,15 @@ Owner authorizes immutable kit 0.5.7 with unchanged client 0.4.6 and HF 2.18.0. 
 
 Director rejected the prior technical delivery because the redundant outer privacy link and host padding narrowed the shared notice into two lines at360px. Remove that outer link and the obsolete host spacing and layout overrides. Normalize notice text to14px and shared baseline4px/8px padding at the game’s17px default root while retaining root-responsive text enlargement. Privacy remains in the existing Feedback disclosure. Keep the actual shared node and exact sentence. Normal360 checks require one text line, type at least14px and both node/wrapper at most40px. Enlarged text must wrap without clipping. Prior review remains complete; required source CI, fresh redeployment and DOM-only live checks still apply.
 
-
 ## Published plain narration — 2026-10-25
 
 HF 2.21.0 / engine 2.21.0; immutable lab-client 0.4.7 and lab-kit 0.5.8. Fresh canonical residents and helpers persist plain narration. Exports pin 2.21.0 and verify exact replay; incompatible saved narration is refused without rewriting the supplied save. Incoming finite native calendars retain 2.17.0 and add exact 2.21.0 support. Source proof and remaining delivery steps are in `~/code/.lab-scratch/hfadopt/commonstead-report.md`. Commit, independent review, exact green CI, deployment and cleanup remain parent-owned.
-
 
 ## B4 public reading candidate — 2026-10-26
 
 Remaining: parent independent review, actual Chrome normal/enlarged 360×690 and1280×800 QA and integration. This candidate changes title heading fit, the plain longer-day departure refusal, the completion-aware pinned goal and an ending view of all residents' existing last words and previously exposed discovery text. Earlier speech is labelled; no new closing reply or fallback quote is invented. Simulation, native3/4/5/6, storage and logs are unchanged. Existing milestone/currentNotice already handle stale completion warnings.
 
 Engineering due2026-10-27: F-709 early finish with lawful storm/continuation semantics; F-712/F-718/F-728 genuine story/work-specific closing events, storm presentation, day identity/same-run continuity and challenge decisions. Only presentation facets of F-711 and ending asks are candidates here. No whole B4/83 closure or current player retest. Open engineering is not an owner blocker; Adam's feel/readiness and real accessibility input remain due2026-11-03. External plan/report/manifest: ~/code/.lab-scratch/games-deferred/commonstead-public-reading-*.
-
 
 ## 2026-10-26 — bounded short-day finish candidate
 

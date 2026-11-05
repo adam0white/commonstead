@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 // HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { describe, expect, test } from 'vitest';
 import { archiveCommunity } from '../src/hf4';
@@ -48,7 +49,7 @@ describe('current settlement day focused headless controls', () => {
         // Exercise both file forms during real activity, without replaying the whole day three times.
         const native = archiveCommunity(resident(s, 'v1').person);
         expect(s.villagers.some((v) => v.person.activity)).toBe(true);
-        expect(native.history.length).toBeGreaterThan(0);
+        expect(readRunHistory(native).length).toBeGreaterThan(0);
         expect(native.current.receipts.inputs.length).toBeGreaterThan(0);
         earlyFull = exportRun(s);
         earlyCompact = exportRun(s, true);
@@ -58,7 +59,7 @@ describe('current settlement day focused headless controls', () => {
           'DAY_ACTIVITY_CHECKPOINT',
           JSON.stringify({
             tick: s.tick,
-            transactions: native.history.length,
+            transactions: readRunHistory(native).length,
             acceptedInputs: native.current.receipts.inputs.length,
             activities: s.villagers.map((v) => v.person.activity?.action ?? null),
             hash: earlyHash,

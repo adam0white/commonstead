@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.5/schema.json",
   "files": {
     "includes": [
       "**",
@@ -29,5 +29,20 @@
     "rules": {
       "preset": "recommended"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "docs/cast-adoption.md",
+        "docs/concept.md",
+        "docs/games/commonstead-playtest-2026-10-27.md",
+        "docs/games/commonstead-playtest-2026-10-27b.md",
+        "docs/reading-plan.md",
+        "docs/work-orders-plan.md"
+      ],
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ]
 }

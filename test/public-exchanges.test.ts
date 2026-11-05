@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 // HF4 current-policy controls use the single canonical long scenario. Historical source stays frozen at c98.
 import { expect, test } from 'vitest';
 import { publicCommands } from '../src/public-voice-content';
@@ -137,7 +138,7 @@ test('partner response requires the completed native Yield and current source', 
   // Map and hub selections are not resident speech invitations, even after a real Yield.
   for (const ids of [['town'], [s.buildings[0]!.id], ['v1', s.buildings[0]!.id]])
     expect(publicCommands(s, ids)).toEqual([]);
-  const history = archiveCommunity(s.villagers[0]!.person).history.flatMap((t) => t.inputs);
+  const history = readRunHistory(archiveCommunity(s.villagers[0]!.person)).flatMap((t) => t.inputs);
   const complete = history.find(
     (i) =>
       i.kind === 'action.resolved' &&
@@ -319,8 +320,8 @@ test('actual interrupted speaking records no completed quotation or automatic wo
   expect(publicUtterances(s, 'v1')).toEqual([]);
   expect(s.villagers[0]!.order?.target).toBe('stone');
   expect(
-    archiveCommunity(s.villagers[0]!.person)
-      .history.flatMap((t) => t.inputs)
+    readRunHistory(archiveCommunity(s.villagers[0]!.person))
+      .flatMap((t) => t.inputs)
       .some(
         (i) =>
           i.kind === 'action.resolved' &&
