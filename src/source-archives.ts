@@ -10,7 +10,7 @@ type PackedArchive = {
   encoding: 'base64';
   compression: 'gzip';
   archiveFormat: 'hf-run';
-  archiveVersion: 5;
+  archiveVersion: 5 | 7;
   fullHash: string;
   decodedBytes: number;
   sha256: string;
@@ -28,7 +28,9 @@ const fail = (): never => {
 function rawHash(snapshot: unknown): string | undefined {
   const value = object(snapshot);
   const hashes = object(value?.hashes);
-  return value?.format === 'hf-run' && value.version === 5 && typeof hashes?.full === 'string'
+  return value?.format === 'hf-run' &&
+    (value.version === 5 || value.version === 7) &&
+    typeof hashes?.full === 'string'
     ? hashes.full
     : undefined;
 }
@@ -42,7 +44,7 @@ function packed(snapshot: unknown): PackedArchive | undefined {
     value.encoding !== 'base64' ||
     value.compression !== 'gzip' ||
     value.archiveFormat !== 'hf-run' ||
-    value.archiveVersion !== 5 ||
+    (value.archiveVersion !== 5 && value.archiveVersion !== 7) ||
     typeof value.fullHash !== 'string' ||
     !value.fullHash.length ||
     value.fullHash.length > 500 ||
@@ -137,7 +139,7 @@ async function decoded(snapshot: unknown): Promise<{ value: unknown; text: strin
     const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     const value: unknown = JSON.parse(text);
     safeJson(value);
-    if (rawHash(value) !== wrapper.fullHash) fail();
+    if (rawHash(value) !== wrapper.fullHash || object(value)?.version !== wrapper.archiveVersion) fail();
     return { value, text };
   } catch {
     return fail();
@@ -176,7 +178,7 @@ export async function retainSource(
     encoding: 'base64',
     compression: 'gzip',
     archiveFormat: 'hf-run',
-    archiveVersion: 5,
+    archiveVersion: object(original.value)?.version as 5 | 7,
     fullHash: hash,
     decodedBytes: bytes.byteLength,
     sha256: await sha256(bytes),
