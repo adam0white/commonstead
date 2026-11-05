@@ -90,13 +90,11 @@ export async function control(browser: Browser, url: string) {
     await page.getByRole('button', { name: 'Skip tutorial' }).click();
     await page.evaluate(() => localStorage.setItem('commonstead-tutorial-seen', 'native-sentinel'));
     await page.goto(new URL('/file/', url).href);
-    await page
-      .locator('#file-load')
-      .setInputFiles({
-        name: 'run.json',
-        mimeType: 'application/json',
-        buffer: Buffer.from(JSON.stringify(run)),
-      });
+    await page.locator('#file-load').setInputFiles({
+      name: 'run.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(run)),
+    });
     await page.locator('#resume').click();
     await page.getByRole('button', { name: 'Skip tutorial' }).click();
     assert.equal(
