@@ -20,7 +20,7 @@ test('normal game work runs in one HF4 community and replays completely', () => 
   apply(s, { kind: 'order', ids: ['v1'], target: 'wood' });
   for (let i = 0; i < 40; i++) step(s);
   const archive = archiveCommunity(s.villagers[0]!.person);
-  expect(archive.version).toBe(5);
+  expect(archive.version).toBe(7);
   expect(archive.initial.people).toHaveLength(8);
   expect(s.resources.wood).toBeGreaterThan(80);
   const proof = verifyCommunity(s.villagers[0]!.person);
